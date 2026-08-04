@@ -176,6 +176,13 @@ public class ItemTooltipsMod
 	private static GameObject mapPopup = null;
 	public static int MapIconCount => mapIcons.Count;
 
+	/// <summary>Stage Selection "Relics in stage" icons (menu, not in-run map).</summary>
+	private static Dictionary<int, MapIconInfo> stageRelicIcons = new Dictionary<int, MapIconInfo>();
+	private static int currentStageRelicHoverId = -1;
+	private static int pendingStageRelicHoverId = -1;
+	private static float stageRelicHoverStartTime = 0f;
+	private static GameObject stageRelicPopup = null;
+
 	private static int currentCollectionHoverId = -1;
 
 	private static GameObject collectionPopup = null;
@@ -345,6 +352,9 @@ public class ItemTooltipsMod
 			try {
 				MapPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("Map patches: " + ex.Message); }
+			try {
+				StageSelectPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("StageSelect patches: " + ex.Message); }
 			Plugin.Log.LogInfo("Patches applied successfully");
 		}
 		catch (Exception arg)
@@ -760,6 +770,11 @@ public class ItemTooltipsMod
 		{
 			// Map closed with unpause
 			HideMapPopup();
+		}
+		// Stage Selection relic icons (main menu / pre-run)
+		if (stageRelicIcons.Count > 0)
+		{
+			UpdateStageRelicHover();
 		}
 		if (!flag && collectionIcons.Count > 0)
 		{
@@ -6431,6 +6446,185 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 	}
 
+	// ── Stage Selection relic icons ──────────────────────────────────────
+
+	public static void RegisterStageRelicIcon(GameObject go, ItemType item, string label, string description, Sprite sprite)
+	{
+		if ((Object)(object)go == (Object)null) return;
+		int id = ((Object)go).GetInstanceID();
+		stageRelicIcons[id] = new MapIconInfo
+		{
+			Go = go,
+			Item = item,
+			Weapon = null,
+			Label = label ?? GameData.GetItemName(item),
+			Description = description ?? GameData.GetItemDescription(item),
+			Sprite = sprite ?? GameData.GetItemSprite(item)
+		};
+	}
+
+	public static void ClearStageRelicIcons()
+	{
+		stageRelicIcons.Clear();
+		currentStageRelicHoverId = -1;
+		pendingStageRelicHoverId = -1;
+		HideStageRelicPopup();
+	}
+
+	private static void UpdateStageRelicHover()
+	{
+		List<int> dead = null;
+		foreach (var kv in stageRelicIcons)
+		{
+			if ((Object)(object)kv.Value.Go == (Object)null)
+			{
+				dead ??= new List<int>();
+				dead.Add(kv.Key);
+			}
+		}
+		if (dead != null)
+		{
+			foreach (int k in dead) stageRelicIcons.Remove(k);
+		}
+		if (stageRelicIcons.Count == 0)
+		{
+			HideStageRelicPopup();
+			return;
+		}
+
+		Vector2 mouse = (Vector2)Input.mousePosition;
+		int hitId = -1;
+		MapIconInfo hitInfo = default;
+		float bestArea = float.MaxValue;
+
+		foreach (var kv in stageRelicIcons)
+		{
+			GameObject go = kv.Value.Go;
+			if ((Object)(object)go == (Object)null || !go.activeInHierarchy) continue;
+			RectTransform rt = go.GetComponent<RectTransform>();
+			if ((Object)(object)rt == (Object)null) continue;
+
+			Camera cam = null;
+			var canvas = go.GetComponentInParent<Canvas>();
+			if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+				cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+
+			bool hit = RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, cam)
+				|| RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, null)
+				|| RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, Camera.main);
+
+			if (!hit)
+			{
+				Vector3[] corners = new Vector3[4];
+				rt.GetWorldCorners(corners);
+				Vector2 min = RectTransformUtility.WorldToScreenPoint(cam, corners[0]);
+				Vector2 max = RectTransformUtility.WorldToScreenPoint(cam, corners[2]);
+				Vector2 center = (min + max) * 0.5f;
+				float half = Mathf.Max(22f, Mathf.Max(Mathf.Abs(max.x - min.x), Mathf.Abs(max.y - min.y)) * 0.5f + 10f);
+				hit = (mouse - center).sqrMagnitude <= half * half;
+			}
+			if (!hit) continue;
+
+			float area = Mathf.Max(1f, Mathf.Abs(rt.rect.width * rt.rect.height));
+			if (area < bestArea)
+			{
+				bestArea = area;
+				hitId = kv.Key;
+				hitInfo = kv.Value;
+			}
+		}
+
+		if (hitId != -1 && hitId != currentStageRelicHoverId)
+		{
+			if (hitId != pendingStageRelicHoverId)
+			{
+				pendingStageRelicHoverId = hitId;
+				stageRelicHoverStartTime = Time.unscaledTime;
+				return;
+			}
+			if (Time.unscaledTime - stageRelicHoverStartTime >= CollectionHoverDelay * 0.4f)
+			{
+				currentStageRelicHoverId = hitId;
+				pendingStageRelicHoverId = -1;
+				ShowStageRelicPopup(hitInfo);
+			}
+		}
+		else if (hitId == currentStageRelicHoverId)
+		{
+			pendingStageRelicHoverId = -1;
+		}
+		else
+		{
+			pendingStageRelicHoverId = -1;
+			if (hitId == -1 && currentStageRelicHoverId != -1)
+			{
+				if ((Object)(object)stageRelicPopup != (Object)null)
+				{
+					RectTransform prt = stageRelicPopup.GetComponent<RectTransform>();
+					bool overPopup = (Object)(object)prt != (Object)null
+						&& (RectTransformUtility.RectangleContainsScreenPoint(prt, mouse, null)
+							|| RectTransformUtility.RectangleContainsScreenPoint(prt, mouse, Camera.main));
+					if (!overPopup)
+					{
+						currentStageRelicHoverId = -1;
+						HideStageRelicPopup();
+					}
+				}
+				else
+				{
+					currentStageRelicHoverId = -1;
+				}
+			}
+		}
+	}
+
+	private static void ShowStageRelicPopup(MapIconInfo info)
+	{
+		HideStageRelicPopup();
+		Transform parent = null;
+		try
+		{
+			// Prefer StageSelect / app canvas
+			GameObject page = GameObject.Find("UI/Canvas - App/Safe Area/View - StageSelection");
+			if ((Object)(object)page == (Object)null)
+				page = GameObject.Find("UI/Canvas - App");
+			if ((Object)(object)page != (Object)null)
+				parent = page.transform;
+		}
+		catch { }
+		if ((Object)(object)parent == (Object)null && (Object)(object)info.Go != (Object)null)
+		{
+			var c = info.Go.GetComponentInParent<Canvas>();
+			if ((Object)(object)c != (Object)null)
+				parent = ((Component)c).transform;
+		}
+		if ((Object)(object)parent == (Object)null) return;
+
+		string label = info.Label;
+		string desc = info.Description;
+		Sprite spr = info.Sprite;
+		if (info.Item.HasValue)
+		{
+			if (string.IsNullOrEmpty(label)) label = GameData.GetItemName(info.Item.Value);
+			if (string.IsNullOrEmpty(desc)) desc = GameData.GetItemDescription(info.Item.Value);
+			spr = GameData.GetItemSprite(info.Item.Value) ?? spr;
+		}
+
+		stageRelicPopup = CreateSimpleMapPopup(parent, label, desc, spr);
+		if ((Object)(object)stageRelicPopup != (Object)null && (Object)(object)info.Go != (Object)null)
+			PositionPopup(stageRelicPopup, info.Go.transform);
+		Plugin.Dbg($"StageRelic popup item={info.Item} label={label}");
+	}
+
+	private static void HideStageRelicPopup()
+	{
+		if ((Object)(object)stageRelicPopup != (Object)null)
+		{
+			Object.Destroy((Object)(object)stageRelicPopup);
+			stageRelicPopup = null;
+		}
+	}
+
 	// ── Pause map icons ──────────────────────────────────────────────────
 
 	public static void RegisterMapIcon(GameObject go, ItemType? item, WeaponType? weapon, string label, string description, Sprite sprite)
@@ -7153,6 +7347,9 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		TextMeshProUGUI obj = Object.FindObjectOfType<TextMeshProUGUI>();
 		return (obj != null) ? ((TMP_Text)obj).font : null;
 	}
+
+	/// <summary>Shared UI font for Stage Guide / other menus.</summary>
+	public static TMP_FontAsset GetUiFont() => GetFont();
 
 	private static object GetGameManager()
 	{
