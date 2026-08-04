@@ -1,6 +1,7 @@
 using System;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.UI;
 using VampireSurvivors.Data;
 using VampireSurvivors.UI;
 using Object = UnityEngine.Object;
@@ -12,6 +13,9 @@ namespace VSItemTooltips;
 /// which creates a child icon GameObject per ingredient/result. Generic patches only saw the
 /// parent EvolutionItemUI instance, so every icon in a row shared one InstanceID and only
 /// the last WeaponType stuck — hence "only the middle (or one) icon has a tooltip".
+///
+/// Hit targets: register the full icon root (not a tiny nested sprite), enable raycasts, and
+/// map all graphic children to the same weapon so the whole icon is hoverable.
 ///
 /// Also patches CollectionItemUI.SetData/SetItem/SetArcana for reliable collection-grid hover.
 /// </summary>
@@ -101,22 +105,28 @@ public static class GrimoirePatches
 		}
 	}
 
-	/// <summary>Register the *child icon* returned by AddWeaponIcon, not the EvolutionItemUI row.</summary>
+	/// <summary>
+	/// Register the full icon root from AddWeaponIcon (not a tiny nested sprite).
+	/// Nested Image-only targets caused hover only near the formula center / + sign.
+	/// </summary>
 	public static void AddWeaponIcon_Postfix(EvolutionItemUI __instance, WeaponType __0, GameObject __result)
 	{
 		try
 		{
 			if ((Object)(object)__result == (Object)null)
-			{
 				return;
-			}
-			// Prefer the Image child for tighter hitboxes
-			GameObject hit = FindBestHitTarget(__result);
-			int id = ((Object)hit).GetInstanceID();
-			ItemTooltipsMod.RegisterWeaponUI(id, hit, __0, isAddMethod: false);
+
+			// Full icon cell — hit area matches the layout slot, not just the pixel sprite
+			PrepareIconHitArea(__result);
+			int id = ((Object)__result).GetInstanceID();
+			ItemTooltipsMod.RegisterWeaponUI(id, __result, __0, isAddMethod: false);
+
+			// Also map every graphic child under this icon so raycasts on frames/sprites resolve
+			RegisterChildGraphicsAsWeapon(__result, __0);
+
 			if (Plugin.DebugVerbose)
 			{
-				Plugin.Dbg($"Grimoire AddWeaponIcon -> {__0} on {((Object)hit).name} id={id} parent={((Object)__instance)?.name}");
+				Plugin.Dbg($"Grimoire AddWeaponIcon -> {__0} on {((Object)__result).name} id={id}");
 			}
 		}
 		catch (Exception ex)
@@ -131,8 +141,9 @@ public static class GrimoirePatches
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 			GameObject go = ((Component)__instance).gameObject;
-			GameObject hit = FindBestHitTarget(go);
-			ItemTooltipsMod.RegisterWeaponUI(((Object)hit).GetInstanceID(), hit, _wType, isAddMethod: false);
+			PrepareIconHitArea(go);
+			ItemTooltipsMod.RegisterWeaponUI(((Object)go).GetInstanceID(), go, _wType, isAddMethod: false);
+			RegisterChildGraphicsAsWeapon(go, _wType);
 		}
 		catch (Exception ex)
 		{
@@ -146,8 +157,9 @@ public static class GrimoirePatches
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 			GameObject go = ((Component)__instance).gameObject;
-			GameObject hit = FindBestHitTarget(go);
-			ItemTooltipsMod.RegisterItemUI(((Object)hit).GetInstanceID(), hit, _item, isAddMethod: false);
+			PrepareIconHitArea(go);
+			ItemTooltipsMod.RegisterItemUI(((Object)go).GetInstanceID(), go, _item, isAddMethod: false);
+			RegisterChildGraphicsAsItem(go, _item);
 		}
 		catch (Exception ex)
 		{
@@ -161,8 +173,8 @@ public static class GrimoirePatches
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 			GameObject go = ((Component)__instance).gameObject;
-			GameObject hit = FindBestHitTarget(go);
-			ItemTooltipsMod.RegisterArcanaUI(((Object)hit).GetInstanceID(), hit, type);
+			PrepareIconHitArea(go);
+			ItemTooltipsMod.RegisterArcanaUI(((Object)go).GetInstanceID(), go, type);
 		}
 		catch (Exception ex)
 		{
@@ -170,54 +182,98 @@ public static class GrimoirePatches
 		}
 	}
 
-	/// <summary>Use an Image child when present so hit-tests match the visible sprite, not a wide panel.</summary>
-	private static GameObject FindBestHitTarget(GameObject root)
+	/// <summary>
+	/// Ensure the icon root can receive hover: raycastable graphics + transparent full-rect
+	/// Image if the root itself has no Graphic (common for layout cells).
+	/// </summary>
+	private static void PrepareIconHitArea(GameObject root)
 	{
-		if ((Object)(object)root == (Object)null) return root;
+		if ((Object)(object)root == (Object)null) return;
 		try
 		{
-			// Prefer named icon images
-			string[] names = { "UnlockedIcon", "Icon", "icon", "WeaponIcon", "ItemIcon", "Image" };
-			foreach (string n in names)
+			// Enable raycasts on icon images (skip huge backgrounds)
+			var graphics = root.GetComponentsInChildren<Graphic>(true);
+			if (graphics != null)
 			{
-				Transform t = root.transform.Find(n);
-				if ((Object)(object)t != (Object)null)
+				for (int i = 0; i < graphics.Count; i++)
 				{
-					var img = t.GetComponent<UnityEngine.UI.Image>();
-					if ((Object)(object)img != (Object)null && (Object)(object)img.sprite != (Object)null)
-						return t.gameObject;
-				}
-			}
-			// Any child Image with a sprite (skip backgrounds)
-			var images = root.GetComponentsInChildren<UnityEngine.UI.Image>(true);
-			if (images != null)
-			{
-				GameObject best = null;
-				float bestArea = float.MaxValue;
-				for (int i = 0; i < images.Count; i++)
-				{
-					var img = images[i];
-					if ((Object)(object)img == (Object)null || (Object)(object)img.sprite == (Object)null) continue;
-					string nm = ((Object)img).name.ToLowerInvariant();
-					if (nm.Contains("background") || nm.Contains("frame") || nm.Contains("panel") || nm.Contains("highlight") || nm.Contains("seal"))
+					var g = graphics[i];
+					if ((Object)(object)g == (Object)null) continue;
+					string nm = ((Object)g).name.ToLowerInvariant();
+					if (nm.Contains("background") || nm.Contains("panel") || nm.Contains("scroll"))
 						continue;
-					var rt = img.rectTransform;
-					if ((Object)(object)rt == (Object)null) continue;
-					float area = Mathf.Abs(rt.rect.width * rt.rect.height);
-					if (area < 4f) continue;
-					if (area < bestArea)
-					{
-						bestArea = area;
-						best = ((Component)img).gameObject;
-					}
+					try { g.raycastTarget = true; } catch { }
 				}
-				if ((Object)(object)best != (Object)null)
-					return best;
+			}
+
+			// If root has no Graphic, add a nearly-invisible hit plate so the full cell is hoverable
+			var rootGraphic = root.GetComponent<Graphic>();
+			if ((Object)(object)rootGraphic == (Object)null)
+			{
+				var img = root.AddComponent<Image>();
+				img.color = new Color(1f, 1f, 1f, 0.01f);
+				img.raycastTarget = true;
+			}
+			else
+			{
+				try { rootGraphic.raycastTarget = true; } catch { }
 			}
 		}
-		catch
+		catch { }
+	}
+
+	private static void RegisterChildGraphicsAsWeapon(GameObject root, WeaponType type)
+	{
+		if ((Object)(object)root == (Object)null) return;
+		try
 		{
+			var graphics = root.GetComponentsInChildren<Graphic>(true);
+			if (graphics == null) return;
+			int rootId = ((Object)root).GetInstanceID();
+			for (int i = 0; i < graphics.Count; i++)
+			{
+				var g = graphics[i];
+				if ((Object)(object)g == (Object)null) continue;
+				GameObject child = ((Component)g).gameObject;
+				int id = ((Object)child).GetInstanceID();
+				if (id == rootId) continue;
+				// Only map direct visual children of this icon, not the whole grimoire tree
+				if (!IsUnder(child.transform, root.transform)) continue;
+				ItemTooltipsMod.RegisterWeaponUI(id, child, type, isAddMethod: false);
+			}
 		}
-		return root;
+		catch { }
+	}
+
+	private static void RegisterChildGraphicsAsItem(GameObject root, ItemType type)
+	{
+		if ((Object)(object)root == (Object)null) return;
+		try
+		{
+			var graphics = root.GetComponentsInChildren<Graphic>(true);
+			if (graphics == null) return;
+			int rootId = ((Object)root).GetInstanceID();
+			for (int i = 0; i < graphics.Count; i++)
+			{
+				var g = graphics[i];
+				if ((Object)(object)g == (Object)null) continue;
+				GameObject child = ((Component)g).gameObject;
+				int id = ((Object)child).GetInstanceID();
+				if (id == rootId) continue;
+				if (!IsUnder(child.transform, root.transform)) continue;
+				ItemTooltipsMod.RegisterItemUI(id, child, type, isAddMethod: false);
+			}
+		}
+		catch { }
+	}
+
+	private static bool IsUnder(Transform t, Transform ancestor)
+	{
+		while ((Object)(object)t != (Object)null)
+		{
+			if ((Object)(object)t == (Object)(object)ancestor) return true;
+			t = t.parent;
+		}
+		return false;
 	}
 }

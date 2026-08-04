@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.10] — polish (unreleased tag)
+
+### Fixed
+- Grimoire evolution icons: hover the **whole icon cell** (not only near the +). Full root hit plate, child graphic mapping, padded screen-space hit tests, smarter icon-vs-row scoring.
+
 ## [1.10.9] — polish (unreleased tag)
 
 ### Fixed

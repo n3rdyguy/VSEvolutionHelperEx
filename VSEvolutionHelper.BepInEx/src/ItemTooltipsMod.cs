@@ -6470,12 +6470,16 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 		Vector3 mousePosition = Input.mousePosition;
 		Vector2 mouse = (Vector2)mousePosition;
-		// Pick the *smallest* containing rect so per-icon children beat parent row panels
+		// Among hits, prefer mid-sized icon cells over huge EvolutionItemUI rows and tiny badges.
+		// Use world-corner hit + padding so stretch/layout icons match the visible formula icons.
 		int num = -1;
 		WeaponType? weaponType = null;
 		ItemType? itemType = null;
 		object obj = null;
-		float bestArea = float.MaxValue;
+		float bestScore = float.MaxValue;
+		const float hitPad = 10f;
+		const float minUsefulArea = 24f * 24f;
+		const float maxRowArea = 420f * 120f; // skip whole formula / page panels
 		foreach (KeyValuePair<int, (GameObject, WeaponType?, ItemType?, object)> collectionIcon2 in collectionIcons)
 		{
 			GameObject item = collectionIcon2.Value.Item1;
@@ -6488,26 +6492,25 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			{
 				continue;
 			}
-			bool hit = RectTransformUtility.RectangleContainsScreenPoint(component, mouse, (Camera)null)
-				|| RectTransformUtility.RectangleContainsScreenPoint(component, mouse, Camera.main);
-			if (!hit)
-			{
-				// Also try canvas camera if any
-				var canvas = item.GetComponentInParent<Canvas>();
-				if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay && (Object)(object)canvas.worldCamera != (Object)null)
-				{
-					hit = RectTransformUtility.RectangleContainsScreenPoint(component, mouse, canvas.worldCamera);
-				}
-			}
-			if (!hit)
-			{
+			if (!ScreenPointHitsUi(component, mouse, hitPad, out float screenArea, out float distSq))
 				continue;
-			}
-			float area = Mathf.Abs(component.rect.width * component.rect.height);
-			// Prefer smaller hit targets (actual icons over whole EvolutionItemUI rows)
-			if (area < bestArea || (Mathf.Approximately(area, bestArea) && num == -1))
+			// Huge panels (full evo row / list) — only use if nothing better
+			bool huge = screenArea > maxRowArea;
+			// Tiny badges / 1px plates
+			if (screenArea < 8f) continue;
+
+			// Score: prefer closer centers; penalize huge rows and oversize targets
+			float score = Mathf.Sqrt(distSq);
+			if (huge) score += 500f;
+			else if (screenArea < minUsefulArea) score += 80f;
+			else if (screenArea > 180f * 180f) score += 40f; // large collection cards slightly deprioritized vs formula icons
+
+			// Slight preference for smaller true icons when distances are equal
+			score += Mathf.Clamp(screenArea / 20000f, 0f, 30f);
+
+			if (score < bestScore)
 			{
-				bestArea = area;
+				bestScore = score;
 				num = collectionIcon2.Key;
 				weaponType = collectionIcon2.Value.Item2;
 				itemType = collectionIcon2.Value.Item3;
@@ -6541,6 +6544,91 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		{
 			// Left all icons — clear pending; hide popup only after leaving the popup itself
 			pendingCollectionHoverId = -1;
+		}
+	}
+
+	/// <summary>
+	/// Screen-space hit test with padding using world corners (reliable for stretch/layout icons).
+	/// </summary>
+	private static bool ScreenPointHitsUi(RectTransform rt, Vector2 screen, float pad, out float screenArea, out float distSqToCenter)
+	{
+		screenArea = 0f;
+		distSqToCenter = float.MaxValue;
+		if ((Object)(object)rt == (Object)null) return false;
+		try
+		{
+			Camera cam = null;
+			var canvas = rt.GetComponentInParent<Canvas>();
+			if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+				cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+
+			// Fast path without pad
+			if (pad <= 0.01f
+				&& (RectTransformUtility.RectangleContainsScreenPoint(rt, screen, cam)
+					|| RectTransformUtility.RectangleContainsScreenPoint(rt, screen, null)
+					|| RectTransformUtility.RectangleContainsScreenPoint(rt, screen, Camera.main)))
+			{
+				// fall through to measure
+			}
+
+			Vector3[] corners = new Vector3[4];
+			rt.GetWorldCorners(corners);
+			float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
+			for (int i = 0; i < 4; i++)
+			{
+				Vector2 sp;
+				if ((Object)(object)cam != (Object)null)
+					sp = RectTransformUtility.WorldToScreenPoint(cam, corners[i]);
+				else
+					sp = new Vector2(corners[i].x, corners[i].y); // overlay: world ~= screen
+				if (sp.x < minX) minX = sp.x;
+				if (sp.x > maxX) maxX = sp.x;
+				if (sp.y < minY) minY = sp.y;
+				if (sp.y > maxY) maxY = sp.y;
+			}
+			// Overlay canvas: WorldToScreenPoint with null cam is wrong; use RectangleContains as base
+			bool overlay = (Object)(object)canvas != (Object)null && canvas.renderMode == RenderMode.ScreenSpaceOverlay;
+			if (overlay)
+			{
+				// Recompute corners via RectTransformUtility for overlay
+				bool contains = RectTransformUtility.RectangleContainsScreenPoint(rt, screen, null);
+				// Inflate: also accept if within pad of edges using local rect projection
+				if (!contains && pad > 0f)
+				{
+					if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rt, screen, null, out Vector2 local))
+					{
+						Rect r = rt.rect;
+						contains = local.x >= r.xMin - pad && local.x <= r.xMax + pad
+							&& local.y >= r.yMin - pad && local.y <= r.yMax + pad;
+					}
+				}
+				if (!contains) return false;
+				screenArea = Mathf.Abs(rt.rect.width * rt.rect.height);
+				if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rt, screen, null, out Vector2 loc2))
+				{
+					Vector2 c = rt.rect.center;
+					distSqToCenter = (loc2 - c).sqrMagnitude;
+				}
+				else distSqToCenter = 0f;
+				return true;
+			}
+
+			minX -= pad; maxX += pad; minY -= pad; maxY += pad;
+			if (screen.x < minX || screen.x > maxX || screen.y < minY || screen.y > maxY)
+				return false;
+			float w = Mathf.Max(1f, maxX - minX);
+			float h = Mathf.Max(1f, maxY - minY);
+			screenArea = w * h;
+			float cx = (minX + maxX) * 0.5f;
+			float cy = (minY + maxY) * 0.5f;
+			float dx = screen.x - cx;
+			float dy = screen.y - cy;
+			distSqToCenter = dx * dx + dy * dy;
+			return true;
+		}
+		catch
+		{
+			return false;
 		}
 	}
 
