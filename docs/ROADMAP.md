@@ -1,10 +1,13 @@
 # VS Evolution Helper — Full Roadmap
 
 **Mod:** BepInEx IL2CPP port of NihilXD’s Evolution Helper for Vampire Survivors 1.15 / Unity 6  
-**Current version:** 1.10.0 (Phase 3: character + adventure tooltips)  
-**Repo state:** Adventure hover tooltips; broader stage tips; packaging polish open  
+**Current version:** 1.10.1 (Phase 3 mostly done; polish ongoing)  
+**Repo state:** Character + adventure tooltips solid; more StageExtraTips / UX polish  
 
-
+### Working practices (owner notes)
+- **Do not tag/GitHub-release on every polish change.** Iterate: build → install local DLL → commit/push when useful. Ship `vX.Y.Z` only when the owner asks or when a real milestone is ready.
+- Keep `CHANGELOG.md` / version bumps light during polish; batch them into the next intentional release.
+- `storage/` is private (gitignored); save-fix tooling lives under `scripts/`.
 
 
 **Credits (keep in all releases):**
@@ -229,10 +232,19 @@ BepInEx core + evo/arcana + grimoire + map + stage A/B/C baseline.
 
 **Exit:** feels like a “full” helper across pre-run and in-run.
 
-### Phase 4 — Packaging automation
-1. Tag-driven zip  
+### Phase 4 — Packaging automation (later; not every PR)
+1. Tag-driven zip — **only when releasing**  
 2. Optional GH Action  
 3. Nexus update cadence  
+
+### Next polish (no release unless asked)
+| Item | Notes |
+|------|--------|
+| StageExtraTips expansion | More DLC / adventure stage notes |
+| Adventure tooltip richness | Weapon icons like character tooltips |
+| Stage Guide edge cases | Layout on odd resolutions, empty stages |
+| In-run / map / grimoire nits | Whatever shows up while playing unlocked save |
+| Config / README polish | Batch into next ship |
 
 ---
 
@@ -248,16 +260,11 @@ BepInEx core + evo/arcana + grimoire + map + stage A/B/C baseline.
 
 ---
 
-## 9. Immediate next action (pick one track)
+## 9. Immediate next action
 
-| Track | First concrete tasks |
-|-------|----------------------|
-| **A. Ship 1.7.0** | README feature update, CHANGELOG, VerboseLogging default false, zip, smoke test |
-| **B. Guide polish** | ScrollRect, empty relics UX, more tips |
-| **C. Controller** | Tab + relic navigation on stage select |
-| **D. Character tooltips** | Find CharacterSelection UI, patch SetData, reuse GameData |
+**Default mode: polish + local install.** No GitHub tag/release unless requested.
 
-**Recommendation:** **Track A then B** — package what works so you have a release baseline, then polish Guide/controller without blocking a public build.
+Suggested order: play with unlocked save → fix nits → expand tips → (optional) adventure tooltip icons.
 
 ---
 
@@ -266,4 +273,5 @@ BepInEx core + evo/arcana + grimoire + map + stage A/B/C baseline.
 - Installs without hand-holding beyond BepInEx  
 - No CTDs on stage select / pause / map for tested version  
 - Credits always visible on Nexus + README  
-- Each release: version bump + changelog + smoke checklist green  
+- Releases are intentional milestones, not every polish commit  
+
