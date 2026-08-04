@@ -3988,6 +3988,13 @@ public class ItemTooltipsMod
 				else
 					text2 = "";
 			}
+			// Collections only: extra flavor line for this relic
+			if (_collectionMenuTooltipContext && itemType.Value == ItemType.RELIC_YELLOW)
+			{
+				text2 = "The Sign is patient. "
+					+ "A small door opens in your sense of safety. "
+					+ "Nothing bad has ever come from obeying a pink occult square. Probably.";
+			}
 		}
 		// Never paint raw I2 paths as title
 		text = GameData.LocalizeDisplayText(text) ?? text;
@@ -6769,7 +6776,10 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 	}
 
-	/// <param name="anchor">Hovered collection cell — required for correct placement on App canvas.</param>
+	/// <summary>True while building a Collections-menu docked tooltip (enables Collections-only flavor copy).</summary>
+	private static bool _collectionMenuTooltipContext;
+
+	/// <param name="anchor">Hovered collection cell — optional; docked panel ignores mouse follow.</param>
 	private static void ShowCollectionPopup(WeaponType? weaponType, ItemType? itemType, object arcanaType = null, Transform anchor = null)
 	{
 		if (interactiveMode && (Object)(object)collectionPopup != (Object)null)
@@ -6782,6 +6792,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		{
 			TryCacheDataManagerStatic();
 		}
+		_collectionMenuTooltipContext = true;
 
 		// Parent under the same canvas as the hovered cell (or Collections view / App Safe Area)
 		Transform parent = null;
@@ -6857,6 +6868,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		// Keep clickable — user moves to the right panel to click formula icons
 		EnableCollectionPanelInteraction(collectionPopup);
 		try { collectionPopup.SetActive(true); } catch { }
+		_collectionMenuTooltipContext = false;
 	}
 
 	/// <summary>
