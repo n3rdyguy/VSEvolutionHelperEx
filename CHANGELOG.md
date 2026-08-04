@@ -2,6 +2,13 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.9.2] — 2026-08-04
+
+### Fixed
+- Character tooltips only on **grid cards** (UI raycast) — no longer pop when hovering the bottom info panel.
+- Starting weapon: ignore `WeaponType.VOID` (false HasValue); prefer **current outfit/skin** starter, then character, then weapon-icon sprite.
+- Outfits with different starters (e.g. Para Kooleo) listed under **Other outfits**; tooltip rebuilds live on hover/skin change.
+
 ## [1.9.1] — 2026-08-04
 
 ### Fixed

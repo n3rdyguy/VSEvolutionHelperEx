@@ -6756,6 +6756,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		};
 	}
 
+	public static bool HasCharacterIcon(int instanceId) => characterIcons.ContainsKey(instanceId);
+
 	public static void ClearCharacterIcons()
 	{
 		characterIcons.Clear();
@@ -7029,30 +7031,24 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		if (characterIcons.Count == 0) return;
 
 		Vector2 mouse = Input.mousePosition;
-		MapIconInfo hitInfo = default;
-		int hitId = -1;
+		// Raycast so bottom info panel blocks "through" hits on grid cards
 		bool hit = false;
-
-		foreach (var kv in characterIcons)
+		int hitId = -1;
+		MapIconInfo hitInfo = default;
+		GameObject rayGo = null;
+		if (CharacterSelectPatches.TryRaycastCharacterHit(mouse, out rayGo) && (Object)(object)rayGo != (Object)null)
 		{
-			GameObject go = kv.Value.Go;
-			if ((Object)(object)go == (Object)null || !go.activeInHierarchy) continue;
-			RectTransform rt = go.GetComponent<RectTransform>();
-			if ((Object)(object)rt == (Object)null) continue;
-			Camera cam = null;
-			try
-			{
-				Canvas c = go.GetComponentInParent<Canvas>();
-				if ((Object)(object)c != (Object)null && c.renderMode != RenderMode.ScreenSpaceOverlay)
-					cam = c.worldCamera;
-			}
-			catch { }
-			if (RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, cam))
-			{
+			if (TryResolveCharacterIcon(rayGo, out hitId, out hitInfo))
 				hit = true;
-				hitId = kv.Key;
-				hitInfo = kv.Value;
-				break;
+			else
+			{
+				// Registered icon may be a child (weapon/portrait)
+				int id = ((Object)rayGo).GetInstanceID();
+				if (characterIcons.TryGetValue(id, out hitInfo))
+				{
+					hit = true;
+					hitId = id;
+				}
 			}
 		}
 
@@ -7142,10 +7138,21 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 		if ((Object)(object)parent == (Object)null) return;
 
-		characterPopup = CreateSimpleMapPopup(parent, info.Label, info.Description, info.Sprite);
+		// Live rebuild so current outfit/skin starter is correct (Para Kooleo etc.)
+		string label = info.Label;
+		string desc = info.Description;
+		Sprite spr = info.Sprite;
+		if (CharacterSelectPatches.TryBuildLiveTooltip(info.Go, out string liveTitle, out string liveBody, out Sprite liveSpr))
+		{
+			label = liveTitle;
+			desc = liveBody;
+			if ((Object)(object)liveSpr != (Object)null) spr = liveSpr;
+		}
+
+		characterPopup = CreateSimpleMapPopup(parent, label, desc, spr);
 		if ((Object)(object)characterPopup != (Object)null && (Object)(object)info.Go != (Object)null)
 			PositionPopup(characterPopup, info.Go.transform);
-		Plugin.Dbg($"Character popup label={info.Label}");
+		Plugin.Dbg($"Character popup label={label}");
 	}
 
 	private static void HideCharacterPopup()
