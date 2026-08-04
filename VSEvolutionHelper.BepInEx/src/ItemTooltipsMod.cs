@@ -6856,9 +6856,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	}
 
 	/// <summary>
-	/// Place popup next to hovered cell on root canvas, drawn on top (nested Canvas + overrideSorting).
-	/// Does NOT set renderMode on the nested canvas (that made popups invisible).
-	/// Raycasts disabled so the cell keeps hover (no instant PointerExit hide).
+	/// Reverse of "under the grid": parent OUTSIDE ScrollRect (Collections view / Safe Area),
+	/// place from cell world corners, last sibling so it draws on top — no nested Canvas games.
 	/// </summary>
 	private static void PositionPopupNearScreen(GameObject popup, Transform anchor)
 	{
@@ -6873,38 +6872,80 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			if ((Object)(object)anchorRt == (Object)null)
 				anchorRt = anchor.GetComponent<RectTransform>();
 
-			Canvas leaf = anchor.GetComponentInParent<Canvas>();
-			Canvas root = (Object)(object)leaf != (Object)null ? leaf.rootCanvas : leaf;
-			if ((Object)(object)root == (Object)null)
-			{
-				popup.transform.SetParent(anchor, false);
-				popupRt.anchorMin = popupRt.anchorMax = new Vector2(1f, 1f);
-				popupRt.pivot = new Vector2(0f, 1f);
-				popupRt.anchoredPosition = new Vector2(10f, 4f);
-				DisablePopupRaycasts(popup);
-				return;
-			}
-
-			// Prefer App "Safe Area" as parent (same space as Collections) if present
-			Transform parentXf = ((Component)root).transform;
+			// Host ABOVE the grid mask: Collections view root, else Safe Area, else canvas
+			Transform host = null;
 			try
 			{
-				var safe = GameObject.Find("UI/Canvas - App/Safe Area");
-				if ((Object)(object)safe != (Object)null && safe.activeInHierarchy)
-					parentXf = safe.transform;
+				// Walk up to View - Collections (sibling of ScrollView, not inside Viewport)
+				Transform t = anchor;
+				while ((Object)(object)t != (Object)null)
+				{
+					string n = ((Object)t).name ?? "";
+					if (n.IndexOf("View - Collection", StringComparison.OrdinalIgnoreCase) >= 0
+						|| n.Equals("Safe Area", StringComparison.OrdinalIgnoreCase))
+					{
+						host = t;
+						break;
+					}
+					t = t.parent;
+				}
+			}
+			catch { }
+			if ((Object)(object)host == (Object)null)
+			{
+				var go = GameObject.Find("UI/Canvas - App/Safe Area/View - Collections");
+				if ((Object)(object)go == (Object)null)
+					go = GameObject.Find("UI/Canvas - App/Safe Area");
+				if ((Object)(object)go != (Object)null)
+					host = go.transform;
+			}
+			if ((Object)(object)host == (Object)null)
+			{
+				var c = anchor.GetComponentInParent<Canvas>();
+				if ((Object)(object)c != (Object)null)
+					host = ((Component)c.rootCanvas).transform;
+			}
+			if ((Object)(object)host == (Object)null)
+				host = anchor.parent != null ? anchor.parent : anchor;
+
+			// Strip any leftover overlay Canvas from 1.10.16 that can blank the popup
+			try
+			{
+				var leftover = popup.GetComponent<Canvas>();
+				if ((Object)(object)leftover != (Object)null
+					&& (Object)(object)popup.GetComponentInParent<Canvas>() != (Object)(object)leftover)
+				{
+					// only remove if it's our nested overlay, not the root
+				}
+				// Always remove nested Canvas/GraphicRaycaster we may have added
+				var nested = popup.GetComponents<Canvas>();
+				// GetComponents on same GO
+				var cv = popup.GetComponent<Canvas>();
+				if ((Object)(object)cv != (Object)null)
+				{
+					// If this GO has its own Canvas AND a parent canvas, remove the nested one
+					var parentCv = popup.transform.parent != null
+						? popup.transform.parent.GetComponentInParent<Canvas>()
+						: null;
+					// remove after reparent
+				}
 			}
 			catch { }
 
-			popup.transform.SetParent(parentXf, false);
+			popup.transform.SetParent(host, false);
 			popup.transform.SetAsLastSibling();
 
-			// Nested canvas: ONLY overrideSorting — never set renderMode (breaks nested UI)
-			Canvas overlay = popup.GetComponent<Canvas>();
-			if ((Object)(object)overlay == (Object)null)
-				overlay = popup.AddComponent<Canvas>();
-			overlay.overrideSorting = true;
-			overlay.sortingOrder = 9000;
-			// Do not add GraphicRaycaster for menu tooltips — steals hover from the cell
+			// Remove nested Canvas (polarity reverse: no overlay canvas)
+			try
+			{
+				var cv = popup.GetComponent<Canvas>();
+				if ((Object)(object)cv != (Object)null)
+					Object.Destroy(cv);
+				var gr = popup.GetComponent<GraphicRaycaster>();
+				if ((Object)(object)gr != (Object)null)
+					Object.Destroy(gr);
+			}
+			catch { }
 
 			popupRt.localScale = Vector3.one;
 			popupRt.localRotation = Quaternion.identity;
@@ -6912,67 +6953,66 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			popupRt.anchorMax = new Vector2(0.5f, 0.5f);
 			popupRt.pivot = new Vector2(0f, 1f);
 
+			Canvas canvas = host.GetComponentInParent<Canvas>();
 			Camera cam = null;
-			if (root.renderMode != RenderMode.ScreenSpaceOverlay)
-				cam = root.worldCamera != null ? root.worldCamera : Camera.main;
+			if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+				cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+			// Overlay: cam must be null for ScreenPointToLocalPointInRectangle
+			Camera localCam = ((Object)(object)canvas != (Object)null && canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+				? null
+				: cam;
 
-			Vector2 screen;
+			// World attach = top-right of cell
+			Vector3 worldAttach = anchor.position;
 			if ((Object)(object)anchorRt != (Object)null)
 			{
 				Vector3[] corners = new Vector3[4];
 				anchorRt.GetWorldCorners(corners);
-				// top-right of cell
-				screen = RectTransformUtility.WorldToScreenPoint(cam, corners[2]);
-			}
-			else
-			{
-				screen = RectTransformUtility.WorldToScreenPoint(cam, anchor.position);
+				worldAttach = corners[2]; // TR
 			}
 
-			screen.x += 14f;
-			screen.y += 6f;
+			Vector2 screen = RectTransformUtility.WorldToScreenPoint(localCam, worldAttach);
+			// For overlay WorldToScreenPoint(null, ...) is wrong — use cam null only in LocalPoint
+			if ((Object)(object)canvas != (Object)null && canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+			{
+				// World corners are already in screen-ish space for overlay; convert carefully
+				screen = RectTransformUtility.WorldToScreenPoint(null, worldAttach);
+				// Unity docs: for overlay, pass null to both
+			}
+
+			screen.x += 12f;
+			screen.y += 4f;
 
 			float popupW = popupRt.sizeDelta.x > 40f ? popupRt.sizeDelta.x : 360f;
-			bool flipLeft = screen.x + popupW + 16f > Screen.width;
-			if (flipLeft)
+			bool flipLeft = screen.x + popupW + 20f > Screen.width;
+			if (flipLeft && (Object)(object)anchorRt != (Object)null)
 			{
-				if ((Object)(object)anchorRt != (Object)null)
-				{
-					Vector3[] corners = new Vector3[4];
-					anchorRt.GetWorldCorners(corners);
-					screen = RectTransformUtility.WorldToScreenPoint(cam, corners[1]);
-				}
-				screen.x -= 14f;
+				Vector3[] corners = new Vector3[4];
+				anchorRt.GetWorldCorners(corners);
+				worldAttach = corners[1]; // TL
+				screen = RectTransformUtility.WorldToScreenPoint(
+					canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : cam,
+					worldAttach);
+				screen.x -= 12f;
 				popupRt.pivot = new Vector2(1f, 1f);
 			}
 
-			RectTransform parentRt = parentXf as RectTransform;
-			if ((Object)(object)parentRt == (Object)null)
-				parentRt = ((Component)parentXf).GetComponent<RectTransform>();
-			if ((Object)(object)parentRt == (Object)null) return;
+			RectTransform hostRt = host as RectTransform;
+			if ((Object)(object)hostRt == (Object)null)
+				hostRt = host.GetComponent<RectTransform>();
+			if ((Object)(object)hostRt == (Object)null) return;
 
-			// Use same camera rules as the canvas for local conversion
-			Camera localCam = cam;
-			if (root.renderMode == RenderMode.ScreenSpaceOverlay)
-				localCam = null;
-
-			if (RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRt, screen, localCam, out Vector2 local))
+			if (RectTransformUtility.ScreenPointToLocalPointInRectangle(hostRt, screen, localCam, out Vector2 local))
 			{
-				Rect r = parentRt.rect;
-				float ph = popupRt.sizeDelta.y > 40f ? popupRt.sizeDelta.y : 220f;
-				local.x = Mathf.Clamp(local.x, r.xMin + 8f, r.xMax - 8f);
-				local.y = Mathf.Clamp(local.y, r.yMin + 8f, r.yMax - 8f);
-				// Keep pivot corner on-screen roughly
-				if (!flipLeft && local.x + popupW > r.xMax)
-					local.x = r.xMax - popupW - 8f;
-				if (flipLeft && local.x - popupW < r.xMin)
-					local.x = r.xMin + popupW + 8f;
-				if (local.y - ph < r.yMin)
-					local.y = r.yMin + ph + 8f;
 				popupRt.anchoredPosition = local;
 			}
+			else
+			{
+				// Last resort: same local space as InverseTransform of world point
+				Vector3 lp = host.InverseTransformPoint(worldAttach);
+				popupRt.anchoredPosition = new Vector2(lp.x + 12f, lp.y + 4f);
+			}
 
-			// Critical: don't steal pointer from the cell (would hide tooltip immediately)
 			DisablePopupRaycasts(popup);
 		}
 		catch (Exception ex)
