@@ -5988,8 +5988,9 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			GameObject go = CreateFormulaIcon(parent, $"ArcanaIcon{i}", sprite, isOwned: false, isBanned: false, card, padding, yOffset);
 			AddArcanaHoverToGameObject(go, arcanaInfo.Type);
 			string displayName = !string.IsNullOrEmpty(arcanaInfo.Name) ? arcanaInfo.Name : GameData.GetArcanaName(arcanaInfo.Type);
+			// Same dark purple as Arcana header (not bold)
 			GameObject val2 = CreateTextElement(parent, $"ArcanaName{i}", displayName, font, 13f,
-				new Color(0.55f, 0.38f, 0.72f, 1f), (FontStyles)0);
+				new Color(0.42f, 0.22f, 0.62f, 1f), (FontStyles)0);
 			RectTransform component2 = val2.GetComponent<RectTransform>();
 			component2.anchorMin = new Vector2(0f, 1f);
 			component2.anchorMax = new Vector2(0f, 1f);
@@ -6113,7 +6114,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			((TMP_Text)val10).text = text;
 			((TMP_Text)val10).fontSize = 20f;
 			((TMP_Text)val10).fontStyle = (FontStyles)1;
-			((Graphic)val10).color = new Color(0.8f, 0.7f, 0.95f, 1f);
+			// Match dark Arcana purple used on list names / headers
+			((Graphic)val10).color = new Color(0.42f, 0.22f, 0.62f, 1f);
 			((TMP_Text)val10).alignment = (TextAlignmentOptions)513;
 			((TMP_Text)val10).enableAutoSizing = true;
 			((TMP_Text)val10).fontSizeMin = 12f;
