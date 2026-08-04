@@ -2,6 +2,16 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.7.2] — 2026-08-04
+
+### Fixed
+- **Level Up tooltips (harder):** require mouse **move** after the screen opens, then ~0.45s hover on the **icon** (not the full card). No dwell-from-auto-select. Stops tooltips when cards spawn under a stationary cursor.
+
+## [1.7.1] — 2026-08-04
+
+### Fixed
+- **Level Up:** first pass — clear popups on open; don't treat auto-select as controller dwell.
+
 ## [1.7.0] — 2026-08-04
 
 ### Added

@@ -13,6 +13,9 @@ public static class LevelUpPagePatches
 	{
 		try
 		{
+			// Clear any auto/stale tooltip before cards finish spawning
+			ItemTooltipsMod.OnLevelUpOpened();
+
 			DataManager data = ((BaseUIPage)__instance).Data;
 			if (data != null)
 			{

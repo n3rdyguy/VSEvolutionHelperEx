@@ -16,6 +16,7 @@ Run before tagging or uploading a Nexus zip. Game build under test: **VS 1.15.x*
 - [ ] Nested click on evo icon opens nested tooltip
 - [ ] Arcana section (if any) shows real names; click opens popup with Affects
 - [ ] Pause **map**: hover a relic/pickup → name/description
+- [ ] **Level Up:** no tooltip until you hover a choice; moving away hides it (fixed 1.7.1 — re-verify)
 
 ## Menus
 

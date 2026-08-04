@@ -201,6 +201,18 @@ public class ItemTooltipsMod
 
 	private static bool passivePopupShown = false;
 
+	/// <summary>After Level Up opens, block auto tooltips until real hover or grace ends.</summary>
+	private static float suppressUnsolicitedPopupUntil = 0f;
+	/// <summary>User must move the mouse after Level Up opens before any hover tooltip (cards spawn under cursor).</summary>
+	private static bool levelUpHoverUnlocked = false;
+	/// <summary>Pending delayed hover on Level Up (avoid instant PointerEnter when cards appear under the mouse).</summary>
+	private static Transform levelUpPendingAnchor = null;
+	private static WeaponType? levelUpPendingWeapon = null;
+	private static ItemType? levelUpPendingItem = null;
+	private static float levelUpPendingSince = -1f;
+	// Short settle delay only — main guard is "mouse must move after Level Up opens"
+	private const float LevelUpHoverDelay = 0.15f;
+
 	private static bool interactiveMode = false;
 
 	private static List<GameObject> formulaIcons = new List<GameObject>();
@@ -723,6 +735,9 @@ public class ItemTooltipsMod
 		bool flag = IsGamePaused();
 		if (flag && !wasGamePaused)
 		{
+			// Level Up / pause / merchant just opened — never keep a stale or auto tooltip
+			HideAllPopups();
+			ResetHoverDwellState();
 			collectionIcons.Clear();
 			HideCollectionPopup();
 			ClearTrackedIcons();
@@ -738,7 +753,9 @@ public class ItemTooltipsMod
 			{
 				TryFindGameSession();
 			}
-			if ((Object)(object)hudInventory != (Object)null && cachedGameSession != null)
+			// Do not attach HUD hovers while Level Up is the active overlay (avoids stray tooltips)
+			bool levelUpOpen = (Object)(object)levelUpView != (Object)null && levelUpView.activeInHierarchy;
+			if (!levelUpOpen && (Object)(object)hudInventory != (Object)null && cachedGameSession != null)
 			{
 				SetupHUDHovers();
 			}
@@ -819,10 +836,12 @@ public class ItemTooltipsMod
 		{
 			return;
 		}
-		if (usingController && !equipmentNavMode)
+		if (usingController && !equipmentNavMode && !IsLevelUpViewActive())
 		{
+			// Never dwell-show tooltips on Level Up (auto-select first card)
 			UpdateControllerDwell();
 		}
+		UpdateLevelUpPendingHover();
 		float unscaledTime = Time.unscaledTime;
 		if (unscaledTime - lastScanTime >= scanInterval)
 		{
@@ -1091,16 +1110,21 @@ public class ItemTooltipsMod
 			WeaponType? weaponType = tracked.WeaponType;
 			ItemType? itemType = tracked.ItemType;
 			EventTrigger.Entry val2 = new EventTrigger.Entry();
-			val2.eventID = (EventTriggerType)0;
+			val2.eventID = (EventTriggerType)0; // PointerEnter
 			((UnityEvent<BaseEventData>)(object)val2.callback).AddListener((UnityEngine.Events.UnityAction<UnityEngine.EventSystems.BaseEventData>)(System.Action<UnityEngine.EventSystems.BaseEventData>)(delegate
 			{
-				ShowItemPopup(((Component)tracked.Image).transform, weaponType, itemType);
+				var t = ((Component)tracked.Image).transform;
+				if (IsLevelUpViewActive())
+					RequestLevelUpHover(t, weaponType, itemType);
+				else
+					ShowItemPopup(t, weaponType, itemType);
 			}));
 			val.triggers.Add(val2);
 			EventTrigger.Entry val3 = new EventTrigger.Entry();
-			val3.eventID = (EventTriggerType)1;
+			val3.eventID = (EventTriggerType)1; // PointerExit
 			((UnityEvent<BaseEventData>)(object)val3.callback).AddListener((UnityEngine.Events.UnityAction<UnityEngine.EventSystems.BaseEventData>)(System.Action<UnityEngine.EventSystems.BaseEventData>)(delegate
 			{
+				CancelLevelUpHoverIfMatch(((Component)tracked.Image).transform);
 				DelayFrames(10, () => { if (mouseOverPopupIndex < 0 && popupStack.Count > 0) HideAllPopups(); });
 			}));
 			val.triggers.Add(val3);
@@ -2485,10 +2509,13 @@ public class ItemTooltipsMod
 		//IL_0023: Unknown result type (might be due to invalid IL or missing references)
 		Vector3 mousePosition = Input.mousePosition;
 		Vector3 val = mousePosition - lastMousePosition;
-		bool flag = val.sqrMagnitude > 1f;
+		bool mouseMoved = val.sqrMagnitude > 1f;
 		lastMousePosition = mousePosition;
-		if (flag)
+		if (mouseMoved)
 		{
+			// Deliberate mouse movement after Level Up opens unlocks hover tooltips
+			if (IsLevelUpViewActive())
+				levelUpHoverUnlocked = true;
 			if (usingController)
 			{
 				if (equipmentNavMode)
@@ -2502,15 +2529,200 @@ public class ItemTooltipsMod
 			}
 			return;
 		}
+		// Only enter controller mode on real gamepad/keyboard nav input —
+		// NOT merely because Level Up auto-selected the first card (that was
+		// causing unsolicited tooltips with a stationary mouse).
 		EventSystem current = EventSystem.current;
-		if (!((Object)(object)current == (Object)null))
+		if ((Object)(object)current != (Object)null)
 		{
 			GameObject currentSelectedGameObject = current.currentSelectedGameObject;
-			if ((Object)(object)currentSelectedGameObject != (Object)(object)lastSelectedObject && (Object)(object)currentSelectedGameObject != (Object)null && !usingController)
+			if (HasControllerNavInput())
 			{
 				usingController = true;
 			}
 			lastSelectedObject = currentSelectedGameObject;
+		}
+	}
+
+	/// <summary>True when player is actively driving UI with pad/keys (not auto-selection).</summary>
+	private static bool HasControllerNavInput()
+	{
+		try
+		{
+			if (Mathf.Abs(Input.GetAxisRaw("Horizontal")) > 0.35f) return true;
+			if (Mathf.Abs(Input.GetAxisRaw("Vertical")) > 0.35f) return true;
+		}
+		catch { }
+		// Face / d-pad style keys used elsewhere in this mod
+		if (Input.GetKeyDown(KeyCode.JoystickButton0) || Input.GetKeyDown(KeyCode.JoystickButton1)
+			|| Input.GetKeyDown(KeyCode.JoystickButton2) || Input.GetKeyDown(KeyCode.JoystickButton3))
+			return true;
+		if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.DownArrow)
+			|| Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.RightArrow))
+			return true;
+		if (IsInteractButtonPressed() || IsSubmitButtonPressed())
+			return true;
+		return false;
+	}
+
+	private static void ResetHoverDwellState()
+	{
+		dwellTarget = null;
+		passivePopupShown = false;
+		usingController = false;
+		preDwellSelection = null;
+		if (equipmentNavMode)
+		{
+			try { ExitEquipmentNavMode(); } catch { }
+		}
+		try { ExitInteractiveMode(); } catch { }
+	}
+
+	/// <summary>Called when Level Up UI opens — clear popups so nothing shows until real hover.</summary>
+	public static void OnLevelUpOpened()
+	{
+		try
+		{
+			HideAllPopups();
+			ResetHoverDwellState();
+			// Cards often spawn under the cursor → PointerEnter fires immediately. Require a
+			// deliberate mouse move + short hover delay before any Level Up tooltip.
+			suppressUnsolicitedPopupUntil = Time.unscaledTime + 1.0f;
+			levelUpHoverUnlocked = false;
+			ClearLevelUpPendingHover();
+			Plugin.Dbg("OnLevelUpOpened: cleared popups; hover locked until mouse moves");
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("OnLevelUpOpened: " + ex.Message);
+		}
+	}
+
+	private static void ClearLevelUpPendingHover()
+	{
+		levelUpPendingAnchor = null;
+		levelUpPendingWeapon = null;
+		levelUpPendingItem = null;
+		levelUpPendingSince = -1f;
+	}
+
+	/// <summary>Level Up only: queue hover for delayed show (called from EventTrigger).</summary>
+	private static void RequestLevelUpHover(Transform anchor, WeaponType? weaponType, ItemType? itemType)
+	{
+		if (!IsLevelUpViewActive())
+		{
+			ShowItemPopup(anchor, weaponType, itemType);
+			return;
+		}
+		if (!levelUpHoverUnlocked)
+		{
+			Plugin.Dbg("LevelUp hover ignored (mouse not moved since open)");
+			return;
+		}
+		levelUpPendingAnchor = anchor;
+		levelUpPendingWeapon = weaponType;
+		levelUpPendingItem = itemType;
+		levelUpPendingSince = Time.unscaledTime;
+	}
+
+	private static void CancelLevelUpHoverIfMatch(Transform anchor)
+	{
+		if ((Object)(object)levelUpPendingAnchor != (Object)null
+			&& (Object)(object)anchor != (Object)null
+			&& ((Object)levelUpPendingAnchor).GetInstanceID() == ((Object)anchor).GetInstanceID())
+		{
+			ClearLevelUpPendingHover();
+		}
+		// Always hide when leaving a Level Up icon if no popup hover
+		if (IsLevelUpViewActive() && mouseOverPopupIndex < 0)
+		{
+			DelayFrames(5, () =>
+			{
+				if (mouseOverPopupIndex < 0 && IsLevelUpViewActive()
+					&& ((Object)(object)levelUpPendingAnchor == (Object)null
+						|| !IsPointerOverObject(levelUpPendingAnchor.gameObject)))
+				{
+					HideAllPopups();
+				}
+			});
+		}
+	}
+
+	private static void UpdateLevelUpPendingHover()
+	{
+		if (!IsLevelUpViewActive())
+		{
+			if (levelUpPendingSince >= 0f)
+				ClearLevelUpPendingHover();
+			return;
+		}
+		if (!levelUpHoverUnlocked || levelUpPendingSince < 0f || (Object)(object)levelUpPendingAnchor == (Object)null)
+			return;
+		if (!IsPointerOverObject(levelUpPendingAnchor.gameObject))
+		{
+			ClearLevelUpPendingHover();
+			return;
+		}
+		if (Time.unscaledTime - levelUpPendingSince < LevelUpHoverDelay)
+			return;
+		// Confirmed dwell on icon after mouse move
+		Transform a = levelUpPendingAnchor;
+		WeaponType? w = levelUpPendingWeapon;
+		ItemType? it = levelUpPendingItem;
+		ClearLevelUpPendingHover();
+		ShowItemPopupForced(a, w, it);
+	}
+
+	/// <summary>Show popup bypassing Level Up request queue (already validated).</summary>
+	private static void ShowItemPopupForced(Transform anchor, WeaponType? weaponType, ItemType? itemType)
+	{
+		// Temporarily clear suppress so ShowItemPopup proceeds
+		float saved = suppressUnsolicitedPopupUntil;
+		suppressUnsolicitedPopupUntil = 0f;
+		bool unlocked = levelUpHoverUnlocked;
+		levelUpHoverUnlocked = true;
+		try
+		{
+			ShowItemPopup(anchor, weaponType, itemType);
+		}
+		finally
+		{
+			suppressUnsolicitedPopupUntil = saved;
+			levelUpHoverUnlocked = unlocked;
+		}
+	}
+
+	private static bool IsLevelUpViewActive()
+	{
+		if ((Object)(object)levelUpView == (Object)null)
+		{
+			levelUpView = GameObject.Find("GAME UI/Canvas - Game UI/Safe Area/View - Level Up");
+		}
+		return (Object)(object)levelUpView != (Object)null && levelUpView.activeInHierarchy;
+	}
+
+	/// <summary>True if screen point is over this UI object (or a child).</summary>
+	private static bool IsPointerOverObject(GameObject go)
+	{
+		if ((Object)(object)go == (Object)null) return false;
+		try
+		{
+			RectTransform rt = go.GetComponent<RectTransform>();
+			if ((Object)(object)rt == (Object)null)
+				rt = go.GetComponentInChildren<RectTransform>();
+			if ((Object)(object)rt == (Object)null) return false;
+			Vector2 mouse = (Vector2)Input.mousePosition;
+			Camera cam = null;
+			var canvas = go.GetComponentInParent<Canvas>();
+			if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+				cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+			return RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, cam)
+				|| RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, null)
+				|| RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, Camera.main);
+		}
+		catch
+		{
+			return false;
 		}
 	}
 
@@ -2562,6 +2774,12 @@ public class ItemTooltipsMod
 			float num = Time.unscaledTime - dwellStartTime;
 			if (!(num < DwellDelay))
 			{
+				// Level Up: never dwell-show for mouse-only (auto-select first card).
+				// Controller: only after real nav input (usingController set by HasControllerNavInput).
+				if (IsLevelUpViewActive() && !usingController)
+					return;
+				if (IsLevelUpViewActive() && usingController && !IsPointerOverObject(currentSelectedGameObject) && !HasControllerNavInput())
+					return;
 				(WeaponType?, ItemType?)? tuple = FindTrackedIconForObject(currentSelectedGameObject);
 				if (tuple.HasValue)
 				{
@@ -3499,6 +3717,28 @@ public class ItemTooltipsMod
 		if ((weaponType.HasValue && ((object)weaponType.Value/*cast due to constrained. prefix*/).ToString() == "DEFANG") || (itemType.HasValue && ((object)itemType.Value/*cast due to constrained. prefix*/).ToString() == "DEFANG"))
 		{
 			return;
+		}
+		// Level Up: never show unless user moved mouse after open AND pointer is on the icon
+		if (IsLevelUpViewActive())
+		{
+			if (!levelUpHoverUnlocked)
+			{
+				Plugin.Dbg("ShowItemPopup blocked: Level Up hover not unlocked (move mouse first)");
+				return;
+			}
+			if ((Object)(object)anchor == (Object)null || !IsPointerOverObject(anchor.gameObject))
+			{
+				Plugin.Dbg("ShowItemPopup blocked: pointer not over Level Up icon");
+				return;
+			}
+		}
+		else if (Time.unscaledTime < suppressUnsolicitedPopupUntil)
+		{
+			if ((Object)(object)anchor == (Object)null || !IsPointerOverObject(anchor.gameObject))
+			{
+				Plugin.Dbg("ShowItemPopup suppressed (grace / pointer not over icon)");
+				return;
+			}
 		}
 		if (!IsGamePaused())
 		{
@@ -7077,16 +7317,20 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		else
 		{
 			EventTrigger.Entry val3 = new EventTrigger.Entry();
-			val3.eventID = (EventTriggerType)0;
+			val3.eventID = (EventTriggerType)0; // PointerEnter
 			((UnityEvent<BaseEventData>)(object)val3.callback).AddListener((UnityEngine.Events.UnityAction<UnityEngine.EventSystems.BaseEventData>)(System.Action<UnityEngine.EventSystems.BaseEventData>)(delegate
 			{
-				ShowItemPopup(go.transform, weaponType, itemType);
+				if (IsLevelUpViewActive())
+					RequestLevelUpHover(go.transform, weaponType, itemType);
+				else
+					ShowItemPopup(go.transform, weaponType, itemType);
 			}));
 			val.triggers.Add(val3);
 			EventTrigger.Entry val4 = new EventTrigger.Entry();
-			val4.eventID = (EventTriggerType)1;
+			val4.eventID = (EventTriggerType)1; // PointerExit
 			((UnityEvent<BaseEventData>)(object)val4.callback).AddListener((UnityEngine.Events.UnityAction<UnityEngine.EventSystems.BaseEventData>)(System.Action<UnityEngine.EventSystems.BaseEventData>)(delegate
 			{
+				CancelLevelUpHoverIfMatch(go.transform);
 				DelayFrames(10, () => { if (mouseOverPopupIndex < 0 && popupStack.Count > 0) HideAllPopups(); });
 			}));
 			val.triggers.Add(val4);

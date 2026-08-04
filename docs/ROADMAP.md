@@ -54,6 +54,13 @@
 | Arcana “active run only” filter option | Currently data-driven (all affecting) | S |
 | Nested popup stack edge cases | Click relic → weapon → arcana depth | S |
 
+### 2.5 Known bugs (fix for next phase)
+| Bug | Severity | Repro | Likely area | Fix ideas |
+|-----|----------|-------|-------------|-----------|
+| **Level Up tooltip shows without hovering a choice** | High / annoying | Open level-up with cursor off cards → tooltip appears; goes away after hover-on/off an item | False `usingController` from EventSystem auto-select of first card → dwell popup; also possible enter-on-spawn | **Fixed in 1.7.1:** `OnLevelUpOpened` clears popups; selection no longer enables controller mode; grace + pointer check on `ShowItemPopup`; skip HUD hovers while Level Up open |
+
+**Reporter note (2026-08):** Confirmed — unsolicited tooltip on Level Up open; clears after hover-on then hover-off an item. Fix shipped **1.7.1**.
+
 ### 2.4 README & in-repo docs
 | Task | Why | Effort |
 |------|-----|--------|
@@ -204,12 +211,12 @@ BepInEx core + evo/arcana + grimoire + map + stage A/B/C baseline.
 
 **Exit:** someone can install from zip without this repo.
 
-### Phase 2 — Input & config
-1. Hover delay + feature toggles in cfg  
-2. Controller: Guide tabs + relic focus  
-3. VerboseLogging default false for release  
+### Phase 2 — Bugs, input & config
+1. **Fix Level Up global tooltip** (ROADMAP §2.5) — highest UX priority  
+2. Hover delay + feature toggles in cfg  
+3. Controller: Guide tabs + relic focus  
 
-**Exit:** pad-friendly stage select; configurable UX.
+**Exit:** level-up is usable without stray tooltips; pad-friendly stage select; configurable UX.
 
 ### Phase 3 — Content expansions
 1. Character select tooltips  
