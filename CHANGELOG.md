@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.1] — 2026-08-04
+
+### Fixed
+- Character select tooltips **resize from real TMP preferred height/width** so flavor, stats, and multi-line names are no longer clipped or oversized.
+
 ## [1.10.0] — 2026-08-04
 
 ### Added
