@@ -3957,6 +3957,11 @@ public class ItemTooltipsMod
 		TMP_FontAsset font = GetFont();
 		if ((Object)(object)font != (Object)null)
 		{
+			float contentW = num2 - Padding * 2f;
+			float headerIcon = IconSize;
+			bool hasHeaderIcon = (Object)(object)val5 != (Object)null;
+
+			// Title row: fixed icon + wrapping title (not stretch-fill)
 			GameObject val6 = new GameObject("TitleRow");
 			val6.transform.SetParent(val.transform, false);
 			RectTransform val7 = val6.AddComponent<RectTransform>();
@@ -3964,41 +3969,47 @@ public class ItemTooltipsMod
 			val7.anchorMax = new Vector2(0f, 1f);
 			val7.pivot = new Vector2(0f, 1f);
 			val7.anchoredPosition = new Vector2(Padding, num);
-			val7.sizeDelta = new Vector2(num2 - Padding * 2f, IconSize);
+
+			if (hasHeaderIcon)
+			{
+				GameObject val11 = new GameObject("HeaderIcon");
+				val11.transform.SetParent(val6.transform, false);
+				RectTransform val12 = val11.AddComponent<RectTransform>();
+				val12.anchorMin = new Vector2(0f, 1f);
+				val12.anchorMax = new Vector2(0f, 1f);
+				val12.pivot = new Vector2(0f, 1f);
+				val12.anchoredPosition = Vector2.zero;
+				val12.sizeDelta = new Vector2(headerIcon, headerIcon);
+				Image val13 = val11.AddComponent<Image>();
+				val13.sprite = val5;
+				val13.preserveAspect = true;
+				((Graphic)val13).raycastTarget = false;
+			}
+
 			GameObject val8 = new GameObject("Title");
 			val8.transform.SetParent(val6.transform, false);
 			RectTransform val9 = val8.AddComponent<RectTransform>();
-			val9.anchorMin = Vector2.zero;
-			val9.anchorMax = Vector2.one;
-			val9.offsetMin = new Vector2(IconSize + Spacing, 0f);
-			val9.offsetMax = Vector2.zero;
+			val9.anchorMin = new Vector2(0f, 1f);
+			val9.anchorMax = new Vector2(0f, 1f);
+			val9.pivot = new Vector2(0f, 1f);
+			float titleX = hasHeaderIcon ? headerIcon + Spacing : 0f;
+			val9.anchoredPosition = new Vector2(titleX, 0f);
+			val9.sizeDelta = new Vector2(contentW - titleX, headerIcon);
 			TextMeshProUGUI val10 = val8.AddComponent<TextMeshProUGUI>();
 			((TMP_Text)val10).font = font;
 			((TMP_Text)val10).text = text;
 			((TMP_Text)val10).fontSize = 20f;
 			((TMP_Text)val10).fontStyle = (FontStyles)1;
 			((Graphic)val10).color = Color.white;
-			((TMP_Text)val10).alignment = (TextAlignmentOptions)513;
-			((TMP_Text)val10).enableAutoSizing = true;
-			((TMP_Text)val10).fontSizeMin = 12f;
-			((TMP_Text)val10).fontSizeMax = 20f;
-			((TMP_Text)val10).overflowMode = (TextOverflowModes)1;
-			if ((Object)(object)val5 != (Object)null)
-			{
-				GameObject val11 = new GameObject("HeaderIcon");
-				val11.transform.SetParent(val6.transform, false);
-				RectTransform val12 = val11.AddComponent<RectTransform>();
-				val12.anchorMin = new Vector2(0f, 0.5f);
-				val12.anchorMax = new Vector2(0f, 0.5f);
-				val12.pivot = new Vector2(0f, 0.5f);
-				val12.anchoredPosition = new Vector2(0f, 0f);
-				val12.sizeDelta = new Vector2(IconSize, IconSize);
-				Image val13 = val11.AddComponent<Image>();
-				val13.sprite = val5;
-				val13.preserveAspect = true;
-				((Graphic)val13).raycastTarget = false;
-			}
-			num -= IconSize + Spacing;
+			((TMP_Text)val10).alignment = (TextAlignmentOptions)257; // top-left
+			((TMP_Text)val10).enableWordWrapping = true;
+			((TMP_Text)val10).overflowMode = TextOverflowModes.Overflow;
+			((Graphic)val10).raycastTarget = false;
+			float titleH = FitTmpHeight(val10, contentW - titleX, 24f, 72f);
+			float rowH = Mathf.Max(hasHeaderIcon ? headerIcon : 0f, titleH);
+			val7.sizeDelta = new Vector2(contentW, rowH);
+			num -= rowH + Spacing + 2f;
+
 			if (!string.IsNullOrEmpty(text2))
 			{
 				GameObject val14 = new GameObject("Description");
@@ -4008,8 +4019,7 @@ public class ItemTooltipsMod
 				val15.anchorMax = new Vector2(0f, 1f);
 				val15.pivot = new Vector2(0f, 1f);
 				val15.anchoredPosition = new Vector2(Padding, num);
-				float num3 = num2 - Padding * 2f;
-				val15.sizeDelta = new Vector2(num3, 0f);
+				val15.sizeDelta = new Vector2(contentW, 24f);
 				TextMeshProUGUI val16 = val14.AddComponent<TextMeshProUGUI>();
 				((TMP_Text)val16).font = font;
 				((TMP_Text)val16).text = text2;
@@ -4017,16 +4027,10 @@ public class ItemTooltipsMod
 				((Graphic)val16).color = new Color(0.85f, 0.85f, 0.9f, 1f);
 				((TMP_Text)val16).alignment = (TextAlignmentOptions)257;
 				((TMP_Text)val16).enableWordWrapping = true;
-				((TMP_Text)val16).overflowMode = (TextOverflowModes)3;
-				((TMP_Text)val16).rectTransform.sizeDelta = new Vector2(num3, 0f);
-				ContentSizeFitter val17 = val14.AddComponent<ContentSizeFitter>();
-				val17.horizontalFit = (ContentSizeFitter.FitMode)0;
-				val17.verticalFit = (ContentSizeFitter.FitMode)2;
-				((TMP_Text)val16).ForceMeshUpdate(false, false);
-				LayoutRebuilder.ForceRebuildLayoutImmediate(val15);
-				float num4 = ((((TMP_Text)val16).preferredHeight > 0f) ? ((TMP_Text)val16).preferredHeight : 40f);
-				val15.sizeDelta = new Vector2(num3, num4);
-				num -= num4 + Spacing;
+				((TMP_Text)val16).overflowMode = TextOverflowModes.Overflow;
+				((Graphic)val16).raycastTarget = false;
+				float num4 = FitTmpHeight(val16, contentW, 22f, 160f);
+				num -= num4 + Spacing + 4f; // breathing room before Evolutions
 			}
 			if (weaponType.HasValue)
 			{
@@ -4062,6 +4066,12 @@ public class ItemTooltipsMod
 		}
 		num -= Padding;
 		val2.sizeDelta = new Vector2(num2, 0f - num);
+		try
+		{
+			Canvas.ForceUpdateCanvases();
+			LayoutRebuilder.ForceRebuildLayoutImmediate(val2);
+		}
+		catch { }
 		return val;
 	}
 
@@ -4724,18 +4734,20 @@ public class ItemTooltipsMod
 		}
 
 		// Multi-row: every recipe as its own base + passives → evolved line
-		yOffset -= Spacing;
+		yOffset -= Spacing + 4f; // clear gap under description
 		string headerLabel = rows.Count == 1 ? "Evolutions: (click for details)" : $"Evolutions ({rows.Count}): (click for details)";
 		GameObject header = CreateTextElement(parent, "EvoHeader", headerLabel, font, 14f, new Color(0.9f, 0.75f, 0.3f, 1f), (FontStyles)1);
 		RectTransform headerRt = header.GetComponent<RectTransform>();
 		headerRt.anchorMin = new Vector2(0f, 1f);
-		headerRt.anchorMax = new Vector2(1f, 1f);
+		headerRt.anchorMax = new Vector2(0f, 1f);
 		headerRt.pivot = new Vector2(0f, 1f);
 		headerRt.anchoredPosition = new Vector2(Padding, yOffset);
-		headerRt.sizeDelta = new Vector2(maxWidth - Padding * 2f, 20f);
-		yOffset -= 22f;
+		headerRt.sizeDelta = new Vector2(maxWidth - Padding * 2f, 22f);
+		yOffset -= 26f; // header + gap before icons
 
 		float iconSize = 38f;
+		float iconGap = 6f;
+		float midY = (iconSize - 18f) * 0.5f; // center +/→ in the icon row
 		for (int ri = 0; ri < rows.Count; ri++)
 		{
 			var row = rows[ri];
@@ -4747,26 +4759,26 @@ public class ItemTooltipsMod
 					if (p.RequiresMax) { anyMax = true; break; }
 				}
 			}
-			float rowHeight = iconSize + 8f + (anyMax ? 12f : 0f);
-			float x = Padding + 5f;
+			float rowHeight = iconSize + 10f + (anyMax ? 14f : 0f);
+			float x = Padding + 4f;
 
 			// Base (hovered) weapon
 			GameObject baseIcon = CreateFormulaIcon(parent, $"BaseIcon{ri}", GameData.GetSprite(weaponType), PlayerOwnsWeapon(weaponType), IsWeaponBanned(weaponType), iconSize, x, yOffset);
 			AddHoverToGameObject(baseIcon, weaponType, null, useClick: true);
-			x += iconSize + 4f;
+			x += iconSize + iconGap;
 
 			if (row.Passives != null)
 			{
 				foreach (var passive in row.Passives)
 				{
-					GameObject plus = CreateTextElement(parent, $"Plus{ri}", "+", font, 18f, new Color(0.8f, 0.8f, 0.8f, 1f), (FontStyles)1);
+					GameObject plus = CreateTextElement(parent, $"Plus{ri}", "+", font, 18f, new Color(0.85f, 0.85f, 0.85f, 1f), (FontStyles)1);
 					RectTransform plusRt = plus.GetComponent<RectTransform>();
 					plusRt.anchorMin = new Vector2(0f, 1f);
 					plusRt.anchorMax = new Vector2(0f, 1f);
 					plusRt.pivot = new Vector2(0f, 1f);
-					plusRt.anchoredPosition = new Vector2(x, yOffset - 8f);
-					plusRt.sizeDelta = new Vector2(20f, iconSize);
-					x += 22f;
+					plusRt.anchoredPosition = new Vector2(x, yOffset - midY);
+					plusRt.sizeDelta = new Vector2(18f, 22f);
+					x += 18f + 4f;
 					Sprite ps = passive.Sprite ?? GameData.GetSprite(passive.Type);
 					GameObject pIcon = CreateFormulaIcon(parent, $"PassiveIcon{ri}_{passive.Type}", ps, PlayerOwnsWeapon(passive.Type), IsWeaponBanned(passive.Type), iconSize, x, yOffset);
 					AddHoverToGameObject(pIcon, passive.Type, null, useClick: true);
@@ -4777,21 +4789,21 @@ public class ItemTooltipsMod
 						maxRt.anchorMin = new Vector2(0f, 1f);
 						maxRt.anchorMax = new Vector2(0f, 1f);
 						maxRt.pivot = new Vector2(0.5f, 1f);
-						maxRt.anchoredPosition = new Vector2(x + iconSize / 2f, yOffset - iconSize);
-						maxRt.sizeDelta = new Vector2(iconSize, 12f);
+						maxRt.anchoredPosition = new Vector2(x + iconSize / 2f, yOffset - iconSize - 1f);
+						maxRt.sizeDelta = new Vector2(iconSize + 4f, 12f);
 					}
-					x += iconSize + 4f;
+					x += iconSize + iconGap;
 				}
 			}
 
-			GameObject arrow = CreateTextElement(parent, $"Arrow{ri}", "→", font, 18f, new Color(0.8f, 0.8f, 0.8f, 1f), (FontStyles)0);
+			GameObject arrow = CreateTextElement(parent, $"Arrow{ri}", "→", font, 18f, new Color(0.85f, 0.85f, 0.85f, 1f), (FontStyles)0);
 			RectTransform arrowRt = arrow.GetComponent<RectTransform>();
 			arrowRt.anchorMin = new Vector2(0f, 1f);
 			arrowRt.anchorMax = new Vector2(0f, 1f);
 			arrowRt.pivot = new Vector2(0f, 1f);
-			arrowRt.anchoredPosition = new Vector2(x, yOffset - 8f);
-			arrowRt.sizeDelta = new Vector2(24f, iconSize);
-			x += 26f;
+			arrowRt.anchoredPosition = new Vector2(x, yOffset - midY);
+			arrowRt.sizeDelta = new Vector2(22f, 22f);
+			x += 22f + 4f;
 
 			Sprite evoSprite = row.EvolvedSprite ?? GameData.GetSprite(row.Evolved);
 			GameObject evoIcon = CreateFormulaIcon(parent, $"EvoIcon{ri}", evoSprite, false, IsWeaponBanned(row.Evolved), iconSize, x, yOffset);
@@ -4805,13 +4817,14 @@ public class ItemTooltipsMod
 				nameRt.anchorMin = new Vector2(0f, 1f);
 				nameRt.anchorMax = new Vector2(0f, 1f);
 				nameRt.pivot = new Vector2(0f, 1f);
-				nameRt.anchoredPosition = new Vector2(x + iconSize + 6f, yOffset - 10f);
-				nameRt.sizeDelta = new Vector2(Mathf.Max(40f, maxWidth - x - iconSize - Padding - 10f), 18f);
+				nameRt.anchoredPosition = new Vector2(x + iconSize + 6f, yOffset - midY);
+				nameRt.sizeDelta = new Vector2(Mathf.Max(40f, maxWidth - x - iconSize - Padding - 10f), 20f);
 			}
 
 			yOffset -= rowHeight;
 			Plugin.Dbg($"  evo row {ri}: {weaponType} + [{string.Join("+", System.Linq.Enumerable.Select(row.Passives ?? new System.Collections.Generic.List<EvoPassive>(), p => p.Type.ToString()))}] -> {row.Evolved} sprite={(evoSprite != null ? "ok" : "NULL")}");
 		}
+		yOffset -= 4f; // gap before Arcana
 		return yOffset;
 	}
 
@@ -5906,22 +5919,24 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		{
 			return yOffset;
 		}
-		yOffset -= Spacing;
+		yOffset -= Spacing + 2f;
 		GameObject val = CreateTextElement(parent, "ArcanaHeader", "Arcana: (click for details)", font, 14f, new Color(0.7f, 0.5f, 0.9f, 1f), (FontStyles)1);
 		RectTransform component = val.GetComponent<RectTransform>();
 		component.anchorMin = new Vector2(0f, 1f);
-		component.anchorMax = new Vector2(1f, 1f);
+		component.anchorMax = new Vector2(0f, 1f);
 		component.pivot = new Vector2(0f, 1f);
 		component.anchoredPosition = new Vector2(Padding, yOffset);
-		component.sizeDelta = new Vector2(maxWidth - Padding * 2f, 20f);
-		yOffset -= 26f;
-		float num = 52f;
+		component.sizeDelta = new Vector2(maxWidth - Padding * 2f, 22f);
+		yOffset -= 28f; // header + gap before first card
+		float card = 48f;
 		float padding = Padding;
+		float nameX = padding + card + 10f;
+		float nameW = maxWidth - nameX - Padding;
 		for (int i = 0; i < arcanas.Count; i++)
 		{
 			ArcanaInfo arcanaInfo = arcanas[i];
 			Sprite sprite = arcanaInfo.Sprite ?? GameData.GetArcanaSprite(arcanaInfo.Type);
-			GameObject go = CreateFormulaIcon(parent, $"ArcanaIcon{i}", sprite, isOwned: false, isBanned: false, num, padding, yOffset);
+			GameObject go = CreateFormulaIcon(parent, $"ArcanaIcon{i}", sprite, isOwned: false, isBanned: false, card, padding, yOffset);
 			AddArcanaHoverToGameObject(go, arcanaInfo.Type);
 			string displayName = !string.IsNullOrEmpty(arcanaInfo.Name) ? arcanaInfo.Name : GameData.GetArcanaName(arcanaInfo.Type);
 			GameObject val2 = CreateTextElement(parent, $"ArcanaName{i}", displayName, font, 13f, new Color(0.8f, 0.7f, 0.95f, 1f), (FontStyles)0);
@@ -5929,9 +5944,24 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			component2.anchorMin = new Vector2(0f, 1f);
 			component2.anchorMax = new Vector2(0f, 1f);
 			component2.pivot = new Vector2(0f, 1f);
-			component2.anchoredPosition = new Vector2(padding + num + 8f, yOffset - (num / 2f - 8f));
-			component2.sizeDelta = new Vector2(maxWidth - padding - num - Padding - 8f, 20f);
-			yOffset -= num + 8f;
+			// Vertically center name next to the card
+			float nameMid = (card - 18f) * 0.5f;
+			component2.anchoredPosition = new Vector2(nameX, yOffset - nameMid);
+			component2.sizeDelta = new Vector2(nameW, 22f);
+			// Allow wrap for long arcana titles
+			try
+			{
+				var tmp = val2.GetComponent<TextMeshProUGUI>();
+				if ((Object)(object)tmp != (Object)null)
+				{
+					float nh = FitTmpHeight(tmp, nameW, 18f, 48f);
+					float row = Mathf.Max(card, nh + 4f);
+					yOffset -= row + 10f;
+					continue;
+				}
+			}
+			catch { }
+			yOffset -= card + 10f;
 		}
 		return yOffset;
 	}

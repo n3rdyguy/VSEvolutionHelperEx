@@ -2,6 +2,12 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.4] — polish (unreleased tag)
+
+### Fixed
+- In-game weapon tooltips: tighter **section gaps**, centered +/→ on evo rows, TMP-sized title/description, arcana name wrap/alignment.
+- Stage select **Music | Guide** tabs: gold-framed strip, better contrast, edges aligned to the song panel.
+
 ## [1.10.3] — polish (unreleased tag)
 
 ### Fixed

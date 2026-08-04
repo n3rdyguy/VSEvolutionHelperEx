@@ -41,12 +41,18 @@ public static class StageGuideUI
 	private static StageData _stage;
 	private static StageType _stageType;
 	private static StageItemUI _stageItem;
-	private static readonly Color TabOn = new Color(0.75f, 0.55f, 0.2f, 0.95f);
-	private static readonly Color TabOff = new Color(0.25f, 0.25f, 0.28f, 0.9f);
+	// VS-style gold tab strip (matches song panel frame)
+	private static readonly Color TabOn = new Color(0.82f, 0.62f, 0.22f, 0.98f);
+	private static readonly Color TabOff = new Color(0.18f, 0.16f, 0.2f, 0.96f);
+	private static readonly Color TabOnBorder = new Color(1f, 0.88f, 0.45f, 1f);
+	private static readonly Color TabOffBorder = new Color(0.55f, 0.45f, 0.22f, 0.9f);
+	private static readonly Color TabBarBg = new Color(0.12f, 0.1f, 0.12f, 0.95f);
 	private static readonly Color PanelBg = new Color(0.22f, 0.22f, 0.26f, 0.96f);
 	private static readonly Color Gold = new Color(0.95f, 0.8f, 0.35f, 1f);
-	private static readonly Color Soft = new Color(0.85f, 0.85f, 0.9f, 1f);
+	private static readonly Color Soft = new Color(0.9f, 0.88f, 0.82f, 1f);
 	private static readonly Color Muted = new Color(0.65f, 0.7f, 0.85f, 1f);
+	private const float TabHeight = 36f;
+	private const float TabGap = 3f;
 
 	public static void OnStageSelected(StageSelectPage page, StageItemUI item, StageData stage, StageType type)
 	{
@@ -220,45 +226,25 @@ public static class StageGuideUI
 			return false;
 		}
 
-		// Tab bar — sit just above the song panel, same width
+		// Tab bar — same horizontal bounds as song panel, sit flush on its top edge
 		if ((Object)(object)_tabBar == (Object)null)
 		{
 			_tabBar = new GameObject("EvoHelper_StageTabs");
 			_tabBar.transform.SetParent(parent, false);
 			RectTransform tabRt = _tabBar.AddComponent<RectTransform>();
-			CopyHorizontalPlacement(tabRt, _songPanelRt);
-			// Stick to top of song panel, hang upward
-			tabRt.pivot = new Vector2(0.5f, 0f);
-			tabRt.anchorMin = _songPanelRt.anchorMin;
-			tabRt.anchorMax = _songPanelRt.anchorMax;
-			// Position at top edge of song panel
-			Vector2 songPos = _songPanelRt.anchoredPosition;
-			Vector2 songSize = _songPanelRt.sizeDelta;
-			// Prefer matching width; height for tabs
-			float tabH = 34f;
-			tabRt.sizeDelta = new Vector2(songSize.x, tabH);
-			// Place so bottom of tab bar touches top of song panel
-			float topY = songPos.y + songSize.y * (1f - _songPanelRt.pivot.y);
-			// When anchors are stretch, sizeDelta.y is different — also try offsetMax
-			if (Mathf.Approximately(_songPanelRt.anchorMin.y, _songPanelRt.anchorMax.y))
-			{
-				tabRt.anchoredPosition = new Vector2(songPos.x, topY);
-			}
-			else
-			{
-				// Stretch anchors: put tabs as overlay at top of same rect, offset upward
-				tabRt.anchorMin = new Vector2(_songPanelRt.anchorMin.x, _songPanelRt.anchorMax.y);
-				tabRt.anchorMax = new Vector2(_songPanelRt.anchorMax.x, _songPanelRt.anchorMax.y);
-				tabRt.pivot = new Vector2(0.5f, 0f);
-				tabRt.anchoredPosition = new Vector2(0f, 2f);
-				tabRt.sizeDelta = new Vector2(_songPanelRt.sizeDelta.x, tabH);
-				tabRt.offsetMin = new Vector2(_songPanelRt.offsetMin.x, 0f);
-				tabRt.offsetMax = new Vector2(_songPanelRt.offsetMax.x, tabH);
-			}
+			PlaceTabBarAboveSong(tabRt, _songPanelRt);
+
+			// Shared dark strip + gold outline so tabs read as one control with the panel
+			Image barBg = _tabBar.AddComponent<Image>();
+			barBg.color = TabBarBg;
+			((Graphic)barBg).raycastTarget = false;
+			Outline barOl = _tabBar.AddComponent<Outline>();
+			((Shadow)barOl).effectColor = TabOnBorder;
+			((Shadow)barOl).effectDistance = new Vector2(1.5f, -1.5f);
 
 			// Two equal tabs (Buttons for mouse + EventSystem / controller)
-			_tabMusicBg = MakeTabButton(_tabBar.transform, "TabMusic", "Music", font, 0f, out _tabMusicLabel, out _tabMusicBtn);
-			_tabGuideBg = MakeTabButton(_tabBar.transform, "TabGuide", "Guide", font, 0.5f, out _tabGuideLabel, out _tabGuideBtn);
+			_tabMusicBg = MakeTabButton(_tabBar.transform, "TabMusic", "Music", font, 0, out _tabMusicLabel, out _tabMusicBtn);
+			_tabGuideBg = MakeTabButton(_tabBar.transform, "TabGuide", "Guide", font, 1, out _tabGuideLabel, out _tabGuideBtn);
 			WireTabNavigation();
 			AddClick(_tabMusicBg.gameObject, () => SetTab(Tab.Music));
 			AddClick(_tabGuideBg.gameObject, () => SetTab(Tab.Guide));
@@ -274,6 +260,17 @@ public static class StageGuideUI
 			{
 				Plugin.Log.LogWarning("[StageGuide] tab onClick: " + ex.Message);
 			}
+		}
+		else
+		{
+			// Keep aligned if song panel rect moved (resolution / layout refresh)
+			try
+			{
+				RectTransform tabRt = _tabBar.GetComponent<RectTransform>();
+				if ((Object)(object)tabRt != (Object)null)
+					PlaceTabBarAboveSong(tabRt, _songPanelRt);
+			}
+			catch { }
 		}
 
 		// Guide root — same top/width as song panel; scroll when content is tall
@@ -375,9 +372,56 @@ public static class StageGuideUI
 	private static void StyleTab(Image bg, TextMeshProUGUI label, bool on)
 	{
 		if ((Object)(object)bg != (Object)null)
+		{
 			bg.color = on ? TabOn : TabOff;
+			Outline ol = bg.GetComponent<Outline>();
+			if ((Object)(object)ol != (Object)null)
+			{
+				((Shadow)ol).effectColor = on ? TabOnBorder : TabOffBorder;
+				((Shadow)ol).effectDistance = on ? new Vector2(1.8f, -1.8f) : new Vector2(1.2f, -1.2f);
+			}
+		}
 		if ((Object)(object)label != (Object)null)
+		{
 			((Graphic)label).color = on ? Color.white : Soft;
+			((TMP_Text)label).fontStyle = on ? (FontStyles)1 : (FontStyles)0;
+		}
+	}
+
+	/// <summary>
+	/// Match song panel left/right edges; place tab strip sitting on the panel's top edge.
+	/// Handles both fixed and stretch-anchored song panels.
+	/// </summary>
+	private static void PlaceTabBarAboveSong(RectTransform tabRt, RectTransform songRt)
+	{
+		if ((Object)(object)tabRt == (Object)null || (Object)(object)songRt == (Object)null)
+			return;
+
+		bool stretchX = !Mathf.Approximately(songRt.anchorMin.x, songRt.anchorMax.x);
+
+		if (stretchX)
+		{
+			// Stretch horizontally like the song panel; pin to its top edge
+			tabRt.anchorMin = new Vector2(songRt.anchorMin.x, songRt.anchorMax.y);
+			tabRt.anchorMax = new Vector2(songRt.anchorMax.x, songRt.anchorMax.y);
+			tabRt.pivot = new Vector2(0.5f, 0f);
+			// Horizontal offsets match the song frame; height via sizeDelta.y
+			tabRt.offsetMin = new Vector2(songRt.offsetMin.x, 0f);
+			tabRt.offsetMax = new Vector2(songRt.offsetMax.x, TabHeight);
+			tabRt.anchoredPosition = Vector2.zero;
+		}
+		else
+		{
+			// Point anchors: same X as song, width = song width, bottom on song top
+			tabRt.anchorMin = songRt.anchorMin;
+			tabRt.anchorMax = songRt.anchorMax;
+			tabRt.pivot = new Vector2(songRt.pivot.x, 0f);
+			Vector2 songPos = songRt.anchoredPosition;
+			Vector2 songSize = songRt.sizeDelta;
+			float topY = songPos.y + songSize.y * (1f - songRt.pivot.y);
+			tabRt.anchoredPosition = new Vector2(songPos.x, topY);
+			tabRt.sizeDelta = new Vector2(songSize.x, TabHeight);
+		}
 	}
 
 	private static void RebuildGuideContent()
@@ -768,27 +812,38 @@ public static class StageGuideUI
 		return go;
 	}
 
-	private static Image MakeTabButton(Transform parent, string name, string label, TMP_FontAsset font, float anchorX, out TextMeshProUGUI tmpOut, out Button btnOut)
+	/// <param name="index">0 = Music (left), 1 = Guide (right)</param>
+	private static Image MakeTabButton(Transform parent, string name, string label, TMP_FontAsset font, int index, out TextMeshProUGUI tmpOut, out Button btnOut)
 	{
 		GameObject go = new GameObject(name);
 		go.transform.SetParent(parent, false);
 		RectTransform rt = go.AddComponent<RectTransform>();
-		rt.anchorMin = new Vector2(anchorX, 0f);
-		rt.anchorMax = new Vector2(anchorX + 0.5f, 1f);
-		rt.offsetMin = new Vector2(2f, 2f);
-		rt.offsetMax = new Vector2(-2f, -2f);
+		// Half width each with a small gap in the middle
+		float aMin = index == 0 ? 0f : 0.5f;
+		float aMax = index == 0 ? 0.5f : 1f;
+		rt.anchorMin = new Vector2(aMin, 0f);
+		rt.anchorMax = new Vector2(aMax, 1f);
+		// Inset from bar edges; gap between the two tabs
+		float leftPad = index == 0 ? 3f : TabGap * 0.5f;
+		float rightPad = index == 0 ? TabGap * 0.5f : 3f;
+		rt.offsetMin = new Vector2(leftPad, 3f);
+		rt.offsetMax = new Vector2(-rightPad, -3f);
+
 		Image img = go.AddComponent<Image>();
 		img.color = TabOff;
 		((Graphic)img).raycastTarget = true;
+		Outline ol = go.AddComponent<Outline>();
+		((Shadow)ol).effectColor = TabOffBorder;
+		((Shadow)ol).effectDistance = new Vector2(1.2f, -1.2f);
 
 		Button btn = go.AddComponent<Button>();
 		((Selectable)btn).targetGraphic = img;
 		ColorBlock colors = ((Selectable)btn).colors;
 		colors.normalColor = Color.white;
-		colors.highlightedColor = new Color(1f, 0.95f, 0.8f, 1f);
-		colors.selectedColor = new Color(1f, 0.9f, 0.7f, 1f);
-		colors.pressedColor = new Color(0.9f, 0.85f, 0.7f, 1f);
-		colors.fadeDuration = 0.05f;
+		colors.highlightedColor = new Color(1.05f, 1f, 0.9f, 1f);
+		colors.selectedColor = new Color(1.08f, 1.02f, 0.85f, 1f);
+		colors.pressedColor = new Color(0.92f, 0.88f, 0.75f, 1f);
+		colors.fadeDuration = 0.06f;
 		((Selectable)btn).colors = colors;
 		btnOut = btn;
 
@@ -797,15 +852,17 @@ public static class StageGuideUI
 		RectTransform tr = textGo.AddComponent<RectTransform>();
 		tr.anchorMin = Vector2.zero;
 		tr.anchorMax = Vector2.one;
-		tr.offsetMin = Vector2.zero;
-		tr.offsetMax = Vector2.zero;
+		tr.offsetMin = new Vector2(2f, 1f);
+		tr.offsetMax = new Vector2(-2f, -1f);
 		TextMeshProUGUI tmp = textGo.AddComponent<TextMeshProUGUI>();
 		((TMP_Text)tmp).font = font;
 		((TMP_Text)tmp).text = label;
-		((TMP_Text)tmp).fontSize = 14f;
+		((TMP_Text)tmp).fontSize = 16f;
 		((TMP_Text)tmp).fontStyle = (FontStyles)1;
 		((Graphic)tmp).color = Soft;
 		((TMP_Text)tmp).alignment = (TextAlignmentOptions)514; // mid
+		((TMP_Text)tmp).enableWordWrapping = false;
+		((TMP_Text)tmp).overflowMode = TextOverflowModes.Ellipsis;
 		((Graphic)tmp).raycastTarget = false;
 		tmpOut = tmp;
 		return img;
