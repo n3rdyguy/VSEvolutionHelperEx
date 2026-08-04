@@ -350,34 +350,45 @@ public static class CharacterSelectPatches
 		if (!string.IsNullOrWhiteSpace(flavor))
 			sb.AppendLine(flavor.Trim());
 
-		// Starting weapon: skin override → character → UI weapon icon sprite
+		// Starting weapon: UI icon first (reliable), then skin/character data
 		WeaponType? starter = ResolveStartingWeapon(ui, cdata, skin);
-		if (starter.HasValue)
+		if (starter.HasValue && GameData.IsRealWeaponType(starter.Value))
 		{
 			if (sb.Length > 0) sb.AppendLine();
 			string wName = GameData.GetWeaponName(starter.Value);
-			sb.AppendLine($"Starting weapon: {wName}");
-
-			var rows = GameData.BuildEvoRowsFor(starter.Value);
-			if (rows != null && rows.Count > 0)
+			if (string.IsNullOrEmpty(wName))
+				wName = starter.Value.ToString();
+			// Final guard — never print Void/VOID as a starter name
+			if (string.Equals(wName, "Void", StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(wName, "VOID", StringComparison.OrdinalIgnoreCase))
 			{
-				sb.AppendLine("Evolution:");
-				foreach (var row in rows)
+				sb.AppendLine("Starting weapon: (unknown)");
+			}
+			else
+			{
+				sb.AppendLine($"Starting weapon: {wName}");
+
+				var rows = GameData.BuildEvoRowsFor(starter.Value);
+				if (rows != null && rows.Count > 0)
 				{
-					string passives = "";
-					if (row.Passives != null && row.Passives.Count > 0)
+					sb.AppendLine("Evolution:");
+					foreach (var row in rows)
 					{
-						var parts = new List<string>();
-						foreach (var p in row.Passives)
+						string passives = "";
+						if (row.Passives != null && row.Passives.Count > 0)
 						{
-							string pn = string.IsNullOrEmpty(p.Name) ? p.Type.ToString() : p.Name;
-							if (p.RequiresMax) pn += " (max)";
-							parts.Add(pn);
+							var parts = new List<string>();
+							foreach (var p in row.Passives)
+							{
+								string pn = string.IsNullOrEmpty(p.Name) ? p.Type.ToString() : p.Name;
+								if (p.RequiresMax) pn += " (max)";
+								parts.Add(pn);
+							}
+							passives = " + " + string.Join(" + ", parts);
 						}
-						passives = " + " + string.Join(" + ", parts);
+						string evoName = string.IsNullOrEmpty(row.EvolvedName) ? row.Evolved.ToString() : row.EvolvedName;
+						sb.AppendLine($"  {wName}{passives} → {evoName}");
 					}
-					string evoName = string.IsNullOrEmpty(row.EvolvedName) ? row.Evolved.ToString() : row.EvolvedName;
-					sb.AppendLine($"  {wName}{passives} → {evoName}");
 				}
 			}
 		}
@@ -408,41 +419,55 @@ public static class CharacterSelectPatches
 	}
 
 	/// <summary>
-	/// Skin.startingWeapon first (outfit override), then CharacterData, then weapon icon sprite.
-	/// WeaponType.VOID (0) is treated as "unset" — Il2Cpp Nullable often reports it as HasValue.
+	/// Prefer the weapon icon the game already painted on the card (skin-correct),
+	/// then skin/character startingWeapon fields. Il2Cpp Nullable&lt;WeaponType&gt; often
+	/// reports HasValue with Value=VOID — those are ignored.
 	/// </summary>
 	private static WeaponType? ResolveStartingWeapon(CharacterItemUI ui, CharacterData cdata, Skin skin)
 	{
+		// 1) What the card is actually showing (handles outfits / Para Kooleo correctly)
+		try
+		{
+			// Skip when game marked void / hidden weapon
+			bool voidWeapon = false;
+			try { voidWeapon = ui._voidWeapon; } catch { }
+			if (!voidWeapon)
+			{
+				Image w = ui._WeaponIcon;
+				if ((Object)(object)w != (Object)null
+					&& ((Component)w).gameObject.activeInHierarchy
+					&& (Object)(object)w.sprite != (Object)null)
+				{
+					if (GameData.TryIdentifyWeaponFromSprite(w.sprite, out WeaponType fromIcon)
+						&& GameData.IsRealWeaponType(fromIcon))
+					{
+						Plugin.Dbg($"[CharacterSelect] starter from icon sprite={w.sprite.name} -> {fromIcon}");
+						return fromIcon;
+					}
+					Plugin.Dbg($"[CharacterSelect] weapon icon sprite unmatched: {w.sprite.name}");
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Plugin.Dbg("[CharacterSelect] icon resolve: " + ex.Message);
+		}
+
+		// 2) Skin override (outfit)
 		WeaponType? fromSkin = ReadNullableWeapon(skin);
 		if (fromSkin.HasValue) return fromSkin;
 
-		WeaponType? fromChar = null;
+		// 3) Character default
 		if (cdata != null)
 		{
+			WeaponType? fromChar = null;
 			try { fromChar = ReadNullableWeaponValue(cdata.startingWeapon); } catch { }
 			if (!fromChar.HasValue)
 			{
 				try { fromChar = ReadNullableWeaponValue(cdata._startingWeapon_k__BackingField); } catch { }
 			}
+			if (fromChar.HasValue) return fromChar;
 		}
-		if (fromChar.HasValue) return fromChar;
-
-		// UI weapon icon → frame name map
-		try
-		{
-			Image w = ui._WeaponIcon;
-			if ((Object)(object)w != (Object)null && (Object)(object)w.sprite != (Object)null)
-			{
-				string sn = w.sprite.name;
-				if (!string.IsNullOrEmpty(sn) && GameData.SpriteToWeapon.TryGetValue(sn, out WeaponType wt) && IsRealWeapon(wt))
-					return wt;
-				// try without clone suffix
-				int us = sn != null ? sn.LastIndexOf('_') : -1;
-				if (us > 0 && GameData.SpriteToWeapon.TryGetValue(sn.Substring(0, us), out wt) && IsRealWeapon(wt))
-					return wt;
-			}
-		}
-		catch { }
 
 		return null;
 	}
@@ -460,17 +485,22 @@ public static class CharacterSelectPatches
 		if (n == null) return null;
 		try
 		{
-			if (!n.HasValue) return null;
-			WeaponType v = n.Value;
-			return IsRealWeapon(v) ? v : (WeaponType?)null;
+			// Prefer explicit check — Il2Cpp Nullable can lie about HasValue
+			WeaponType v = default;
+			bool has = false;
+			try
+			{
+				has = n.HasValue;
+				if (has) v = n.Value;
+			}
+			catch
+			{
+				try { v = n.Value; has = true; } catch { return null; }
+			}
+			if (!has) return null;
+			return GameData.IsRealWeaponType(v) ? v : (WeaponType?)null;
 		}
 		catch { return null; }
-	}
-
-	private static bool IsRealWeapon(WeaponType wt)
-	{
-		// VOID = 0 is default/unset, not a playable starter
-		return wt != WeaponType.VOID && (int)wt != 0;
 	}
 
 	private static string FormatOtherOutfitWeapons(CharacterData cdata, WeaponType? currentStarter)
@@ -496,6 +526,10 @@ public static class CharacterSelectPatches
 				try { sname = s.skinType.ToString(); } catch { sname = "Outfit"; }
 			}
 			string wname = GameData.GetWeaponName(w.Value);
+			if (string.IsNullOrEmpty(wname)
+				|| string.Equals(wname, "Void", StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(wname, "VOID", StringComparison.OrdinalIgnoreCase))
+				continue;
 			string line = $"  {sname.Trim()}: {wname}";
 			if (seen.Add(line))
 				lines.Add(line);

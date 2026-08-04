@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.9.3] — 2026-08-04
+
+### Fixed
+- Starting weapon no longer always **Void**: resolve from the card’s **weapon icon sprite** first (skin/outfit-correct), then data fields. `GetWeaponName` refuses VOID; never print “Void” as a starter.
+
 ## [1.9.2] — 2026-08-04
 
 ### Fixed

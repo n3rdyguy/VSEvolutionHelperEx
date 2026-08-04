@@ -389,14 +389,121 @@ public static class GameData
     public static string GetWeaponName(WeaponType type)
     {
         EnsureLoaded();
+        // VOID is not a real weapon — callers that care should use IsRealWeaponType first
+        if (!IsRealWeaponType(type))
+            return "";
         if (WeaponNames.TryGetValue(type, out string cached) && !string.IsNullOrEmpty(cached))
         {
             return cached;
         }
         var data = GetWeaponData(type);
         string name = ResolveWeaponName(data, type);
+        if (string.Equals(name, "VOID", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "Void", StringComparison.OrdinalIgnoreCase))
+            return "";
         WeaponNames[type] = name;
         return name;
+    }
+
+    /// <summary>VOID (0) is the enum default / "no weapon", not a usable starter.</summary>
+    public static bool IsRealWeaponType(WeaponType type)
+    {
+        try
+        {
+            int v = Convert.ToInt32(type);
+            if (v == 0) return false;
+        }
+        catch
+        {
+            string s = type.ToString();
+            if (string.IsNullOrEmpty(s) || s.Equals("VOID", StringComparison.OrdinalIgnoreCase) || s == "0")
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Map a UI sprite (e.g. CharacterItemUI._WeaponIcon) back to a WeaponType.
+    /// Matches frameName, sprite.name, and instance/rect equality against known weapon sprites.
+    /// </summary>
+    public static bool TryIdentifyWeaponFromSprite(Sprite sprite, out WeaponType type)
+    {
+        type = default;
+        if ((Object)(object)sprite == (Object)null) return false;
+        EnsureLoaded();
+
+        string sn = null;
+        try { sn = sprite.name; } catch { }
+        if (!string.IsNullOrEmpty(sn))
+        {
+            // Unity often appends " (Instance)" or clone suffixes
+            string bare = sn;
+            int paren = bare.IndexOf(" (", StringComparison.Ordinal);
+            if (paren > 0) bare = bare.Substring(0, paren);
+            bare = bare.Trim();
+
+            if (SpriteToWeapon.TryGetValue(bare, out type) && IsRealWeaponType(type))
+                return true;
+            if (SpriteToWeapon.TryGetValue(sn, out type) && IsRealWeaponType(type))
+                return true;
+
+            // case-insensitive frame lookup
+            foreach (var kv in SpriteToWeapon)
+            {
+                if (!IsRealWeaponType(kv.Value)) continue;
+                if (string.Equals(kv.Key, bare, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(kv.Key, sn, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(System.IO.Path.GetFileNameWithoutExtension(kv.Key), bare, StringComparison.OrdinalIgnoreCase))
+                {
+                    type = kv.Value;
+                    return true;
+                }
+            }
+
+            // enum / slug parse from sprite name (e.g. "whip", "Weapon_Whip")
+            if (TryParseWeaponType(bare, out type) && IsRealWeaponType(type))
+                return true;
+            string compact = System.Text.RegularExpressions.Regex.Replace(bare, "^Weapon_?", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (TryParseWeaponType(compact, out type) && IsRealWeaponType(type))
+                return true;
+        }
+
+        // Pixel/identity match against loaded weapon sprites (slower, reliable for set icons)
+        try
+        {
+            if (_weapons != null)
+            {
+                foreach (var kvp in _weapons)
+                {
+                    WeaponType wt = kvp.Key;
+                    if (!IsRealWeaponType(wt)) continue;
+                    Sprite known = GetSprite(wt);
+                    if ((Object)(object)known == (Object)null) continue;
+                    if ((Object)(object)known == (Object)(object)sprite)
+                    {
+                        type = wt;
+                        return true;
+                    }
+                    try
+                    {
+                        if ((Object)(object)known.texture == (Object)(object)sprite.texture
+                            && known.rect.Equals(sprite.rect)
+                            && known.pivot == sprite.pivot)
+                        {
+                            type = wt;
+                            return true;
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] TryIdentifyWeaponFromSprite: " + ex.Message);
+        }
+
+        return false;
     }
 
     public static string GetWeaponDescription(WeaponType type)
