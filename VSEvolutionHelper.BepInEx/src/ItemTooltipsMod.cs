@@ -2947,7 +2947,7 @@ public class ItemTooltipsMod
 		if (collectionIcons.TryGetValue(instanceID, out (GameObject, WeaponType?, ItemType?, object) value))
 		{
 			preDwellSelection = currentSelectedGameObject;
-			ShowCollectionPopup(value.Item2, value.Item3, value.Item4);
+			ShowCollectionPopup(value.Item2, value.Item3, value.Item4, value.Item1 != null ? value.Item1.transform : currentSelectedGameObject.transform);
 			passivePopupShown = true;
 			return;
 		}
@@ -2958,7 +2958,7 @@ public class ItemTooltipsMod
 			if (collectionIcons.TryGetValue(instanceID2, out (GameObject, WeaponType?, ItemType?, object) value2))
 			{
 				preDwellSelection = currentSelectedGameObject;
-				ShowCollectionPopup(value2.Item2, value2.Item3, value2.Item4);
+				ShowCollectionPopup(value2.Item2, value2.Item3, value2.Item4, value2.Item1 != null ? value2.Item1.transform : parent);
 				passivePopupShown = true;
 				break;
 			}
@@ -6616,7 +6616,15 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			{
 				currentCollectionHoverId = num;
 				pendingCollectionHoverId = -1;
-				ShowCollectionPopup(weaponType, itemType, pendingCollectionArcana);
+				Transform anch = null;
+				try
+				{
+					if (collectionIcons.TryGetValue(num, out var hit)
+						&& (Object)(object)hit.Item1 != (Object)null)
+						anch = hit.Item1.transform;
+				}
+				catch { }
+				ShowCollectionPopup(weaponType, itemType, pendingCollectionArcana, anch);
 			}
 		}
 		else if (num == currentCollectionHoverId)
@@ -6715,15 +6723,9 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 	}
 
-	private static void ShowCollectionPopup(WeaponType? weaponType, ItemType? itemType, object arcanaType = null)
+	/// <param name="anchor">Hovered collection cell — required for correct placement on App canvas.</param>
+	private static void ShowCollectionPopup(WeaponType? weaponType, ItemType? itemType, object arcanaType = null, Transform anchor = null)
 	{
-		//IL_0181: Unknown result type (might be due to invalid IL or missing references)
-		//IL_0198: Unknown result type (might be due to invalid IL or missing references)
-		//IL_01af: Unknown result type (might be due to invalid IL or missing references)
-		//IL_0215: Unknown result type (might be due to invalid IL or missing references)
-		//IL_01d4: Unknown result type (might be due to invalid IL or missing references)
-		//IL_01e2: Unknown result type (might be due to invalid IL or missing references)
-		//IL_01fa: Unknown result type (might be due to invalid IL or missing references)
 		if (interactiveMode && (Object)(object)collectionPopup != (Object)null)
 		{
 			collectionPopupBackStack.Add(currentCollectionPopupData);
@@ -6734,28 +6736,28 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		{
 			TryCacheDataManagerStatic();
 		}
-		Transform val = null;
-		GameObject val2 = GameObject.Find("UI/Canvas - App/Safe Area/View - Collections");
-		if ((Object)(object)val2 != (Object)null)
+
+		// Parent under the same canvas as the hovered cell (or Collections view / App Safe Area)
+		Transform parent = null;
+		if ((Object)(object)anchor != (Object)null)
 		{
-			val = val2.transform;
+			var c = anchor.GetComponentInParent<Canvas>();
+			if ((Object)(object)c != (Object)null)
+				parent = ((Component)c).transform;
+			if ((Object)(object)parent == (Object)null)
+				parent = FindPopupParent(anchor);
 		}
-		else
+		if ((Object)(object)parent == (Object)null)
 		{
-			Il2CppArrayBase<Canvas> val3 = Object.FindObjectsOfType<Canvas>();
-			for (int i = 0; i < val3.Count; i++)
-			{
-				if ((Object)(object)val3[i] != (Object)null && ((Component)val3[i]).gameObject.activeInHierarchy)
-				{
-					val = ((Component)val3[i]).transform;
-					break;
-				}
-			}
+			GameObject view = GameObject.Find("UI/Canvas - App/Safe Area/View - Collections");
+			if ((Object)(object)view == (Object)null)
+				view = GameObject.Find("UI/Canvas - App/Safe Area");
+			if ((Object)(object)view != (Object)null)
+				parent = view.transform;
 		}
-		if ((Object)(object)val == (Object)null)
-		{
+		if ((Object)(object)parent == (Object)null)
 			return;
-		}
+
 		if (arcanaType != null)
 		{
 			ArcanaType parsed = ArcanaType.VOID;
@@ -6784,37 +6786,114 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			}
 			catch (Exception ex)
 			{
-				Plugin.Log.LogWarning($"[CollectionPopup] Arcana parse: {ex.Message}");
+				Plugin.Log.LogWarning("[CollectionPopup] Arcana parse: " + ex.Message);
 			}
 			if (!ok || parsed == ArcanaType.VOID)
 			{
 				Plugin.Log.LogWarning($"[CollectionPopup] Could not resolve arcana type for {arcanaType}");
 				return;
 			}
-			collectionPopup = CreateArcanaPopup(val, parsed);
+			collectionPopup = CreateArcanaPopup(parent, parsed);
 		}
 		else
 		{
-			collectionPopup = CreatePopup(val, weaponType, itemType);
+			collectionPopup = CreatePopup(parent, weaponType, itemType);
 		}
-		if (!((Object)(object)collectionPopup == (Object)null))
+
+		if ((Object)(object)collectionPopup == (Object)null)
+			return;
+
+		// Always place next to the hovered icon (never fixed FilterPanel / 1450,930)
+		if ((Object)(object)anchor != (Object)null)
+			PositionPopupNearScreen(collectionPopup, anchor);
+		else
+			PositionPopupNearScreen(collectionPopup, parent);
+	}
+
+	/// <summary>
+	/// Place popup next to an App-canvas UI element using screen-space conversion
+	/// (works for Overlay and Camera canvases; avoids bottom-left FilterPanel hack).
+	/// </summary>
+	private static void PositionPopupNearScreen(GameObject popup, Transform anchor)
+	{
+		if ((Object)(object)popup == (Object)null || (Object)(object)anchor == (Object)null)
+			return;
+		try
 		{
-			RectTransform component = collectionPopup.GetComponent<RectTransform>();
-			GameObject val4 = GameObject.Find("UI/Canvas - App/Safe Area/View - Collections/FilterPanel");
-			component.anchorMin = new Vector2(0f, 0f);
-			component.anchorMax = new Vector2(0f, 0f);
-			component.pivot = new Vector2(0f, 1f);
-			if ((Object)(object)val4 != (Object)null)
+			RectTransform popupRt = popup.GetComponent<RectTransform>();
+			if ((Object)(object)popupRt == (Object)null) return;
+
+			Canvas canvas = anchor.GetComponentInParent<Canvas>();
+			if ((Object)(object)canvas == (Object)null)
+				canvas = popup.GetComponentInParent<Canvas>();
+
+			// Keep popup under the canvas root so coordinates match
+			if ((Object)(object)canvas != (Object)null
+				&& (Object)(object)popup.transform.parent != (Object)(object)((Component)canvas).transform)
 			{
-				RectTransform component2 = val4.GetComponent<RectTransform>();
-				float x = component2.offsetMin.x;
-				float y = component2.offsetMin.y;
-				component.anchoredPosition = new Vector2(x, y - 15f);
+				popup.transform.SetParent(((Component)canvas).transform, false);
+			}
+
+			popupRt.anchorMin = new Vector2(0.5f, 0.5f);
+			popupRt.anchorMax = new Vector2(0.5f, 0.5f);
+			popupRt.pivot = new Vector2(0f, 1f);
+
+			Camera cam = null;
+			if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+				cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+
+			// Screen position of anchor center
+			Vector2 screen;
+			RectTransform anchorRt = anchor as RectTransform;
+			if ((Object)(object)anchorRt == (Object)null)
+				anchorRt = anchor.GetComponent<RectTransform>();
+			if ((Object)(object)anchorRt != (Object)null)
+			{
+				Vector3[] corners = new Vector3[4];
+				anchorRt.GetWorldCorners(corners);
+				Vector3 mid = (corners[0] + corners[2]) * 0.5f;
+				screen = RectTransformUtility.WorldToScreenPoint(cam, mid);
 			}
 			else
 			{
-				component.anchoredPosition = new Vector2(1450f, 930f);
+				screen = RectTransformUtility.WorldToScreenPoint(cam, anchor.position);
 			}
+
+			// Slight offset: right and a bit up from icon
+			screen.x += 24f;
+			screen.y += 8f;
+
+			RectTransform parentRt = popupRt.parent as RectTransform;
+			if ((Object)(object)parentRt == (Object)null)
+				parentRt = ((Component)popupRt.parent).GetComponent<RectTransform>();
+			if ((Object)(object)parentRt == (Object)null) return;
+
+			if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRt, screen, cam, out Vector2 local))
+				return;
+
+			// Clamp inside parent so it stays on-screen
+			float pw = popupRt.sizeDelta.x;
+			float ph = popupRt.sizeDelta.y;
+			if (pw < 8f) pw = 320f;
+			if (ph < 8f) ph = 200f;
+			Rect pr = parentRt.rect;
+			// local is relative to parent pivot; for center-pivot canvas this is from center
+			float minX = pr.xMin + 8f;
+			float maxX = pr.xMax - pw - 8f;
+			float minY = pr.yMin + ph + 8f;
+			float maxY = pr.yMax - 8f;
+			local.x = Mathf.Clamp(local.x, minX, maxX);
+			local.y = Mathf.Clamp(local.y, minY, maxY);
+
+			// If still would go off right, flip to left of icon
+			if (local.x + pw > pr.xMax - 4f)
+				local.x = Mathf.Max(pr.xMin + 8f, local.x - pw - 48f);
+
+			popupRt.anchoredPosition = local;
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("[Collections] PositionPopupNearScreen: " + ex.Message);
 		}
 	}
 
@@ -6998,14 +7077,12 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 							if ((Object)(object)collectionUnlockPopup != (Object)null)
 							{
 								DisablePopupRaycasts(collectionUnlockPopup);
-								PositionPopup(collectionUnlockPopup, captured.transform);
+								PositionPopupNearScreen(collectionUnlockPopup, captured.transform);
 							}
 						}
 						return;
 					}
-					ShowCollectionPopup(w, it, ar);
-					if ((Object)(object)collectionPopup != (Object)null)
-						PositionPopup(collectionPopup, captured.transform);
+					ShowCollectionPopup(w, it, ar, captured.transform);
 				}
 				catch (Exception ex)
 				{
