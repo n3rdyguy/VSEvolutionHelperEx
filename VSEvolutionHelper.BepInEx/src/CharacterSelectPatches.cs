@@ -249,12 +249,39 @@ public static class CharacterSelectPatches
 		catch { }
 	}
 
+	/// <summary>Structured tooltip data for rich UI (icons + text).</summary>
+	public class TooltipData
+	{
+		public string Title;
+		public string Flavor;
+		public Sprite Portrait;
+		public WeaponType? Starter;
+		public string StarterName;
+		public Sprite StarterSprite;
+		public List<EvoDisplayRow> Evos = new List<EvoDisplayRow>();
+		public string OutfitsText;
+		public string StatsText;
+		/// <summary>Plain-text fallback body.</summary>
+		public string BodyText;
+	}
+
 	/// <summary>Live tooltip body for current character + current outfit/skin.</summary>
 	public static bool TryBuildLiveTooltip(GameObject hitGo, out string title, out string body, out Sprite sprite)
 	{
 		title = null;
 		body = null;
 		sprite = null;
+		if (!TryGetTooltipData(hitGo, out TooltipData data) || data == null)
+			return false;
+		title = data.Title;
+		body = data.BodyText;
+		sprite = data.Portrait;
+		return !string.IsNullOrEmpty(title);
+	}
+
+	public static bool TryGetTooltipData(GameObject hitGo, out TooltipData data)
+	{
+		data = null;
 		try
 		{
 			if ((Object)(object)hitGo == (Object)null) return false;
@@ -266,7 +293,6 @@ public static class CharacterSelectPatches
 				try { ui = hitGo.GetComponentInParent<CharacterItemUI>(); } catch { }
 			}
 			if ((Object)(object)ui == (Object)null) return false;
-			// Do not re-filter IsGridCard here — if we registered it, trust that
 
 			CharacterItem item = null;
 			try { item = ui.CharacterItem; } catch { }
@@ -278,18 +304,85 @@ public static class CharacterSelectPatches
 			if (cdata == null) { try { cdata = item._characterData; } catch { } }
 
 			Skin skin = ResolveCurrentSkin(item, cdata, ui);
-			title = BuildTitle(ui, cdata, ctype, skin);
-			body = BuildBody(ui, cdata, ctype, skin);
-			sprite = ResolveCharacterSprite(ui);
-			if (string.IsNullOrEmpty(title))
-				title = SafeDisplayName(ui, item) ?? ctype.ToString();
+			data = new TooltipData();
+			data.Title = BuildTitle(ui, cdata, ctype, skin);
+			if (string.IsNullOrEmpty(data.Title))
+				data.Title = SafeDisplayName(ui, item) ?? ctype.ToString();
+			data.Portrait = ResolveCharacterSprite(ui);
+			data.Flavor = BuildFlavor(cdata, ctype, skin);
+			data.BodyText = BuildBody(ui, cdata, ctype, skin);
+
+			WeaponType? starter = ResolveStartingWeapon(ui, cdata, skin);
+			if (starter.HasValue && GameData.IsRealWeaponType(starter.Value))
+			{
+				data.Starter = starter;
+				data.StarterName = GameData.GetWeaponName(starter.Value);
+				if (string.IsNullOrEmpty(data.StarterName))
+					data.StarterName = starter.Value.ToString();
+				if (string.Equals(data.StarterName, "Void", StringComparison.OrdinalIgnoreCase)
+					|| string.Equals(data.StarterName, "VOID", StringComparison.OrdinalIgnoreCase))
+				{
+					data.Starter = null;
+					data.StarterName = null;
+				}
+				else
+				{
+					data.StarterSprite = GameData.GetSprite(starter.Value);
+					// Prefer the card's painted icon if sprite load failed
+					if ((Object)(object)data.StarterSprite == (Object)null)
+					{
+						try
+						{
+							Image w = ui._WeaponIcon;
+							if ((Object)(object)w != (Object)null)
+								data.StarterSprite = w.sprite;
+						}
+						catch { }
+					}
+					try
+					{
+						var rows = GameData.BuildEvoRowsFor(starter.Value);
+						if (rows != null)
+							data.Evos = rows;
+					}
+					catch { }
+				}
+			}
+
+			data.OutfitsText = FormatOtherOutfitWeapons(cdata, data.Starter);
+			data.StatsText = FormatNotableStats(cdata, skin);
 			return true;
 		}
 		catch (Exception ex)
 		{
-			Plugin.Log.LogWarning("[CharacterSelect] TryBuildLiveTooltip: " + ex.Message);
+			Plugin.Log.LogWarning("[CharacterSelect] TryGetTooltipData: " + ex.Message);
+			data = null;
 			return false;
 		}
+	}
+
+	private static string BuildFlavor(CharacterData cdata, CharacterType ctype, Skin skin)
+	{
+		string flavor = null;
+		try
+		{
+			if (cdata != null && skin != null)
+				flavor = cdata.GetDescription(ctype, skin);
+		}
+		catch { }
+		if (string.IsNullOrWhiteSpace(flavor))
+		{
+			try { if (cdata != null) flavor = cdata.GetDescription(ctype); } catch { }
+		}
+		if (string.IsNullOrWhiteSpace(flavor))
+		{
+			try { flavor = cdata != null ? cdata.description : null; } catch { }
+		}
+		if (string.IsNullOrWhiteSpace(flavor) && skin != null)
+		{
+			try { flavor = skin._description_k__BackingField; } catch { }
+		}
+		return string.IsNullOrWhiteSpace(flavor) ? null : flavor.Trim();
 	}
 
 	private static Skin ResolveCurrentSkin(CharacterItem item, CharacterData cdata, CharacterItemUI ui)

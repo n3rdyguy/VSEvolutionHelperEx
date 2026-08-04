@@ -2,6 +2,14 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.9.6] — 2026-08-04
+
+### Fixed
+- Character tooltip **positioning** uses screen-space conversion (no more stuck mid-left); still prefers right of card, flips left if needed; non-blocking raycasts.
+
+### Added
+- Character tooltip **weapon + evolution icons** (starter, passives, evolved) with labels.
+
 ## [1.9.5] — 2026-08-04
 
 ### Fixed

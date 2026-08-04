@@ -7130,46 +7130,31 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 		if ((Object)(object)parent == (Object)null) return;
 
-		// Prefer live rebuild (current outfit); fall back to pre-baked registration text
-		string label = info.Label;
-		string desc = info.Description;
-		Sprite spr = info.Sprite;
-		try
+		// Rich tooltip with weapon / evo icons when possible
+		CharacterSelectPatches.TooltipData data = null;
+		try { CharacterSelectPatches.TryGetTooltipData(info.Go, out data); } catch (Exception ex)
 		{
-			if (CharacterSelectPatches.TryBuildLiveTooltip(info.Go, out string liveTitle, out string liveBody, out Sprite liveSpr))
-			{
-				if (!string.IsNullOrEmpty(liveTitle)) label = liveTitle;
-				if (!string.IsNullOrEmpty(liveBody)) desc = liveBody;
-				if ((Object)(object)liveSpr != (Object)null) spr = liveSpr;
-			}
+			Plugin.Log.LogWarning("[Character] tooltip data: " + ex.Message);
 		}
-		catch (Exception ex)
-		{
-			Plugin.Log.LogWarning("[Character] live tooltip: " + ex.Message);
-		}
-		if (string.IsNullOrEmpty(desc))
-			desc = "(no details)";
 
-		// Wider popup for multi-line character details
-		characterPopup = CreateSimpleMapPopup(parent, label, desc, spr);
+		if (data != null)
+			characterPopup = CreateCharacterDetailPopup(parent, data);
+		else
+			characterPopup = CreateSimpleMapPopup(parent, info.Label, info.Description ?? "(no details)", info.Sprite);
+
 		if ((Object)(object)characterPopup != (Object)null)
 		{
-			try
-			{
-				var rt = characterPopup.GetComponent<RectTransform>();
-				if ((Object)(object)rt != (Object)null && rt.sizeDelta.x < 360f)
-					rt.sizeDelta = new Vector2(360f, rt.sizeDelta.y);
-			}
-			catch { }
-			// Never steal clicks from the character grid
 			DisablePopupRaycasts(characterPopup);
 			if ((Object)(object)info.Go != (Object)null)
 				PositionCharacterPopupToRight(characterPopup, info.Go.transform);
 		}
-		Plugin.Dbg($"Character popup label={label} descLen={(desc != null ? desc.Length : 0)}");
+		Plugin.Dbg($"Character popup title={(data != null ? data.Title : info.Label)}");
 	}
 
-	/// <summary>Place tooltip just to the right of the character card (top-aligned).</summary>
+	/// <summary>
+	/// Place tooltip to the right of the character card using screen-space conversion
+	/// (works for overlay and camera canvases). Flips left if not enough room.
+	/// </summary>
 	private static void PositionCharacterPopupToRight(GameObject popup, Transform anchor)
 	{
 		try
@@ -7177,74 +7162,326 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			RectTransform popupRt = popup.GetComponent<RectTransform>();
 			if ((Object)(object)popupRt == (Object)null || (Object)(object)anchor == (Object)null)
 				return;
-			Transform parent = popup.transform.parent;
-			if ((Object)(object)parent == (Object)null) return;
+			RectTransform parentRt = popup.transform.parent as RectTransform;
+			if ((Object)(object)parentRt == (Object)null)
+				parentRt = popup.transform.parent.GetComponent<RectTransform>();
+			if ((Object)(object)parentRt == (Object)null) return;
 
 			RectTransform anchorRt = anchor as RectTransform;
 			if ((Object)(object)anchorRt == (Object)null)
 				anchorRt = anchor.GetComponent<RectTransform>();
+			if ((Object)(object)anchorRt == (Object)null) return;
 
-			const float gap = 14f;
-			Vector3 worldAnchor;
-			if ((Object)(object)anchorRt != (Object)null)
+			Canvas canvas = parentRt.GetComponentInParent<Canvas>();
+			Camera cam = null;
+			if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+				cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+
+			// Force layout so sizeDelta is valid
+			Canvas.ForceUpdateCanvases();
+			LayoutRebuilder.ForceRebuildLayoutImmediate(popupRt);
+
+			float pw = Mathf.Max(120f, popupRt.sizeDelta.x);
+			float ph = Mathf.Max(60f, popupRt.sizeDelta.y);
+			const float gap = 12f;
+
+			// World corners: 0=BL, 1=TL, 2=TR, 3=BR
+			Vector3[] corners = new Vector3[4];
+			anchorRt.GetWorldCorners(corners);
+
+			// Prefer right of card (screen pixels)
+			Vector2 screenPt = RectTransformUtility.WorldToScreenPoint(cam, corners[2]);
+			screenPt.x += gap;
+			bool placeLeft = screenPt.x + pw > Screen.width - 10f;
+			if (placeLeft)
 			{
-				// World corners: 0=BL, 1=TL, 2=TR, 3=BR
-				Vector3[] corners = new Vector3[4];
-				anchorRt.GetWorldCorners(corners);
-				// Just outside the right edge, aligned to top of card
-				worldAnchor = corners[2] + new Vector3(gap, 0f, 0f);
+				screenPt = RectTransformUtility.WorldToScreenPoint(cam, corners[1]);
+				screenPt.x -= gap + pw;
 			}
-			else
-			{
-				worldAnchor = anchor.position + new Vector3(gap * 0.02f, 0f, 0f);
-			}
+			// Top-align with card top; clamp vertically
+			if (screenPt.y > Screen.height - 10f)
+				screenPt.y = Screen.height - 10f;
+			if (screenPt.y - ph < 10f)
+				screenPt.y = ph + 10f;
+			if (screenPt.x < 10f)
+				screenPt.x = 10f;
+			if (screenPt.x + pw > Screen.width - 10f)
+				screenPt.x = Screen.width - 10f - pw;
 
-			Vector3 local = parent.InverseTransformPoint(worldAnchor);
-			RectTransform parentRt = parent.GetComponent<RectTransform>();
-			if ((Object)(object)parentRt != (Object)null)
+			if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRt, screenPt, cam, out Vector2 local))
 			{
-				Rect rect = parentRt.rect;
-				Vector2 center = rect.center;
-				local.x -= center.x;
-				local.y -= center.y;
-
-				// Pivot is top-left (0,1) — keep on screen
-				float pw = popupRt.sizeDelta.x;
-				float ph = popupRt.sizeDelta.y;
-				float halfW = rect.width * 0.5f;
-				float halfH = rect.height * 0.5f;
-				// If not enough room on the right, flip to the left of the card
-				if (local.x + pw > halfW - 8f && (Object)(object)anchorRt != (Object)null)
-				{
-					Vector3[] corners = new Vector3[4];
-					anchorRt.GetWorldCorners(corners);
-					// Left of card: top-left corner minus popup width
-					Vector3 leftWorld = corners[1] - new Vector3(gap, 0f, 0f);
-					Vector3 leftLocal = parent.InverseTransformPoint(leftWorld);
-					leftLocal.x -= center.x;
-					leftLocal.y -= center.y;
-					local.x = leftLocal.x - pw;
-					local.y = leftLocal.y;
-				}
-				if (local.x + pw > halfW - 4f)
-					local.x = halfW - pw - 4f;
-				if (local.x < -halfW + 4f)
-					local.x = -halfW + 4f;
-				if (local.y > halfH - 4f)
-					local.y = halfH - 4f;
-				if (local.y - ph < -halfH + 4f)
-					local.y = -halfH + 4f + ph;
+				// Fallback without camera
+				RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRt, screenPt, null, out local);
 			}
 
-			// Pivot top-left: position is top-left corner of popup
+			popupRt.anchorMin = new Vector2(0.5f, 0.5f);
+			popupRt.anchorMax = new Vector2(0.5f, 0.5f);
 			popupRt.pivot = new Vector2(0f, 1f);
-			popupRt.anchoredPosition = new Vector2(local.x, local.y);
+			popupRt.anchoredPosition = local;
 		}
 		catch (Exception ex)
 		{
-			Plugin.Dbg("[Character] PositionCharacterPopupToRight: " + ex.Message);
+			Plugin.Log.LogWarning("[Character] PositionCharacterPopupToRight: " + ex.Message);
 			try { PositionPopup(popup, anchor); } catch { }
 		}
+	}
+
+	/// <summary>Character select popup with portrait, starter weapon icon, and evo icons.</summary>
+	private static GameObject CreateCharacterDetailPopup(Transform parent, CharacterSelectPatches.TooltipData data)
+	{
+		if (data == null) return null;
+		GameObject root = new GameObject("CharacterTooltipPopup");
+		root.transform.SetParent(parent, false);
+		RectTransform rootRt = root.AddComponent<RectTransform>();
+		rootRt.anchorMin = new Vector2(0.5f, 0.5f);
+		rootRt.anchorMax = new Vector2(0.5f, 0.5f);
+		rootRt.pivot = new Vector2(0f, 1f);
+		Image bg = root.AddComponent<Image>();
+		((Graphic)bg).color = PopupBgColor;
+		((Graphic)bg).raycastTarget = false;
+		Outline ol = root.AddComponent<Outline>();
+		((Shadow)ol).effectColor = new Color(0.9f, 0.75f, 0.3f, 1f);
+		((Shadow)ol).effectDistance = new Vector2(2f, 2f);
+
+		TMP_FontAsset font = GetFont();
+		if ((Object)(object)font == (Object)null)
+		{
+			Object.Destroy((Object)(object)root);
+			return null;
+		}
+
+		const float width = 340f;
+		const float icon = 36f;
+		const float smallIcon = 28f;
+		float y = -Padding;
+		float contentW = width - Padding * 2f;
+
+		// Title row: portrait + name
+		float titleH = 44f;
+		GameObject titleRow = new GameObject("Title");
+		titleRow.transform.SetParent(root.transform, false);
+		RectTransform tr = titleRow.AddComponent<RectTransform>();
+		tr.anchorMin = new Vector2(0f, 1f);
+		tr.anchorMax = new Vector2(0f, 1f);
+		tr.pivot = new Vector2(0f, 1f);
+		tr.anchoredPosition = new Vector2(Padding, y);
+		tr.sizeDelta = new Vector2(contentW, titleH);
+
+		float titleTextX = 0f;
+		if ((Object)(object)data.Portrait != (Object)null)
+		{
+			AddUiIcon(titleRow.transform, data.Portrait, 0f, -titleH * 0.5f, titleH - 4f);
+			titleTextX = titleH;
+		}
+		AddUiText(titleRow.transform, "Name", data.Title ?? "Character", font, 17f, Color.white, true,
+			titleTextX + 4f, 0f, contentW - titleTextX - 4f, titleH, (TextAlignmentOptions)513);
+		y -= titleH + 6f;
+
+		// Flavor
+		if (!string.IsNullOrEmpty(data.Flavor))
+		{
+			float fh = MeasureTextHeight(font, data.Flavor, 13f, contentW);
+			AddUiText(root.transform, "Flavor", data.Flavor, font, 13f, new Color(0.85f, 0.85f, 0.9f, 1f), false,
+				Padding, y, contentW, fh, (TextAlignmentOptions)257);
+			y -= fh + 8f;
+		}
+
+		// Starting weapon row
+		AddUiText(root.transform, "WeaponHdr", "Starting weapon", font, 12f, new Color(0.95f, 0.8f, 0.35f, 1f), true,
+			Padding, y, contentW, 18f, (TextAlignmentOptions)257);
+		y -= 20f;
+
+		if (data.Starter.HasValue && !string.IsNullOrEmpty(data.StarterName))
+		{
+			GameObject wrow = new GameObject("WeaponRow");
+			wrow.transform.SetParent(root.transform, false);
+			RectTransform wr = wrow.AddComponent<RectTransform>();
+			wr.anchorMin = new Vector2(0f, 1f);
+			wr.anchorMax = new Vector2(0f, 1f);
+			wr.pivot = new Vector2(0f, 1f);
+			wr.anchoredPosition = new Vector2(Padding, y);
+			wr.sizeDelta = new Vector2(contentW, icon + 4f);
+
+			float tx = 0f;
+			if ((Object)(object)data.StarterSprite != (Object)null)
+			{
+				AddUiIcon(wrow.transform, data.StarterSprite, 0f, -(icon + 4f) * 0.5f, icon);
+				tx = icon + 6f;
+			}
+			AddUiText(wrow.transform, "WName", data.StarterName, font, 14f, Color.white, false,
+				tx, 0f, contentW - tx, icon + 4f, (TextAlignmentOptions)513);
+			y -= icon + 10f;
+		}
+		else
+		{
+			AddUiText(root.transform, "WUnknown", "(unknown)", font, 13f, new Color(0.7f, 0.7f, 0.75f, 1f), false,
+				Padding, y, contentW, 18f, (TextAlignmentOptions)257);
+			y -= 22f;
+		}
+
+		// Evolution rows with icons
+		if (data.Evos != null && data.Evos.Count > 0)
+		{
+			AddUiText(root.transform, "EvoHdr", "Evolution", font, 12f, new Color(0.95f, 0.8f, 0.35f, 1f), true,
+				Padding, y, contentW, 18f, (TextAlignmentOptions)257);
+			y -= 20f;
+
+			foreach (var row in data.Evos)
+			{
+				if (row == null) continue;
+				float rowH = smallIcon + 8f;
+				GameObject erow = new GameObject("EvoRow");
+				erow.transform.SetParent(root.transform, false);
+				RectTransform er = erow.AddComponent<RectTransform>();
+				er.anchorMin = new Vector2(0f, 1f);
+				er.anchorMax = new Vector2(0f, 1f);
+				er.pivot = new Vector2(0f, 1f);
+				er.anchoredPosition = new Vector2(Padding, y);
+				er.sizeDelta = new Vector2(contentW, rowH);
+
+				float x = 0f;
+				// Base starter icon
+				Sprite baseSpr = data.StarterSprite;
+				if ((Object)(object)baseSpr != (Object)null)
+				{
+					AddUiIcon(erow.transform, baseSpr, x, -rowH * 0.5f, smallIcon);
+					x += smallIcon + 3f;
+				}
+				// Passives
+				if (row.Passives != null)
+				{
+					foreach (var p in row.Passives)
+					{
+						if (p == null) continue;
+						AddUiText(erow.transform, "Plus", "+", font, 14f, new Color(0.9f, 0.9f, 0.5f, 1f), true,
+							x, 0f, 12f, rowH, (TextAlignmentOptions)514);
+						x += 12f;
+						Sprite ps = p.Sprite;
+						if ((Object)(object)ps == (Object)null)
+							ps = GameData.GetSprite(p.Type);
+						if ((Object)(object)ps != (Object)null)
+						{
+							AddUiIcon(erow.transform, ps, x, -rowH * 0.5f, smallIcon);
+							x += smallIcon + 3f;
+						}
+						else
+						{
+							string pn = string.IsNullOrEmpty(p.Name) ? p.Type.ToString() : p.Name;
+							AddUiText(erow.transform, "PName", pn, font, 11f, SoftWhite(), false,
+								x, 0f, 70f, rowH, (TextAlignmentOptions)513);
+							x += 72f;
+						}
+					}
+				}
+				// Arrow
+				AddUiText(erow.transform, "Arrow", "→", font, 14f, new Color(0.95f, 0.8f, 0.35f, 1f), true,
+					x, 0f, 18f, rowH, (TextAlignmentOptions)514);
+				x += 18f;
+				// Evolved
+				Sprite es = row.EvolvedSprite;
+				if ((Object)(object)es == (Object)null)
+					es = GameData.GetSprite(row.Evolved);
+				if ((Object)(object)es != (Object)null)
+				{
+					AddUiIcon(erow.transform, es, x, -rowH * 0.5f, smallIcon);
+					x += smallIcon + 4f;
+				}
+				string en = string.IsNullOrEmpty(row.EvolvedName) ? row.Evolved.ToString() : row.EvolvedName;
+				AddUiText(erow.transform, "EvoName", en, font, 12f, Color.white, false,
+					x, 0f, Mathf.Max(40f, contentW - x), rowH, (TextAlignmentOptions)513);
+
+				y -= rowH + 4f;
+			}
+			y -= 4f;
+		}
+
+		if (!string.IsNullOrEmpty(data.OutfitsText))
+		{
+			AddUiText(root.transform, "OutfitHdr", "Other outfits", font, 12f, new Color(0.7f, 0.85f, 1f, 1f), true,
+				Padding, y, contentW, 18f, (TextAlignmentOptions)257);
+			y -= 18f;
+			float oh = MeasureTextHeight(font, data.OutfitsText, 12f, contentW);
+			AddUiText(root.transform, "Outfits", data.OutfitsText, font, 12f, SoftWhite(), false,
+				Padding, y, contentW, oh, (TextAlignmentOptions)257);
+			y -= oh + 6f;
+		}
+
+		if (!string.IsNullOrEmpty(data.StatsText))
+		{
+			AddUiText(root.transform, "StatsHdr", "Notable stats", font, 12f, new Color(0.95f, 0.8f, 0.35f, 1f), true,
+				Padding, y, contentW, 18f, (TextAlignmentOptions)257);
+			y -= 18f;
+			float sh = MeasureTextHeight(font, data.StatsText, 12f, contentW);
+			AddUiText(root.transform, "Stats", data.StatsText, font, 12f, SoftWhite(), false,
+				Padding, y, contentW, sh, (TextAlignmentOptions)257);
+			y -= sh + 4f;
+		}
+
+		y -= Padding;
+		rootRt.sizeDelta = new Vector2(width, Mathf.Abs(y));
+		return root;
+	}
+
+	private static Color SoftWhite() => new Color(0.85f, 0.85f, 0.9f, 1f);
+
+	private static void AddUiIcon(Transform parent, Sprite sprite, float x, float yCenter, float size)
+	{
+		GameObject ic = new GameObject("Icon");
+		ic.transform.SetParent(parent, false);
+		RectTransform ir = ic.AddComponent<RectTransform>();
+		ir.anchorMin = new Vector2(0f, 1f);
+		ir.anchorMax = new Vector2(0f, 1f);
+		ir.pivot = new Vector2(0f, 0.5f);
+		ir.anchoredPosition = new Vector2(x, yCenter);
+		ir.sizeDelta = new Vector2(size, size);
+		Image img = ic.AddComponent<Image>();
+		img.sprite = sprite;
+		img.preserveAspect = true;
+		((Graphic)img).raycastTarget = false;
+	}
+
+	private static TextMeshProUGUI AddUiText(Transform parent, string name, string text, TMP_FontAsset font,
+		float size, Color color, bool bold, float x, float y, float w, float h, TextAlignmentOptions align)
+	{
+		GameObject go = new GameObject(name);
+		go.transform.SetParent(parent, false);
+		RectTransform rt = go.AddComponent<RectTransform>();
+		rt.anchorMin = new Vector2(0f, 1f);
+		rt.anchorMax = new Vector2(0f, 1f);
+		rt.pivot = new Vector2(0f, 1f);
+		rt.anchoredPosition = new Vector2(x, y);
+		rt.sizeDelta = new Vector2(w, h);
+		TextMeshProUGUI tmp = go.AddComponent<TextMeshProUGUI>();
+		((TMP_Text)tmp).font = font;
+		((TMP_Text)tmp).text = text ?? "";
+		((TMP_Text)tmp).fontSize = size;
+		((TMP_Text)tmp).fontStyle = bold ? (FontStyles)1 : (FontStyles)0;
+		((Graphic)tmp).color = color;
+		((TMP_Text)tmp).alignment = align;
+		((TMP_Text)tmp).enableWordWrapping = true;
+		((TMP_Text)tmp).overflowMode = TextOverflowModes.Overflow;
+		((Graphic)tmp).raycastTarget = false;
+		return tmp;
+	}
+
+	private static float MeasureTextHeight(TMP_FontAsset font, string text, float fontSize, float width)
+	{
+		try
+		{
+			// Lightweight estimate; TMP preferredHeight needs a live component
+			int lines = 1;
+			if (!string.IsNullOrEmpty(text))
+			{
+				foreach (char c in text)
+					if (c == '\n') lines++;
+				// rough wrap estimate ~28 chars per line at 12–13pt on 300px
+				int chars = text.Length;
+				int wrapLines = Mathf.Max(1, Mathf.CeilToInt(chars / (width / 7.5f)));
+				lines = Mathf.Max(lines, wrapLines);
+			}
+			return Mathf.Max(18f, lines * (fontSize + 4f));
+		}
+		catch { return 40f; }
 	}
 
 	private static void DisablePopupRaycasts(GameObject popup)
