@@ -23,8 +23,7 @@
 | Pause inventory (weapons) | Strong | Confirm accessories/passives same path |
 | Collection / Grimoire | Partial | Collections tab hover/placement done (1.10.11–1.10.24); remaining: multi-icon formula hit; pad dwell on grid |
 | Merchant | **Mouse confirmed** (1.10.24) | Pad/nested unverified; typed SetData patch still worth doing |
-| Arma Dio (WeaponSelection) | Code exists, **still unverified** | Type resolved by string name — may fail silently; needs live verify + typed patch |
-| Penshin Fatcha (gacha) | **No code path** | Not handled at all; decide if in parity scope |
+| Weapon selectors — Arma Dio, Penshin Fatcha, likely `EME_SELECTOR` | Code exists, **still unverified** | One shared `View - WeaponSelection` path; type resolved by string name so it may fail silently. Fix once, fixes all |
 | Owned gold circle | Implemented | Verify `PlayerOwnsWeapon` still correct in 1.15 |
 | Banned red | Implemented | Visual is red bars not “X”; optional polish |
 | MAX labels | Implemented | — |
@@ -54,24 +53,40 @@ Use `docs/SMOKE-TEST.md` plus this table.
 | Merchant offer | ✅ | — | — | — | |
 | Collection weapon | ✅ | — | — | — | Docked-panel rework (1.10.11–1.10.24) |
 | Grimoire formula L/M/R | ✅ | — | — | — | Multi-icon hit still partial (known) |
-| **Arma Dio list item** | ⬜ | ⬜ | ⬜ | ⬜ | **Not tested.** Type resolved by *string name* — see below |
-| **Penshin Fatcha (gacha)** | ⬜ | ⬜ | ⬜ | ⬜ | **Not tested.** No gacha-specific code path exists at all |
+| **Arma Dio list item** | ⬜ | ⬜ | ⬜ | ⬜ | **Not tested.** Weapon selector (base game, 1.10) |
+| **Penshin Fatcha list item** | ⬜ | ⬜ | ⬜ | ⬜ | **Not tested.** Weapon selector (base game, 1.15) — **same code path as Arma Dio** |
 
 **Legend:** ✅ confirmed · ⬜ not tested · — not separately reported this session
 
 **Caveat:** only **mouse hover** was reported. Nested click and all controller columns are
 unverified, not passing — do not read ✅ rows as input-complete.
 
-**Two leads for the next session (cheap to check before deep testing):**
+### Weapon selectors are ONE gap, not two
 
-1. **Arma Dio** — `ItemTooltipsMod.cs:1240` matches `t.Name == "WeaponSelectionItemUI"` and
-   `:1303` calls `GetComponent("WeaponSelectionItemUI")` by string. If 1.15 renamed the type,
-   this fails silently; the tell is `LogWarning("WeaponSelectionItemUI type not found in
-   assemblies")` at `:1254`. Enable `VerboseLogging`, open Arma Dio, check for that one line
-   before testing anything else.
-2. **Penshin Fatcha** — no `penshin`/`gacha` match anywhere in `src/`. Any tooltip there would
-   be incidental from generic icon patches, so treat it as **unhandled** rather than untested,
-   and decide whether it is in parity scope at all (the original mod may not cover it either).
+Arma Dio (1.10, unlocked by collecting it in any stage) and Penshin Fatcha (1.15, Para
+Kooleo's starting weapon, offers the tuna forms) are both **weapon selectors**, and the mod
+handles that screen **generically by view path**, not per weapon:
+
+```
+ItemTooltipsMod.cs:941    GameObject.Find(".../Safe Area/View - WeaponSelection")
+ItemTooltipsMod.cs:1214   ScanWeaponSelectionView(viewGo)
+```
+
+Nothing in that path is Arma-Dio-specific, so whichever weapon opens the view gets the same
+treatment. **Fixing it once fixes both**, and testing either one exercises the same code.
+`WeaponType` also has `EME_SELECTOR = 404`, so there is likely a third selector on the same path.
+
+**Lead — check this before any deep testing:** `:1240` matches `t.Name ==
+"WeaponSelectionItemUI"` and `:1303` calls `GetComponent("WeaponSelectionItemUI")` by string.
+If 1.15 renamed the type, registration fails silently; the tell is
+`LogWarning("WeaponSelectionItemUI type not found in assemblies")` at `:1254`. Enable
+`VerboseLogging`, open either selector, and look for that one line first.
+
+**Penshin is also the best stress test for multi-row evolutions.** `WeaponType` carries
+`EX_PENSHIN`, `EX_PENSHIN_EVO1…EVO7`, `EX_PENSHIN_SELECTOR_EVO`, `EX_PENSHIN_UNION`, and
+`EX_PENSHIN_STATIC1…STATIC7` — the wiki's "Miracle of Multiplication (6+ evolutions)".
+`BuildEvoRowsFor` has no row cap (rows are data-driven), so this is the natural case to
+confirm Phase 2's "multi-row recipes" against something harder than Hollow Heart.
 
 ### 0.2 Runtime diagnostics (temporary or behind `VerboseLogging`)
 
