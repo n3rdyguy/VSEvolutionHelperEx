@@ -22,8 +22,9 @@
 | Level-up | Strong | Re-verify pad navigate + hover delay |
 | Pause inventory (weapons) | Strong | Confirm accessories/passives same path |
 | Collection / Grimoire | Partial | Collections tab hover/placement done (1.10.11–1.10.24); remaining: multi-icon formula hit; pad dwell on grid |
-| Merchant | Untested / fragile | Page patch may only cache Data; icon registration may miss |
-| Arma Dio (WeaponSelection) | Code exists | Hierarchy/reflection brittle; needs live verify + typed patch |
+| Merchant | **Mouse confirmed** (1.10.24) | Pad/nested unverified; typed SetData patch still worth doing |
+| Arma Dio (WeaponSelection) | Code exists, **still unverified** | Type resolved by string name — may fail silently; needs live verify + typed patch |
+| Penshin Fatcha (gacha) | **No code path** | Not handled at all; decide if in parity scope |
 | Owned gold circle | Implemented | Verify `PlayerOwnsWeapon` still correct in 1.15 |
 | Banned red | Implemented | Visual is red bars not “X”; optional polish |
 | MAX labels | Implemented | — |
@@ -40,18 +41,37 @@
 
 ### 0.1 Parity smoke matrix (fill while playing)
 
-Use `docs/SMOKE-TEST.md` plus this table (save results in a short note or PR comment):
+Use `docs/SMOKE-TEST.md` plus this table.
+
+**Last session:** 2026-08-04 · plugin **1.10.24** · VS **1.15.113** · owner playtest, **mouse only**.
 
 | Screen | Mouse hover | Nested click | Pad focus dwell | Nested pad submit | Notes |
 |--------|-------------|--------------|-----------------|-------------------|-------|
-| Level-up weapon | | | | | |
-| Level-up passive | | | | | |
-| Pause weapon slot | | | | | |
-| Pause accessory | | | | | |
-| Merchant offer | | | | | |
-| Collection weapon | | | | | |
-| Grimoire formula L/M/R | | | | | |
-| Arma Dio list item | | | | | |
+| Level-up weapon | ✅ | — | — | — | |
+| Level-up passive | ✅ | — | — | — | |
+| Pause weapon slot | ✅ | — | — | — | |
+| Pause accessory | ✅ | — | — | — | |
+| Merchant offer | ✅ | — | — | — | |
+| Collection weapon | ✅ | — | — | — | Docked-panel rework (1.10.11–1.10.24) |
+| Grimoire formula L/M/R | ✅ | — | — | — | Multi-icon hit still partial (known) |
+| **Arma Dio list item** | ⬜ | ⬜ | ⬜ | ⬜ | **Not tested.** Type resolved by *string name* — see below |
+| **Penshin Fatcha (gacha)** | ⬜ | ⬜ | ⬜ | ⬜ | **Not tested.** No gacha-specific code path exists at all |
+
+**Legend:** ✅ confirmed · ⬜ not tested · — not separately reported this session
+
+**Caveat:** only **mouse hover** was reported. Nested click and all controller columns are
+unverified, not passing — do not read ✅ rows as input-complete.
+
+**Two leads for the next session (cheap to check before deep testing):**
+
+1. **Arma Dio** — `ItemTooltipsMod.cs:1240` matches `t.Name == "WeaponSelectionItemUI"` and
+   `:1303` calls `GetComponent("WeaponSelectionItemUI")` by string. If 1.15 renamed the type,
+   this fails silently; the tell is `LogWarning("WeaponSelectionItemUI type not found in
+   assemblies")` at `:1254`. Enable `VerboseLogging`, open Arma Dio, check for that one line
+   before testing anything else.
+2. **Penshin Fatcha** — no `penshin`/`gacha` match anywhere in `src/`. Any tooltip there would
+   be incidental from generic icon patches, so treat it as **unhandled** rather than untested,
+   and decide whether it is in parity scope at all (the original mod may not cover it either).
 
 ### 0.2 Runtime diagnostics (temporary or behind `VerboseLogging`)
 

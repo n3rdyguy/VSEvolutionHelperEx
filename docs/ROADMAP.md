@@ -146,6 +146,8 @@ VSEvolutionHelper-BepInEx-v{VERSION}.zip
 
 ## 9. Immediate mode
 
-**Default:** execute **[PLAN-original-parity.md](PLAN-original-parity.md)** Phase 0 (matrix + logs), then Merchant / Arma Dio / grimoire multi-icon.
+**Default:** execute **[PLAN-original-parity.md](PLAN-original-parity.md)**. Phase 0 matrix is partly filled (2026-08-04, mouse only): level-up, pause, merchant, collection, grimoire confirmed; **Arma Dio** and **Penshin Fatcha** still untested, and controller columns are unverified across the board.
+
+Next: verify Arma Dio (check for the `WeaponSelectionItemUI type not found` warning first), then grimoire multi-icon, then the controller pass.
 
 Tag **1.11.0** only when parity exit criteria are met (or owner requests an interim release).
