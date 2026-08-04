@@ -792,10 +792,14 @@ public class ItemTooltipsMod
 		{
 			HideMapPopup();
 		}
-		// Stage Selection relic icons (main menu / pre-run)
+		// Stage Selection: Guide tabs (LB/RB, focus) + relic hover
+		StageGuideUI.TickInput();
 		if (stageRelicIcons.Count > 0)
 		{
-			UpdateStageRelicHover();
+			if (usingController)
+				UpdateStageRelicControllerDwell();
+			else
+				UpdateStageRelicHover();
 		}
 		if (!flag && collectionIcons.Count > 0)
 		{
@@ -6715,6 +6719,68 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		currentStageRelicHoverId = -1;
 		pendingStageRelicHoverId = -1;
 		HideStageRelicPopup();
+	}
+
+	/// <summary>Controller: dwell on EventSystem-selected stage relic icon.</summary>
+	private static void UpdateStageRelicControllerDwell()
+	{
+		List<int> dead = null;
+		foreach (var kv in stageRelicIcons)
+		{
+			if ((Object)(object)kv.Value.Go == (Object)null)
+			{
+				dead ??= new List<int>();
+				dead.Add(kv.Key);
+			}
+		}
+		if (dead != null)
+			foreach (int k in dead) stageRelicIcons.Remove(k);
+
+		EventSystem es = EventSystem.current;
+		if ((Object)(object)es == (Object)null || stageRelicIcons.Count == 0)
+			return;
+		GameObject sel = es.currentSelectedGameObject;
+		if ((Object)(object)sel == (Object)null)
+		{
+			pendingStageRelicHoverId = -1;
+			return;
+		}
+		int id = ((Object)sel).GetInstanceID();
+		if (!stageRelicIcons.TryGetValue(id, out MapIconInfo info))
+		{
+			// Parent walk
+			Transform p = sel.transform;
+			bool found = false;
+			while ((Object)(object)p != (Object)null)
+			{
+				id = ((Object)p.gameObject).GetInstanceID();
+				if (stageRelicIcons.TryGetValue(id, out info))
+				{
+					found = true;
+					break;
+				}
+				p = p.parent;
+			}
+			if (!found)
+			{
+				pendingStageRelicHoverId = -1;
+				return;
+			}
+		}
+		if (id != pendingStageRelicHoverId)
+		{
+			pendingStageRelicHoverId = id;
+			stageRelicHoverStartTime = Time.unscaledTime;
+			return;
+		}
+		if (Time.unscaledTime - stageRelicHoverStartTime >= Plugin.ControllerDwellDelay)
+		{
+			if (currentStageRelicHoverId != id)
+			{
+				currentStageRelicHoverId = id;
+				ShowStageRelicPopup(info);
+			}
+		}
 	}
 
 	private static void UpdateStageRelicHover()

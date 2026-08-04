@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.8.1] — 2026-08-04
+
+### Added
+- **Controller / keyboard Stage Guide:** LB/RB (or Q/E) switch Music|Guide; tabs are UI Buttons (focus + Submit); vertical stick scrolls Guide; Guide relic icons are selectable with controller dwell tooltips.
+
 ## [1.8.0] — 2026-08-04
 
 ### Added

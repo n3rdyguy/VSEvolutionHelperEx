@@ -4,6 +4,7 @@ using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Events;
 using UnityEngine.UI;
 using VampireSurvivors.Data;
 using VampireSurvivors.Data.Stage;
@@ -33,6 +34,9 @@ public static class StageGuideUI
 	private static TextMeshProUGUI _tabGuideLabel;
 	private static Image _tabMusicBg;
 	private static Image _tabGuideBg;
+	private static Button _tabMusicBtn;
+	private static Button _tabGuideBtn;
+	private static readonly List<GameObject> _guideRelicSelectables = new List<GameObject>();
 	private static StageData _stage;
 	private static StageType _stageType;
 	private static StageItemUI _stageItem;
@@ -98,10 +102,95 @@ public static class StageGuideUI
 		_tabGuideLabel = null;
 		_tabMusicBg = null;
 		_tabGuideBg = null;
+		_tabMusicBtn = null;
+		_tabGuideBtn = null;
+		_guideRelicSelectables.Clear();
 		_stage = null;
 		_stageItem = null;
 		_tab = Tab.Music;
 		_tabInitialized = false;
+	}
+
+	/// <summary>
+	/// Controller / keyboard helpers while Stage Selection Guide chrome is alive.
+	/// LB/RB (or Q/E) switch Music|Guide; vertical axis scrolls Guide; D-pad left/right on tabs.
+	/// </summary>
+	public static void TickInput()
+	{
+		if (!Plugin.StageGuideEnabled || (Object)(object)_tabBar == (Object)null)
+			return;
+		if (!_tabBar.activeInHierarchy)
+			return;
+
+		// Shoulder / hotkeys — work even when focus is on the stage list
+		if (Input.GetKeyDown(KeyCode.JoystickButton4) || Input.GetKeyDown(KeyCode.Q)
+			|| Input.GetKeyDown(KeyCode.PageUp))
+		{
+			SetTab(Tab.Music);
+			FocusTabButton(Tab.Music);
+			return;
+		}
+		if (Input.GetKeyDown(KeyCode.JoystickButton5) || Input.GetKeyDown(KeyCode.E)
+			|| Input.GetKeyDown(KeyCode.PageDown))
+		{
+			SetTab(Tab.Guide);
+			FocusTabButton(Tab.Guide);
+			return;
+		}
+
+		// When a tab button is focused, left/right switches
+		EventSystem es = EventSystem.current;
+		if ((Object)(object)es != (Object)null)
+		{
+			GameObject sel = es.currentSelectedGameObject;
+			bool onMusic = (Object)(object)_tabMusicBtn != (Object)null
+				&& (Object)(object)sel == (Object)(object)_tabMusicBtn.gameObject;
+			bool onGuide = (Object)(object)_tabGuideBtn != (Object)null
+				&& (Object)(object)sel == (Object)(object)_tabGuideBtn.gameObject;
+			if (onMusic || onGuide)
+			{
+				float h = 0f;
+				try { h = Input.GetAxisRaw("Horizontal"); } catch { }
+				if (h > 0.5f || Input.GetKeyDown(KeyCode.RightArrow))
+				{
+					SetTab(Tab.Guide);
+					FocusTabButton(Tab.Guide);
+				}
+				else if (h < -0.5f || Input.GetKeyDown(KeyCode.LeftArrow))
+				{
+					SetTab(Tab.Music);
+					FocusTabButton(Tab.Music);
+				}
+			}
+		}
+
+		// Scroll Guide content with vertical stick / arrows when Guide is visible
+		if (_tab == Tab.Guide && (Object)(object)_guideScroll != (Object)null && _guideRoot != null && _guideRoot.activeInHierarchy)
+		{
+			float v = 0f;
+			try { v = Input.GetAxisRaw("Vertical"); } catch { }
+			if (Input.GetKey(KeyCode.UpArrow)) v = 1f;
+			if (Input.GetKey(KeyCode.DownArrow)) v = -1f;
+			if (Mathf.Abs(v) > 0.2f)
+			{
+				float speed = 0.9f * Time.unscaledDeltaTime;
+				_guideScroll.verticalNormalizedPosition = Mathf.Clamp01(
+					_guideScroll.verticalNormalizedPosition + v * speed);
+			}
+		}
+	}
+
+	private static void FocusTabButton(Tab tab)
+	{
+		try
+		{
+			EventSystem es = EventSystem.current;
+			if ((Object)(object)es == (Object)null) return;
+			Button b = tab == Tab.Guide ? _tabGuideBtn : _tabMusicBtn;
+			if ((Object)(object)b != (Object)null)
+				es.SetSelectedGameObject(b.gameObject);
+		}
+		catch { }
 	}
 
 	private static bool EnsureChrome(StageSelectPage page)
@@ -166,11 +255,24 @@ public static class StageGuideUI
 				tabRt.offsetMax = new Vector2(_songPanelRt.offsetMax.x, tabH);
 			}
 
-			// Two equal tabs
-			_tabMusicBg = MakeTabButton(_tabBar.transform, "TabMusic", "Music", font, 0f, out _tabMusicLabel);
-			_tabGuideBg = MakeTabButton(_tabBar.transform, "TabGuide", "Guide", font, 0.5f, out _tabGuideLabel);
+			// Two equal tabs (Buttons for mouse + EventSystem / controller)
+			_tabMusicBg = MakeTabButton(_tabBar.transform, "TabMusic", "Music", font, 0f, out _tabMusicLabel, out _tabMusicBtn);
+			_tabGuideBg = MakeTabButton(_tabBar.transform, "TabGuide", "Guide", font, 0.5f, out _tabGuideLabel, out _tabGuideBtn);
+			WireTabNavigation();
 			AddClick(_tabMusicBg.gameObject, () => SetTab(Tab.Music));
 			AddClick(_tabGuideBg.gameObject, () => SetTab(Tab.Guide));
+			// Button onClick (controller Submit / A)
+			try
+			{
+				if ((Object)(object)_tabMusicBtn != (Object)null)
+					_tabMusicBtn.onClick.AddListener((UnityAction)(() => SetTab(Tab.Music)));
+				if ((Object)(object)_tabGuideBtn != (Object)null)
+					_tabGuideBtn.onClick.AddListener((UnityAction)(() => SetTab(Tab.Guide)));
+			}
+			catch (Exception ex)
+			{
+				Plugin.Log.LogWarning("[StageGuide] tab onClick: " + ex.Message);
+			}
 		}
 
 		// Guide root — same top/width as song panel; scroll when content is tall
@@ -233,6 +335,30 @@ public static class StageGuideUI
 			RebuildGuideContent();
 	}
 
+	private static void WireTabNavigation()
+	{
+		if ((Object)(object)_tabMusicBtn == (Object)null || (Object)(object)_tabGuideBtn == (Object)null)
+			return;
+		try
+		{
+			Navigation nMusic = _tabMusicBtn.navigation;
+			nMusic.mode = Navigation.Mode.Explicit;
+			nMusic.selectOnRight = _tabGuideBtn;
+			nMusic.selectOnLeft = _tabGuideBtn;
+			_tabMusicBtn.navigation = nMusic;
+
+			Navigation nGuide = _tabGuideBtn.navigation;
+			nGuide.mode = Navigation.Mode.Explicit;
+			nGuide.selectOnLeft = _tabMusicBtn;
+			nGuide.selectOnRight = _tabMusicBtn;
+			_tabGuideBtn.navigation = nGuide;
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("[StageGuide] tab navigation: " + ex.Message);
+		}
+	}
+
 	private static void ApplyTabVisibility()
 	{
 		bool guide = _tab == Tab.Guide;
@@ -263,6 +389,7 @@ public static class StageGuideUI
 		{
 			Object.Destroy((Object)(object)_guideScrollContent.transform.GetChild(i).gameObject);
 		}
+		_guideRelicSelectables.Clear();
 
 		TMP_FontAsset font = ItemTooltipsMod.GetUiFont();
 		if ((Object)(object)font == (Object)null) return;
@@ -518,7 +645,23 @@ public static class StageGuideUI
 			Image img = ic.AddComponent<Image>();
 			img.sprite = spr;
 			img.preserveAspect = true;
+			((Graphic)img).raycastTarget = true;
+			// Selectable for controller focus + mouse hover registration
+			try
+			{
+				Button btn = ic.AddComponent<Button>();
+				((Selectable)btn).targetGraphic = img;
+				Navigation nav = ((Selectable)btn).navigation;
+				nav.mode = Navigation.Mode.Vertical;
+				((Selectable)btn).navigation = nav;
+				ColorBlock colors = ((Selectable)btn).colors;
+				colors.highlightedColor = new Color(0.9f, 0.95f, 1f, 1f);
+				colors.selectedColor = new Color(0.85f, 0.9f, 1f, 1f);
+				((Selectable)btn).colors = colors;
+			}
+			catch { }
 			ItemTooltipsMod.RegisterStageRelicIcon(ic, it, itemName, itemDesc, spr);
+			_guideRelicSelectables.Add(ic);
 		}
 
 		var label = MakeTmp(row.transform, "Name", itemName, font, 12f, Soft, false);
@@ -563,7 +706,7 @@ public static class StageGuideUI
 		return go;
 	}
 
-	private static Image MakeTabButton(Transform parent, string name, string label, TMP_FontAsset font, float anchorX, out TextMeshProUGUI tmpOut)
+	private static Image MakeTabButton(Transform parent, string name, string label, TMP_FontAsset font, float anchorX, out TextMeshProUGUI tmpOut, out Button btnOut)
 	{
 		GameObject go = new GameObject(name);
 		go.transform.SetParent(parent, false);
@@ -575,6 +718,17 @@ public static class StageGuideUI
 		Image img = go.AddComponent<Image>();
 		img.color = TabOff;
 		((Graphic)img).raycastTarget = true;
+
+		Button btn = go.AddComponent<Button>();
+		((Selectable)btn).targetGraphic = img;
+		ColorBlock colors = ((Selectable)btn).colors;
+		colors.normalColor = Color.white;
+		colors.highlightedColor = new Color(1f, 0.95f, 0.8f, 1f);
+		colors.selectedColor = new Color(1f, 0.9f, 0.7f, 1f);
+		colors.pressedColor = new Color(0.9f, 0.85f, 0.7f, 1f);
+		colors.fadeDuration = 0.05f;
+		((Selectable)btn).colors = colors;
+		btnOut = btn;
 
 		GameObject textGo = new GameObject("Label");
 		textGo.transform.SetParent(go.transform, false);

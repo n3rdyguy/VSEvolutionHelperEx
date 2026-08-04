@@ -1,8 +1,9 @@
 # VS Evolution Helper — Full Roadmap
 
 **Mod:** BepInEx IL2CPP port of NihilXD’s Evolution Helper for Vampire Survivors 1.15 / Unity 6  
-**Current version:** 1.8.0 (Phase 2 config + Level Up tooltip fix)  
-**Repo state:** Config delays/toggles; Level Up hover gated on mouse move  
+**Current version:** 1.8.1 (Phase 2 complete: config + Level Up fix + controller Stage Guide)  
+**Repo state:** Controller Music|Guide tabs + relic dwell; Phase 3 next  
+
 
 
 
@@ -213,10 +214,10 @@ BepInEx core + evo/arcana + grimoire + map + stage A/B/C baseline.
 
 **Exit:** someone can install from zip without this repo.
 
-### Phase 2 — Bugs, input & config
+### Phase 2 — Bugs, input & config — Done (1.8.0–1.8.1)
 1. **Fix Level Up global tooltip** — **Done (1.7.1–1.7.3 / 1.8.0)**  
 2. Hover delay + feature toggles in cfg — **Done (1.8.0)**  
-3. Controller: Guide tabs + relic focus — **Next**  
+3. Controller: Guide tabs + relic focus — **Done (1.8.1)**  
 
 **Exit:** level-up is usable without stray tooltips; pad-friendly stage select; configurable UX.
 

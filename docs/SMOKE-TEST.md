@@ -25,6 +25,7 @@ Run before tagging or uploading a Nexus zip. Game build under test: **VS 1.15.x*
 - [ ] Stage selection: **Music \| Guide** tabs switch without breaking music
 - [ ] Guide: tips wrap; long relic names wrap; long content scrolls if needed
 - [ ] Stages with **no** relics: no empty “Unlocks” clutter (or quiet empty state)
+- [ ] **Controller:** LB/RB (or Q/E) switch Music|Guide; Guide scrolls with stick; relic icons dwell-show tooltip
 
 ## Regression
 

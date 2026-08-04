@@ -1,6 +1,6 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.8.0** — Interactive evolution, arcana, grimoire, map, and stage-select tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.8.1** — Interactive evolution, arcana, grimoire, map, and stage-select tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
@@ -49,7 +49,7 @@ Please support the original authors. This port reuses their design with typed Il
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.8.0]
+Loading [VS Evolution Helper 1.8.1]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete
@@ -90,7 +90,7 @@ Edit the cfg and restart the game (or re-enter menus) for changes to apply on ne
 1. **In a run:** pause or open level-up / merchant — hover equipment icons.
 2. **Grimoire / collection:** hover evolution formula icons.
 3. **Map (pause):** hover pickups and relics.
-4. **Stage selection:** hover left **Relics in stage**; use **Music \| Guide** above the music list for stage tips and unlocks.
+4. **Stage selection:** hover left **Relics in stage**; use **Music \| Guide** above the music list for stage tips and unlocks. **Controller:** LB/RB (or Q/E) switch tabs; stick scrolls Guide; dwell on Guide relic icons for tooltips.
 
 ## Loader notes
 
