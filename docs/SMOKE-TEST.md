@@ -38,6 +38,12 @@ Run before tagging or uploading a release zip. Game: **VS 1.15.x**, BepInEx 6 IL
 - [ ] Long Guide content scrolls
 - [ ] Closing stage select restores music panel
 - [ ] **Controller:** LB/RB (or Q/E) switch tabs; Guide scrolls; relic dwell tooltip works
+- [ ] **On a save where music is NOT unlocked:** Guide is still reachable (known defect — see ROADMAP §4.1)
+
+> **Unlock-state coverage.** Most of this list passes trivially on a fully-unlocked save.
+> Anything that reuses a game panel can silently vanish when that panel does not exist yet —
+> the Stage Guide is coupled to the song panel exactly this way. When a feature depends on
+> another UI element, test it on a **partially-unlocked** save too, not just the dev save.
 
 ## Character & adventure select
 

@@ -45,6 +45,7 @@ Full player-facing detail: **[USER-GUIDE.md](USER-GUIDE.md)**.
 | Character flavor missing for rare I2 gaps | Name humanized; description line omitted rather than raw keys |
 | StageExtraTips coverage | Main + many DLC/adventure stages; not every StageType |
 | Features vs bottom stats | Hyper/length/mods intentionally **not** duplicated in Guide |
+| **Stage Guide needs music unlocked** | **Known defect**, not acceptable — Guide is entirely unavailable when the song panel is absent. See §4.1 |
 
 ---
 
@@ -67,8 +68,41 @@ Full plan: **[PLAN-original-parity.md](PLAN-original-parity.md)**
 ## 4. Optional future work (after or parallel to parity)
 
 ### 4.1 Polish
+
+#### Stage Guide must not depend on the song panel (defect — do this first)
+
+**Symptom:** on a save/character where **music is not unlocked**, the whole Stage Guide
+disappears — no `Music | Guide` tabs, no Guide content.
+
+**Cause:** the Guide was designed and built on a save that *had* music unlocked, so the
+song panel was assumed to always exist. It is coupled to that panel in two ways:
+
+| Coupling | Where | Effect when song panel is missing |
+|----------|-------|-----------------------------------|
+| Gate | `StageGuideUI.EnsureChrome` → `page._SongPanel` null ⇒ `return false` (`:209`) | Tabs and Guide root are never created |
+| Geometry | `CopyRect(gr, _songPanelRt)` (`:284`, `:515`); `PlaceTabBarAboveSong` (`:237`) | Guide has no rect of its own to fall back on |
+
+So it is not just a hidden tab — the Guide has no independent layout at all.
+
+**Fix direction:**
+1. Decouple geometry: derive the Guide rect from the **stage select right column / parent**
+   rather than from `_songPanelRt`, and keep the song-panel rect only as a preferred source
+   when present.
+2. Decouple the gate: let `EnsureChrome` succeed without a song panel.
+3. When there is no music to show, drop the tab strip and show the Guide directly in that
+   space (a `Music` tab with nothing behind it is worse than no tabs).
+4. Keep `Features.StageGuide` as the kill switch.
+
+**Note:** the existing risk-register line *"Song panel layout changes → fall back if
+`_SongPanel` missing"* anticipated exactly this. The mitigation was written down but never
+implemented.
+
+**Test:** needs a save where music is **not** unlocked — this class of bug is invisible on a
+fully-unlocked save. See `SMOKE-TEST.md`.
+
 | Task | Effort |
 |------|--------|
+| **Stage Guide without song panel** (above) | **M** |
 | Expand `StageExtraTips` for remaining DLC / adventures | S–M |
 | Map token labels for unknown sprites | M |
 | Adventure tooltips as rich as character (icon strip) | M |
