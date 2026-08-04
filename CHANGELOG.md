@@ -1,11 +1,60 @@
 # Changelog
 
-## [1.10.11] — polish (unreleased tag)
-
-### Fixed / Added
-- **Collections tab:** rescan all `CollectionItemUI` on page open/filter; fixed IL2CPP SetData parameter binding; locked cells show **Unlock:** tips from game achievement text.
-- Phase 0 playtest: level-up, pause, merchant confirmed working (1.15.113).
 All notable changes to this BepInEx port are listed here.
+
+## [1.10.24] — 2026-08-04
+
+Collections tab polish, batched from the 1.10.11 → 1.10.24 iteration into one release.
+
+### Added
+- **Collections tab tooltips** (main menu) now fire at all: cells get pointer enter/exit
+  triggers when registered, and hover updates run on the main menu instead of only while
+  the game is paused.
+- **Locked cells** show an **Unlock:** hint sourced from the game's achievement text.
+
+### Changed
+- Collections tooltips are **docked to the right margin** of the App Safe Area, outside the
+  collections grid. They no longer chase the mouse or the hovered cell, so they stay fully
+  visible and clear of the center panel.
+- The docked panel stays **interactive** — click formula icons for nested detail; hiding is
+  delayed while the cursor travels from the grid to the panel.
+- **Arcana** headers and names use a darker purple for readability; tighter section spacing.
+
+### Fixed
+- **Crash on the Collections tab:** removed the per-frame full-scene `FindObjectsOfType<Transform>`
+  scan, dropped the `Sort*` patches, switched to instance-only `CollectionItemUI` postfixes,
+  and throttled rescans.
+- IL2CPP Harmony `SetData` parameter binding (bind by position) so registration works.
+- Collection names/descriptions resolve through `GameData` + `LocalizeDisplayText` instead of
+  aborting or painting raw `itemLang/…` paths.
+- Tooltips no longer clipped under the `ScrollRect` mask, blanked by a nested `Canvas`, or
+  buried behind the grid.
+- Fixed a relic description that was, on reflection, insufficiently ominous.
+
+### Notes
+- Phase 0 playtest: level-up, pause, and merchant confirmed working on **1.15.113**.
+
+<details>
+<summary>Version trail (each bump is one commit; later entries supersede earlier attempts)</summary>
+
+| Version | Change |
+|---------|--------|
+| 1.10.11 | Rescan `CollectionItemUI` on open/filter; IL2CPP SetData binding; locked **Unlock:** tips |
+| 1.10.12 | Crash fix — no full-scene Transform scan; instance-only postfixes; throttled scans |
+| 1.10.13 | EventTrigger hover on App UI cells; run collection hover on the main menu |
+| 1.10.14 | Place tooltip next to the hovered cell instead of a fixed 1450,930 position |
+| 1.10.15 | Pin to hovered cell; scrub I2 names via `GameData` + `LocalizeDisplayText` |
+| 1.10.16 | Override canvas sorting so tooltips draw above masked UI |
+| 1.10.17 | Fix invisible/hover-stealing popups: `overrideSorting` only, raycasts off, delayed exit |
+| 1.10.18 | Reverse polarity — outside grid, no nested Canvas, place from cell corners |
+| 1.10.19 | Simplify — Safe Area parent + world placement; end delayed-exit races |
+| 1.10.20 | Dock to the Safe Area right margin; stop chasing mouse/cell placement |
+| 1.10.21 | Docked panel clickable; delayed hide grid→panel; darker Arcana headers; spacing |
+| 1.10.22 | Dark Arcana purple for arcana name text |
+| 1.10.23 | Collections tooltip copy tweak; context flag guarded with `try/finally` |
+| 1.10.24 | Prefer the official I2 blurb, with a little something after it |
+
+</details>
 
 ## [1.10.10] — 2026-08-04
 

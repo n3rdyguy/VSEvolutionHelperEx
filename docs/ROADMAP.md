@@ -1,7 +1,7 @@
 # VS Evolution Helper — Roadmap
 
 **Mod:** BepInEx IL2CPP port of NihilXD’s Evolution Helper for Vampire Survivors 1.15 / Unity 6  
-**Current version:** **1.10.10** (Phase 3 complete; polish as needed)  
+**Current version:** **1.10.24** (Phase 3 complete; Collections polish — released)  
 **Docs:** [USER-GUIDE](USER-GUIDE.md) · [README](../README.md) · [CHANGELOG](../CHANGELOG.md)
 
 ### Working practices
@@ -13,7 +13,7 @@
 
 ---
 
-## 1. Shipped features (1.10.10)
+## 1. Shipped features (1.10.24)
 
 | Area | Status | What players get |
 |------|--------|------------------|
@@ -23,6 +23,7 @@
 | Arcana on tooltips | Done | Names, sprites, Affects popups |
 | Level Up tooltips | Done | No popup on open; hover only |
 | Grimoire / collection | Done | Formula + grid tooltips (multi-icon hit may be partial) |
+| Collections tab | Done | Right-docked clickable tooltip, locked **Unlock:** hints, loc scrub (1.10.11–1.10.24) |
 | Pause map tooltips | Done | Relics / pickups |
 | Stage relics panel | Done | Hover + dynamic sizing |
 | Stage Music \| Guide | Done | Polished tabs; Guide content; Features; curated tips |

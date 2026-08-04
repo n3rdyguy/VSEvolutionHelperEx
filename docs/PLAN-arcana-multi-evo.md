@@ -1,6 +1,6 @@
 # Plan: Arcana polish + multi-row evolutions
 
-**Status:** **Done** (shipped; current plugin **1.10.10**). Kept for historical design notes.
+**Status:** **Done** (shipped; current plugin **1.10.24**). Kept for historical design notes.
 
 See [USER-GUIDE.md](USER-GUIDE.md) for player-facing behavior and [ROADMAP.md](ROADMAP.md) for what’s next.
 

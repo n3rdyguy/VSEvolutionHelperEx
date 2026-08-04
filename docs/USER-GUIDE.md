@@ -1,7 +1,7 @@
 # VS Evolution Helper — User guide
 
 **Plugin:** VS Evolution Helper (BepInEx)  
-**Current version:** 1.10.10  
+**Current version:** 1.10.24  
 **Game:** Vampire Survivors 1.15 / Unity 6  
 
 This guide describes **every player-facing feature**. For install steps, see the root [README](../README.md). For release history, see [CHANGELOG](../CHANGELOG.md).
@@ -105,6 +105,20 @@ Kill switch: `Features.MapTooltips`.
 | Collection weapon cells | Same as weapon tooltips |
 | Collection items | Item / power-up tooltips |
 | Collection arcanas | Arcana name + description |
+| **Locked** collection cells | **Unlock:** hint from the game’s achievement text |
+
+### 4.1 Collections tab behavior (1.10.11+)
+
+The Collections tab tooltip does **not** follow the mouse. It is **docked to the right margin**
+of the screen, outside the collection grid:
+
+| Behavior | Detail |
+|----------|--------|
+| Placement | Fixed right-edge dock, upper-middle — always visible, never clipped by the grid’s scroll mask |
+| Interactive | The docked panel stays **clickable**: click formula icons for nested detail |
+| Hide delay | Hiding is delayed while you move the cursor from a grid cell to the panel |
+| Names | Resolved through game data + localization — no raw `itemLang/…` paths |
+| Arcana | Headers and names in a darker purple for readability |
 
 **Note:** Depending on layout/registration, some formula rows may only respond on one icon slot; treat that as acceptable UX unless you need full multi-icon hit testing later.
 

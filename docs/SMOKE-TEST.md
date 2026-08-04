@@ -1,6 +1,6 @@
 # Smoke test checklist (pre-release)
 
-Run before tagging or uploading a release zip. Game: **VS 1.15.x**, BepInEx 6 IL2CPP only. Plugin version under test: **1.10.10** (or current `PluginVersion`).
+Run before tagging or uploading a release zip. Game: **VS 1.15.x**, BepInEx 6 IL2CPP only. Plugin version under test: **1.10.24** (or current `PluginVersion`).
 
 ## Setup
 

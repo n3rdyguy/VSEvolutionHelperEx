@@ -2,7 +2,7 @@
 
 **Goal:** Match the original Melon mod’s promise — tooltips on every screen where weapon/item icons appear, with the full formula feature set and solid mouse/keyboard/controller support.
 
-**Baseline:** BepInEx port **1.10.10** already has ~90% of formula UX (multi-row evo, arcana, owned/banned/MAX, nested popups, evolved-from, I2) and several **extras** (Stage Guide, character/adventure tooltips, map). This plan closes **gaps**, not rewrites extras.
+**Baseline:** BepInEx port **1.10.24** already has ~90% of formula UX (multi-row evo, arcana, owned/banned/MAX, nested popups, evolved-from, I2) and several **extras** (Stage Guide, character/adventure tooltips, map). This plan closes **gaps**, not rewrites extras.
 
 **Non-goals (stay out of “parity” scope):** Stage Guide polish, character/adventure, map tokens, StageExtraTips content mill.
 
@@ -21,7 +21,7 @@
 |------|--------|-----|
 | Level-up | Strong | Re-verify pad navigate + hover delay |
 | Pause inventory (weapons) | Strong | Confirm accessories/passives same path |
-| Collection / Grimoire | Partial | Multi-icon formula hit; pad dwell on grid |
+| Collection / Grimoire | Partial | Collections tab hover/placement done (1.10.11–1.10.24); remaining: multi-icon formula hit; pad dwell on grid |
 | Merchant | Untested / fragile | Page patch may only cache Data; icon registration may miss |
 | Arma Dio (WeaponSelection) | Code exists | Hierarchy/reflection brittle; needs live verify + typed patch |
 | Owned gold circle | Implemented | Verify `PlayerOwnsWeapon` still correct in 1.15 |

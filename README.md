@@ -1,12 +1,12 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.10.10** — Evolution, arcana, grimoire, map, stage, character, and adventure tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.10.24** — Evolution, arcana, grimoire, collection, map, stage, character, and adventure tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
 | | |
 |--|--|
-| **Latest release** | [v1.10.10](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.10.10) |
+| **Latest release** | [v1.10.24](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.10.24) |
 | **Game** | Vampire Survivors **1.15.x** (tested **1.15.113**), Unity **6000.0.62f1** |
 | **Loader** | [BepInEx 6 IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (BE / bleeding-edge) |
 
@@ -41,7 +41,7 @@ Please support the original authors. This port reuses their design with typed Il
 |---------|----------------|
 | **Character selection** | Hover a character → portrait, flavor (localized), **starting weapon**, evolution path icons, **other outfits**’ starters, **notable stats**. Click-through so you can still select the card. |
 | **Adventure selection** | Hover an adventure → cast / weapon summary (config `AdventureTooltips`) |
-| **Collection / Grimoire** | Tooltips on evolution formula icons and collection grid items/arcanas |
+| **Collection / Grimoire** | Tooltips on evolution formula icons and collection grid items/arcanas. Collections tooltips **dock to the right margin** (always visible, never clipped by the grid) and stay **clickable** for nested formula detail; locked cells show an **Unlock:** hint |
 | **Stage selection — relics** | Hover **Relics in stage** icons for name + description (dynamic sizing for long names) |
 | **Stage selection — Music \| Guide** | Tabs above the song panel: **Music** keeps the track list; **Guide** reuses that space for stage help |
 
@@ -116,7 +116,7 @@ Official bleeding-edge builds: **[https://builds.bepinex.dev/projects/bepinex_be
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.10.10]
+Loading [VS Evolution Helper 1.10.24]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete
