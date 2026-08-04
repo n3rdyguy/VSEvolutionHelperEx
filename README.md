@@ -182,6 +182,7 @@ More detail: **[docs/USER-GUIDE.md](docs/USER-GUIDE.md)**.
 | Doc | Purpose |
 |-----|---------|
 | [docs/USER-GUIDE.md](docs/USER-GUIDE.md) | Full feature walkthrough |
+| [docs/PLAN-original-parity.md](docs/PLAN-original-parity.md) | Plan to match original mod screen/feature parity → 1.11.0 |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
 | [docs/SMOKE-TEST.md](docs/SMOKE-TEST.md) | Pre-release checklist |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | What’s done / what’s next |

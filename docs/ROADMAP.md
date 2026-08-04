@@ -47,19 +47,34 @@ Full player-facing detail: **[USER-GUIDE.md](USER-GUIDE.md)**.
 
 ---
 
-## 3. Optional future work
+## 3. Active plan: original-mod parity → **1.11.0**
 
-### 3.1 Polish
+Full plan: **[PLAN-original-parity.md](PLAN-original-parity.md)**
+
+| Phase | Focus | Exit |
+|-------|--------|------|
+| 0 | Playtest matrix + verbose logs | Known broken list |
+| 1 | Merchant, Arma Dio, pause accessories, grimoire multi-icon | All original **screens** work |
+| 2 | Owned / banned / MAX / nested reliability | All original **formula** features solid |
+| 3 | Mouse + keyboard + controller matrix | Input parity |
+| 4 | Docs + tag **1.11.0** | Claim original parity honestly |
+
+**Non-goals for that milestone:** Stage Guide / character / adventure / map extras (already beyond original).
+
+---
+
+## 4. Optional future work (after or parallel to parity)
+
+### 4.1 Polish
 | Task | Effort |
 |------|--------|
 | Expand `StageExtraTips` for remaining DLC / adventures | S–M |
-| Grimoire full multi-icon hover if still desired | M |
 | Map token labels for unknown sprites | M |
 | Adventure tooltips as rich as character (icon strip) | M |
 | Stage Guide layout on unusual resolutions | S–M |
 | Split mega `ItemTooltipsMod.cs` | L |
 
-### 3.2 Features (not scheduled)
+### 4.2 Features (not scheduled)
 | Feature | Effort |
 |---------|--------|
 | Unlock-requirement hints for stages | L (data-dependent) |
@@ -68,7 +83,7 @@ Full player-facing detail: **[USER-GUIDE.md](USER-GUIDE.md)**.
 | Locale for curated tips | S–M |
 | MelonLoader dual target | L (low value) |
 
-### 3.3 Packaging
+### 4.3 Packaging
 | Task | Effort |
 |------|--------|
 | GH Action: build on tag | M |
@@ -76,7 +91,7 @@ Full player-facing detail: **[USER-GUIDE.md](USER-GUIDE.md)**.
 
 ---
 
-## 4. Delivery phases (history)
+## 5. Delivery phases (history)
 
 | Phase | Versions | Outcome |
 |-------|----------|---------|
@@ -88,7 +103,7 @@ Full player-facing detail: **[USER-GUIDE.md](USER-GUIDE.md)**.
 
 ---
 
-## 5. Release process
+## 6. Release process
 
 1. Update `PluginVersion` + CHANGELOG + USER-GUIDE/README if features changed  
 2. `dotnet build -c Release`  
@@ -108,7 +123,7 @@ VSEvolutionHelper-BepInEx-v{VERSION}.zip
 
 ---
 
-## 6. Risk register
+## 7. Risk register
 
 | Risk | Mitigation |
 |------|------------|
@@ -119,7 +134,7 @@ VSEvolutionHelper-BepInEx-v{VERSION}.zip
 
 ---
 
-## 7. Success metrics
+## 8. Success metrics
 
 - Installable from zip with only BepInEx as a dependency  
 - No CTDs on stage select / pause / map / character select for tested build  
@@ -128,8 +143,8 @@ VSEvolutionHelper-BepInEx-v{VERSION}.zip
 
 ---
 
-## 8. Immediate mode
+## 9. Immediate mode
 
-**Default:** play / polish / local install. Tag and release only when requested.
+**Default:** execute **[PLAN-original-parity.md](PLAN-original-parity.md)** Phase 0 (matrix + logs), then Merchant / Arma Dio / grimoire multi-icon.
 
-Suggested polish backlog: more StageExtraTips, grimoire multi-icon (if wanted), map label nits.
+Tag **1.11.0** only when parity exit criteria are met (or owner requests an interim release).
