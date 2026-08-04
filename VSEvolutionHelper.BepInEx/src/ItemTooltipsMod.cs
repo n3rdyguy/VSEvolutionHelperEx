@@ -4055,7 +4055,7 @@ public class ItemTooltipsMod
 			float titleH = FitTmpHeight(val10, contentW - titleX, 24f, 72f);
 			float rowH = Mathf.Max(hasHeaderIcon ? headerIcon : 0f, titleH);
 			val7.sizeDelta = new Vector2(contentW, rowH);
-			num -= rowH + Spacing + 2f;
+			num -= rowH + Spacing + 6f; // more air under title
 
 			if (!string.IsNullOrEmpty(text2))
 			{
@@ -4077,7 +4077,7 @@ public class ItemTooltipsMod
 				((TMP_Text)val16).overflowMode = TextOverflowModes.Overflow;
 				((Graphic)val16).raycastTarget = false;
 				float num4 = FitTmpHeight(val16, contentW, 22f, 160f);
-				num -= num4 + Spacing + 4f; // breathing room before Evolutions
+				num -= num4 + Spacing + 8f; // breathing room before Evolutions
 			}
 			if (weaponType.HasValue)
 			{
@@ -4782,18 +4782,18 @@ public class ItemTooltipsMod
 
 		// Multi-row: every recipe as its own base + passives → evolved line
 		yOffset -= Spacing + 4f; // clear gap under description
-		string headerLabel = rows.Count == 1 ? "Evolutions: (click for details)" : $"Evolutions ({rows.Count}): (click for details)";
+		string headerLabel = rows.Count == 1 ? "Evolutions: (click icons for details)" : $"Evolutions ({rows.Count}): (click icons for details)";
 		GameObject header = CreateTextElement(parent, "EvoHeader", headerLabel, font, 14f, new Color(0.9f, 0.75f, 0.3f, 1f), (FontStyles)1);
 		RectTransform headerRt = header.GetComponent<RectTransform>();
 		headerRt.anchorMin = new Vector2(0f, 1f);
 		headerRt.anchorMax = new Vector2(0f, 1f);
 		headerRt.pivot = new Vector2(0f, 1f);
 		headerRt.anchoredPosition = new Vector2(Padding, yOffset);
-		headerRt.sizeDelta = new Vector2(maxWidth - Padding * 2f, 22f);
-		yOffset -= 26f; // header + gap before icons
+		headerRt.sizeDelta = new Vector2(maxWidth - Padding * 2f, 24f);
+		yOffset -= 30f; // header + gap before icons
 
 		float iconSize = 38f;
-		float iconGap = 6f;
+		float iconGap = 8f;
 		float midY = (iconSize - 18f) * 0.5f; // center +/→ in the icon row
 		for (int ri = 0; ri < rows.Count; ri++)
 		{
@@ -4806,7 +4806,7 @@ public class ItemTooltipsMod
 					if (p.RequiresMax) { anyMax = true; break; }
 				}
 			}
-			float rowHeight = iconSize + 10f + (anyMax ? 14f : 0f);
+			float rowHeight = iconSize + 14f + (anyMax ? 16f : 0f);
 			float x = Padding + 4f;
 
 			// Base (hovered) weapon
@@ -5966,18 +5966,20 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		{
 			return yOffset;
 		}
-		yOffset -= Spacing + 2f;
-		GameObject val = CreateTextElement(parent, "ArcanaHeader", "Arcana: (click for details)", font, 14f, new Color(0.7f, 0.5f, 0.9f, 1f), (FontStyles)1);
+		yOffset -= Spacing + 6f;
+		// Darker + bold for readability on grey tooltip backgrounds
+		GameObject val = CreateTextElement(parent, "ArcanaHeader", "Arcana: (click icons for details)", font, 15f,
+			new Color(0.42f, 0.22f, 0.62f, 1f), (FontStyles)1);
 		RectTransform component = val.GetComponent<RectTransform>();
 		component.anchorMin = new Vector2(0f, 1f);
 		component.anchorMax = new Vector2(0f, 1f);
 		component.pivot = new Vector2(0f, 1f);
 		component.anchoredPosition = new Vector2(Padding, yOffset);
-		component.sizeDelta = new Vector2(maxWidth - Padding * 2f, 22f);
-		yOffset -= 28f; // header + gap before first card
+		component.sizeDelta = new Vector2(maxWidth - Padding * 2f, 24f);
+		yOffset -= 32f; // header + gap before first card
 		float card = 48f;
 		float padding = Padding;
-		float nameX = padding + card + 10f;
+		float nameX = padding + card + 12f;
 		float nameW = maxWidth - nameX - Padding;
 		for (int i = 0; i < arcanas.Count; i++)
 		{
@@ -5986,7 +5988,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			GameObject go = CreateFormulaIcon(parent, $"ArcanaIcon{i}", sprite, isOwned: false, isBanned: false, card, padding, yOffset);
 			AddArcanaHoverToGameObject(go, arcanaInfo.Type);
 			string displayName = !string.IsNullOrEmpty(arcanaInfo.Name) ? arcanaInfo.Name : GameData.GetArcanaName(arcanaInfo.Type);
-			GameObject val2 = CreateTextElement(parent, $"ArcanaName{i}", displayName, font, 13f, new Color(0.8f, 0.7f, 0.95f, 1f), (FontStyles)0);
+			GameObject val2 = CreateTextElement(parent, $"ArcanaName{i}", displayName, font, 13f,
+				new Color(0.55f, 0.38f, 0.72f, 1f), (FontStyles)0);
 			RectTransform component2 = val2.GetComponent<RectTransform>();
 			component2.anchorMin = new Vector2(0f, 1f);
 			component2.anchorMax = new Vector2(0f, 1f);
@@ -6002,13 +6005,13 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				if ((Object)(object)tmp != (Object)null)
 				{
 					float nh = FitTmpHeight(tmp, nameW, 18f, 48f);
-					float row = Mathf.Max(card, nh + 4f);
-					yOffset -= row + 10f;
+					float row = Mathf.Max(card, nh + 6f);
+					yOffset -= row + 14f;
 					continue;
 				}
 			}
 			catch { }
-			yOffset -= card + 10f;
+			yOffset -= card + 14f;
 		}
 		return yOffset;
 	}
@@ -6185,7 +6188,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			if (num5 > 0)
 			{
 				num -= Spacing;
-				GameObject val18 = CreateTextElement(val.transform, "AffectsHeader", "Affects: (click for details)", font, 14f, new Color(0.7f, 0.5f, 0.9f, 1f), (FontStyles)1);
+				GameObject val18 = CreateTextElement(val.transform, "AffectsHeader", "Affects: (click icons for details)", font, 15f, new Color(0.42f, 0.22f, 0.62f, 1f), (FontStyles)1);
 				RectTransform component = val18.GetComponent<RectTransform>();
 				component.anchorMin = new Vector2(0f, 1f);
 				component.anchorMax = new Vector2(1f, 1f);
@@ -6849,7 +6852,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 		// Fixed dock outside the main Collections grid (does not follow mouse)
 		PositionCollectionPopupDocked(collectionPopup);
-		DisablePopupRaycasts(collectionPopup);
+		// Keep clickable — user moves to the right panel to click formula icons
+		EnableCollectionPanelInteraction(collectionPopup);
 		try { collectionPopup.SetActive(true); } catch { }
 	}
 
@@ -6930,7 +6934,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			}
 			catch { }
 
-			DisablePopupRaycasts(popup);
+			// Do NOT disable raycasts here — docked panel must stay clickable
 		}
 		catch (Exception ex)
 		{
@@ -6938,11 +6942,76 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 	}
 
-	/// <summary>Simple dock for unlock-only tips (same right-side park as full tooltips).</summary>
+	/// <summary>
+	/// Docked collection panel: background + formula icons receive clicks.
+	/// Text labels stay non-blocking so icons remain easy to hit.
+	/// </summary>
+	private static void EnableCollectionPanelInteraction(GameObject popup)
+	{
+		if ((Object)(object)popup == (Object)null) return;
+		try
+		{
+			// Ensure a GraphicRaycaster on a parent canvas path
+			var canvas = popup.GetComponentInParent<Canvas>();
+			// Root image catches hover so leaving the grid cell doesn't instantly dismiss
+			var rootImg = popup.GetComponent<Image>();
+			if ((Object)(object)rootImg != (Object)null)
+				((Graphic)rootImg).raycastTarget = true;
+
+			foreach (var g in popup.GetComponentsInChildren<Graphic>(true))
+			{
+				if ((Object)(object)g == (Object)null) continue;
+				// Formula icons / buttons need clicks; plain text does not
+				string n = ((Object)g).name ?? "";
+				bool isText = g is TextMeshProUGUI || g is Text;
+				if (isText)
+					((Graphic)g).raycastTarget = false;
+				else
+					((Graphic)g).raycastTarget = true;
+			}
+
+			// Pointer enter/exit on panel: keep open while mouse is over the docked tooltip
+			EventTrigger et = popup.GetComponent<EventTrigger>();
+			if ((Object)(object)et == (Object)null)
+				et = popup.AddComponent<EventTrigger>();
+			// Fresh triggers each time popup is built
+			try { et.triggers.Clear(); } catch { }
+			var enter = new EventTrigger.Entry();
+			enter.eventID = EventTriggerType.PointerEnter;
+			enter.callback.AddListener((UnityEngine.Events.UnityAction<BaseEventData>)(Action<BaseEventData>)(delegate
+			{
+				_collectionPanelHovered = true;
+			}));
+			et.triggers.Add(enter);
+
+			var exit = new EventTrigger.Entry();
+			exit.eventID = EventTriggerType.PointerExit;
+			exit.callback.AddListener((UnityEngine.Events.UnityAction<BaseEventData>)(Action<BaseEventData>)(delegate
+			{
+				_collectionPanelHovered = false;
+				ItemTooltipsMod.DelayFrames(2, () =>
+				{
+					if (_collectionPanelHovered) return;
+					if (currentCollectionHoverId != -1) return;
+					HideCollectionPopup();
+				});
+			}));
+			et.triggers.Add(exit);
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("[Collections] EnableCollectionPanelInteraction: " + ex.Message);
+		}
+	}
+
+	private static bool _collectionPanelHovered;
+
+	/// <summary>Unlock tips use the same docked panel.</summary>
 	private static void PositionPopupNearScreen(GameObject popup, Transform anchor)
 	{
-		// Ignore anchor — always dock outside the collections grid
 		PositionCollectionPopupDocked(popup);
+		// Unlock tips don't need formula clicks
+		DisablePopupRaycasts(popup);
 	}
 
 	private static void HideCollectionPopup()
@@ -7150,18 +7219,32 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			{
 				try
 				{
-					// Only hide if we left *this* cell (not a re-enter race)
 					int leavingId = ((Object)captured).GetInstanceID();
 					if (currentCollectionHoverId != leavingId && currentCollectionHoverId != -1)
 						return;
 					currentCollectionHoverId = -1;
 					pendingCollectionHoverId = -1;
-					HideCollectionPopup();
-					if ((Object)(object)collectionUnlockPopup != (Object)null)
+					// Allow mouse to travel to the docked right-side panel without killing the tooltip
+					ItemTooltipsMod.DelayFrames(3, () =>
 					{
-						Object.Destroy((Object)(object)collectionUnlockPopup);
-						collectionUnlockPopup = null;
-					}
+						try
+						{
+							if (_collectionPanelHovered) return;
+							if (currentCollectionHoverId != -1) return; // entered another cell
+							if ((Object)(object)collectionPopup != (Object)null && IsPointerOverObject(collectionPopup))
+							{
+								_collectionPanelHovered = true;
+								return;
+							}
+							HideCollectionPopup();
+							if ((Object)(object)collectionUnlockPopup != (Object)null)
+							{
+								Object.Destroy((Object)(object)collectionUnlockPopup);
+								collectionUnlockPopup = null;
+							}
+						}
+						catch { }
+					});
 				}
 				catch { }
 			}));
