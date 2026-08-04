@@ -6852,8 +6852,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	}
 
 	/// <summary>
-	/// Pin popup to the hovered collection cell (child of the cell). Avoids App-canvas
-	/// camera/overlay conversion that stuck tooltips at screen center.
+	/// Place popup next to the hovered cell on the <b>root canvas</b> with override sorting
+	/// so it draws above ScrollRect masks / panels (not under the collection grid).
 	/// </summary>
 	private static void PositionPopupNearScreen(GameObject popup, Transform anchor)
 	{
@@ -6868,45 +6868,108 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			if ((Object)(object)anchorRt == (Object)null)
 				anchorRt = anchor.GetComponent<RectTransform>();
 
-			// Parent directly under the cell so we share its local space (most reliable for grids)
-			popup.transform.SetParent(anchor, false);
+			Canvas leaf = anchor.GetComponentInParent<Canvas>();
+			Canvas root = (Object)(object)leaf != (Object)null ? leaf.rootCanvas : leaf;
+			if ((Object)(object)root == (Object)null)
+			{
+				// Fallback: keep previous cell-parent approach
+				popup.transform.SetParent(anchor, false);
+				popupRt.anchorMin = popupRt.anchorMax = new Vector2(1f, 1f);
+				popupRt.pivot = new Vector2(0f, 1f);
+				popupRt.anchoredPosition = new Vector2(10f, 4f);
+				return;
+			}
+
+			// Outside ScrollRect/mask hierarchy → not clipped; last sibling + high sort → on top
+			popup.transform.SetParent(((Component)root).transform, false);
 			popup.transform.SetAsLastSibling();
 
-			// Top-right of the cell → tooltip grows right/down from there
-			popupRt.anchorMin = new Vector2(1f, 1f);
-			popupRt.anchorMax = new Vector2(1f, 1f);
-			popupRt.pivot = new Vector2(0f, 1f);
-			popupRt.localScale = Vector3.one;
-			popupRt.localRotation = Quaternion.identity;
-			popupRt.anchoredPosition = new Vector2(10f, 4f);
-
-			// If the cell is near the right edge, open to the left instead
+			// Dedicated canvas so we always render above siblings
+			Canvas overlay = popup.GetComponent<Canvas>();
+			if ((Object)(object)overlay == (Object)null)
+				overlay = popup.AddComponent<Canvas>();
+			overlay.overrideSorting = true;
+			overlay.sortingOrder = 5000;
 			try
 			{
-				Canvas canvas = anchor.GetComponentInParent<Canvas>();
-				Camera cam = null;
-				if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
-					cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+				// Match render mode of root so coordinates stay valid
+				overlay.renderMode = root.renderMode;
+				if (root.renderMode != RenderMode.ScreenSpaceOverlay)
+					overlay.worldCamera = root.worldCamera;
+			}
+			catch { }
+			// Nested clicks on formula icons still need a raycaster
+			if ((Object)(object)popup.GetComponent<GraphicRaycaster>() == (Object)null)
+			{
+				try { popup.AddComponent<GraphicRaycaster>(); } catch { }
+			}
 
+			popupRt.localScale = Vector3.one;
+			popupRt.localRotation = Quaternion.identity;
+			popupRt.anchorMin = new Vector2(0.5f, 0.5f);
+			popupRt.anchorMax = new Vector2(0.5f, 0.5f);
+			popupRt.pivot = new Vector2(0f, 1f);
+
+			Camera cam = null;
+			if (root.renderMode != RenderMode.ScreenSpaceOverlay)
+				cam = root.worldCamera != null ? root.worldCamera : Camera.main;
+
+			// Screen center of the cell
+			Vector2 screen;
+			if ((Object)(object)anchorRt != (Object)null)
+			{
+				Vector3[] corners = new Vector3[4];
+				anchorRt.GetWorldCorners(corners);
+				Vector3 mid = (corners[0] + corners[2]) * 0.5f;
+				// Prefer top-right of cell as attach point
+				Vector3 attach = corners[2]; // top-right
+				screen = RectTransformUtility.WorldToScreenPoint(cam, attach);
+			}
+			else
+			{
+				screen = RectTransformUtility.WorldToScreenPoint(cam, anchor.position);
+			}
+
+			// Nudge right of the icon
+			screen.x += 12f;
+			screen.y += 4f;
+
+			// Flip left if near right edge
+			float popupW = popupRt.sizeDelta.x > 40f ? popupRt.sizeDelta.x : 360f;
+			bool flipLeft = screen.x + popupW + 16f > Screen.width;
+			if (flipLeft)
+			{
 				if ((Object)(object)anchorRt != (Object)null)
 				{
 					Vector3[] corners = new Vector3[4];
 					anchorRt.GetWorldCorners(corners);
-					// corners: 0=bl, 1=tl, 2=tr, 3=br
-					Vector2 tr = RectTransformUtility.WorldToScreenPoint(cam, corners[2]);
-					float popupW = popupRt.sizeDelta.x;
-					if (popupW < 40f) popupW = 360f;
-					if (tr.x + popupW + 24f > Screen.width)
-					{
-						// Flip: top-left of cell, grow leftward
-						popupRt.anchorMin = new Vector2(0f, 1f);
-						popupRt.anchorMax = new Vector2(0f, 1f);
-						popupRt.pivot = new Vector2(1f, 1f);
-						popupRt.anchoredPosition = new Vector2(-10f, 4f);
-					}
+					screen = RectTransformUtility.WorldToScreenPoint(cam, corners[1]); // top-left
 				}
+				screen.x -= 12f;
+				popupRt.pivot = new Vector2(1f, 1f);
 			}
-			catch { }
+
+			RectTransform rootRt = ((Component)root).GetComponent<RectTransform>();
+			if ((Object)(object)rootRt == (Object)null) return;
+
+			if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rootRt, screen, cam, out Vector2 local))
+			{
+				// Soft clamp inside canvas
+				Rect r = rootRt.rect;
+				float ph = popupRt.sizeDelta.y > 40f ? popupRt.sizeDelta.y : 220f;
+				if (!flipLeft)
+				{
+					local.x = Mathf.Min(local.x, r.xMax - popupW - 8f);
+					local.x = Mathf.Max(local.x, r.xMin + 8f);
+				}
+				else
+				{
+					local.x = Mathf.Max(local.x, r.xMin + popupW + 8f);
+					local.x = Mathf.Min(local.x, r.xMax - 8f);
+				}
+				local.y = Mathf.Clamp(local.y, r.yMin + ph + 8f, r.yMax - 8f);
+				popupRt.anchoredPosition = local;
+			}
 		}
 		catch (Exception ex)
 		{
