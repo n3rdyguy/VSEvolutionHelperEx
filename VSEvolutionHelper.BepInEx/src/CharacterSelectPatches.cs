@@ -14,16 +14,13 @@ using Object = UnityEngine.Object;
 namespace VSItemTooltips;
 
 /// <summary>
-/// Character Selection tooltips (starter weapon / evo / outfits).
-/// Never Harmony-patch CharacterItemUI.SetData (IL2CPP detour breaks population).
-/// Scan grid cards after Populate; rebuild tooltip content live on hover so outfit
-/// switches (e.g. Para Kooleo skins with different starters) stay correct.
+/// Character Selection tooltips. Never patch CharacterItemUI.SetData (breaks IL2CPP population).
+/// Register whole grid cards; build full tooltip text at show time.
 /// </summary>
 public static class CharacterSelectPatches
 {
 	private static float _lastScanTime = -999f;
-	private const float ScanCooldown = 0.6f;
-	/// <summary>GameObject instance id → owning CharacterItemUI (for live rebuild).</summary>
+	private const float ScanCooldown = 0.5f;
 	private static readonly Dictionary<int, CharacterItemUI> HitToUi = new Dictionary<int, CharacterItemUI>();
 
 	public static void Apply(Harmony harmony)
@@ -32,10 +29,7 @@ public static class CharacterSelectPatches
 		TryPatch(harmony, typeof(CharacterSelectionPage), "RefreshCharacters", nameof(Populate_Postfix));
 		TryPatch(harmony, typeof(CharacterSelectionPage), "OnShowFinish", nameof(Show_Postfix));
 		TryPatch(harmony, typeof(CharacterSelectionPage), "OnShowStart", nameof(Show_Postfix));
-
-		// Outfit / selection refresh on individual cards (not SetData)
 		TryPatch(harmony, typeof(CharacterItemUI), "Refresh", nameof(CardRefresh_Postfix));
-		TryPatch(harmony, typeof(CharacterItemUI), "RefreshForSkin", nameof(CardRefresh_Postfix));
 		TryPatch(harmony, typeof(CharacterItemUI), "SetSelected", nameof(CardRefresh_Postfix));
 
 		foreach (string name in new[] { "OnHideStart", "OnHideFinish", "OnHide", "Hide", "Close" })
@@ -56,8 +50,7 @@ public static class CharacterSelectPatches
 				if (best == null || m.GetParameters().Length < best.GetParameters().Length)
 					best = m;
 			}
-			if (best == null)
-				return false;
+			if (best == null) return false;
 			harmony.Patch(best, postfix: new HarmonyMethod(typeof(CharacterSelectPatches), postfix));
 			Plugin.Log.LogInfo($"[CharacterSelect] Patched {type.Name}.{best.Name}");
 			return true;
@@ -129,10 +122,7 @@ public static class CharacterSelectPatches
 				if (!IsGridCard(ui)) continue;
 				if (RegisterOne(ui)) n++;
 			}
-			if (n > 0)
-				Plugin.Log.LogInfo($"[CharacterSelect] Registered {n} grid cards for tooltips");
-			else
-				Plugin.Dbg("[CharacterSelect] scan: 0 grid cards registered");
+			Plugin.Log.LogInfo($"[CharacterSelect] Registered {n} character cards for tooltips");
 		}
 		catch (Exception ex)
 		{
@@ -140,30 +130,32 @@ public static class CharacterSelectPatches
 		}
 	}
 
-	/// <summary>
-	/// Skip large info/portrait panels (bottom character details). Only grid-sized cards.
-	/// </summary>
+	/// <summary>Exclude bottom info / portrait panels by hierarchy name only (not size).</summary>
 	private static bool IsGridCard(CharacterItemUI ui)
 	{
 		try
 		{
-			var rt = ((Component)ui).GetComponent<RectTransform>();
-			if ((Object)(object)rt == (Object)null) return true;
-			Rect r = rt.rect;
-			// Bottom info portrait / selected panel is much larger than a grid cell
-			if (r.height > 160f || r.width > 220f)
-				return false;
-			// Also reject if deep under a named info panel
 			Transform t = ((Component)ui).transform;
 			while ((Object)(object)t != (Object)null)
 			{
 				string n = t.name ?? "";
+				// Bottom selected-character strip / detail panes
 				if (n.IndexOf("InfoPanel", StringComparison.OrdinalIgnoreCase) >= 0
 					|| n.IndexOf("CharacterInfo", StringComparison.OrdinalIgnoreCase) >= 0
 					|| n.IndexOf("SelectedCharacter", StringComparison.OrdinalIgnoreCase) >= 0
-					|| n.IndexOf("Detail", StringComparison.OrdinalIgnoreCase) >= 0)
+					|| n.IndexOf("DetailPanel", StringComparison.OrdinalIgnoreCase) >= 0
+					|| n.IndexOf("DescriptionPanel", StringComparison.OrdinalIgnoreCase) >= 0
+					|| n.IndexOf("CharacterDetail", StringComparison.OrdinalIgnoreCase) >= 0)
 					return false;
 				t = t.parent;
+			}
+			// Very tall = bottom strip portrait (grid cells are roughly square)
+			var rt = ((Component)ui).GetComponent<RectTransform>();
+			if ((Object)(object)rt != (Object)null)
+			{
+				Rect r = rt.rect;
+				if (r.height > 280f && r.width > 400f)
+					return false;
 			}
 		}
 		catch { }
@@ -176,48 +168,85 @@ public static class CharacterSelectPatches
 		try { item = ui.CharacterItem; } catch { }
 		if (item == null) return false;
 
-		// Hit targets: small icons only (not the whole card / bottom panel)
-		GameObject hit = ResolveHitTarget(ui);
-		if ((Object)(object)hit == (Object)null) return false;
+		// Whole card for reliable hover (not just the tiny weapon icon)
+		GameObject card = ((Component)ui).gameObject;
+		EnsureRaycastOnCard(card);
 
-		// Placeholder label — live rebuild on show fills real content
 		string name = SafeDisplayName(ui, item);
-		if (string.IsNullOrWhiteSpace(name)) return false;
+		if (string.IsNullOrWhiteSpace(name))
+		{
+			try { name = SafeType(item).ToString(); } catch { name = "Character"; }
+		}
 
-		int id = ((Object)hit).GetInstanceID();
+		// Pre-bake body so popup still has content if live rebuild hiccups
+		string body;
+		Sprite spr;
+		try
+		{
+			CharacterData cdata = null;
+			CharacterType ctype = SafeType(item);
+			try { cdata = item.CharacterData ?? item._characterData; } catch { try { cdata = item._characterData; } catch { } }
+			Skin skin = ResolveCurrentSkin(item, cdata, ui);
+			body = BuildBody(ui, cdata, ctype, skin);
+			spr = ResolveCharacterSprite(ui);
+			name = BuildTitle(ui, cdata, ctype, skin) ?? name;
+		}
+		catch (Exception ex)
+		{
+			Plugin.Dbg("[CharacterSelect] prebuild: " + ex.Message);
+			body = "";
+			spr = ResolveCharacterSprite(ui);
+		}
+
+		int id = ((Object)card).GetInstanceID();
 		HitToUi[id] = ui;
-		ItemTooltipsMod.RegisterCharacterIcon(hit, SafeType(item), name, "", ResolveCharacterSprite(ui));
-		// Also map root so parent-walk resolves
-		int rootId = ((Object)((Component)ui).gameObject).GetInstanceID();
-		HitToUi[rootId] = ui;
+		ItemTooltipsMod.RegisterCharacterIcon(card, SafeType(item), name, body ?? "", spr);
+
+		// Also map weapon + portrait icons so raycasts on them resolve
+		try
+		{
+			if ((Object)(object)ui._WeaponIcon != (Object)null)
+			{
+				var go = ((Component)ui._WeaponIcon).gameObject;
+				HitToUi[((Object)go).GetInstanceID()] = ui;
+				((Graphic)ui._WeaponIcon).raycastTarget = true;
+			}
+		}
+		catch { }
+		try
+		{
+			if ((Object)(object)ui._CharacterIcon != (Object)null)
+			{
+				var go = ((Component)ui._CharacterIcon).gameObject;
+				HitToUi[((Object)go).GetInstanceID()] = ui;
+				((Graphic)ui._CharacterIcon).raycastTarget = true;
+			}
+		}
+		catch { }
+
 		return true;
 	}
 
-	private static GameObject ResolveHitTarget(CharacterItemUI ui)
+	private static void EnsureRaycastOnCard(GameObject card)
 	{
-		// Prefer weapon icon (player looks for starter) then character portrait — both small
 		try
 		{
-			Image w = ui._WeaponIcon;
-			if ((Object)(object)w != (Object)null && ((Component)w).gameObject.activeInHierarchy)
+			var g = card.GetComponent<Graphic>();
+			if ((Object)(object)g != (Object)null)
+				g.raycastTarget = true;
+			else
 			{
-				((Graphic)w).raycastTarget = true;
-				return ((Component)w).gameObject;
+				// Transparent image so the card receives raycasts
+				var img = card.GetComponent<Image>();
+				if ((Object)(object)img == (Object)null)
+				{
+					img = card.AddComponent<Image>();
+					img.color = new Color(0, 0, 0, 0.01f);
+				}
+				((Graphic)img).raycastTarget = true;
 			}
 		}
 		catch { }
-		try
-		{
-			Image c = ui._CharacterIcon;
-			if ((Object)(object)c != (Object)null && ((Component)c).gameObject.activeInHierarchy)
-			{
-				((Graphic)c).raycastTarget = true;
-				return ((Component)c).gameObject;
-			}
-		}
-		catch { }
-		// Fallback: card root only if it is grid-sized
-		return ((Component)ui).gameObject;
 	}
 
 	/// <summary>Live tooltip body for current character + current outfit/skin.</summary>
@@ -226,36 +255,45 @@ public static class CharacterSelectPatches
 		title = null;
 		body = null;
 		sprite = null;
-		if ((Object)(object)hitGo == (Object)null) return false;
-
-		CharacterItemUI ui = null;
-		int id = ((Object)hitGo).GetInstanceID();
-		if (!HitToUi.TryGetValue(id, out ui) || (Object)(object)ui == (Object)null)
+		try
 		{
-			try { ui = hitGo.GetComponentInParent<CharacterItemUI>(); } catch { }
+			if ((Object)(object)hitGo == (Object)null) return false;
+
+			CharacterItemUI ui = null;
+			int id = ((Object)hitGo).GetInstanceID();
+			if (!HitToUi.TryGetValue(id, out ui) || (Object)(object)ui == (Object)null)
+			{
+				try { ui = hitGo.GetComponentInParent<CharacterItemUI>(); } catch { }
+			}
+			if ((Object)(object)ui == (Object)null) return false;
+			// Do not re-filter IsGridCard here — if we registered it, trust that
+
+			CharacterItem item = null;
+			try { item = ui.CharacterItem; } catch { }
+			if (item == null) return false;
+
+			CharacterData cdata = null;
+			CharacterType ctype = SafeType(item);
+			try { cdata = item.CharacterData; } catch { }
+			if (cdata == null) { try { cdata = item._characterData; } catch { } }
+
+			Skin skin = ResolveCurrentSkin(item, cdata, ui);
+			title = BuildTitle(ui, cdata, ctype, skin);
+			body = BuildBody(ui, cdata, ctype, skin);
+			sprite = ResolveCharacterSprite(ui);
+			if (string.IsNullOrEmpty(title))
+				title = SafeDisplayName(ui, item) ?? ctype.ToString();
+			return true;
 		}
-		if ((Object)(object)ui == (Object)null) return false;
-		if (!IsGridCard(ui)) return false;
-
-		CharacterItem item = null;
-		try { item = ui.CharacterItem; } catch { }
-		if (item == null) return false;
-
-		CharacterData cdata = null;
-		CharacterType ctype = SafeType(item);
-		try { cdata = item.CharacterData; } catch { }
-		if (cdata == null) { try { cdata = item._characterData; } catch { } }
-
-		Skin skin = ResolveCurrentSkin(item, cdata, ui);
-		title = BuildTitle(ui, cdata, ctype, skin);
-		body = BuildBody(ui, cdata, ctype, skin);
-		sprite = ResolveCharacterSprite(ui);
-		return !string.IsNullOrEmpty(title);
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("[CharacterSelect] TryBuildLiveTooltip: " + ex.Message);
+			return false;
+		}
 	}
 
 	private static Skin ResolveCurrentSkin(CharacterItem item, CharacterData cdata, CharacterItemUI ui)
 	{
-		// 1) CharacterItem current skin item
 		try
 		{
 			SkinItem si = item.GetCurrentSkinItem();
@@ -267,8 +305,6 @@ public static class CharacterSelectPatches
 			}
 		}
 		catch { }
-
-		// 2) CharacterData helpers
 		if (cdata != null)
 		{
 			try
@@ -291,6 +327,16 @@ public static class CharacterSelectPatches
 	private static string BuildTitle(CharacterItemUI ui, CharacterData cdata, CharacterType ctype, Skin skin)
 	{
 		string baseName = SafeDisplayName(ui, null) ?? ctype.ToString();
+		try
+		{
+			if (cdata != null && skin != null)
+			{
+				string full = cdata.GetFullName(ctype, skin, false, false);
+				if (!string.IsNullOrWhiteSpace(full))
+					return full.Trim();
+			}
+		}
+		catch { }
 		string skinName = null;
 		try
 		{
@@ -299,17 +345,6 @@ public static class CharacterSelectPatches
 				skinName = skin.name;
 				if (string.IsNullOrWhiteSpace(skinName))
 					skinName = skin._name_k__BackingField;
-			}
-		}
-		catch { }
-		// Prefer full name from data when skin-aware
-		try
-		{
-			if (cdata != null && skin != null)
-			{
-				string full = cdata.GetFullName(ctype, skin, false, false);
-				if (!string.IsNullOrWhiteSpace(full))
-					return full.Trim();
 			}
 		}
 		catch { }
@@ -326,149 +361,151 @@ public static class CharacterSelectPatches
 	private static string BuildBody(CharacterItemUI ui, CharacterData cdata, CharacterType ctype, Skin skin)
 	{
 		var sb = new StringBuilder();
-
-		// Flavor — prefer skin-specific description
-		string flavor = null;
 		try
 		{
-			if (cdata != null && skin != null)
-				flavor = cdata.GetDescription(ctype, skin);
-		}
-		catch { }
-		if (string.IsNullOrWhiteSpace(flavor))
-		{
-			try { if (cdata != null) flavor = cdata.GetDescription(ctype); } catch { }
-		}
-		if (string.IsNullOrWhiteSpace(flavor))
-		{
-			try { flavor = cdata != null ? cdata.description : null; } catch { }
-		}
-		if (string.IsNullOrWhiteSpace(flavor) && skin != null)
-		{
-			try { flavor = skin._description_k__BackingField; } catch { }
-		}
-		if (!string.IsNullOrWhiteSpace(flavor))
-			sb.AppendLine(flavor.Trim());
-
-		// Starting weapon: UI icon first (reliable), then skin/character data
-		WeaponType? starter = ResolveStartingWeapon(ui, cdata, skin);
-		if (starter.HasValue && GameData.IsRealWeaponType(starter.Value))
-		{
-			if (sb.Length > 0) sb.AppendLine();
-			string wName = GameData.GetWeaponName(starter.Value);
-			if (string.IsNullOrEmpty(wName))
-				wName = starter.Value.ToString();
-			// Final guard — never print Void/VOID as a starter name
-			if (string.Equals(wName, "Void", StringComparison.OrdinalIgnoreCase)
-				|| string.Equals(wName, "VOID", StringComparison.OrdinalIgnoreCase))
+			// Flavor
+			string flavor = null;
+			try
 			{
-				sb.AppendLine("Starting weapon: (unknown)");
+				if (cdata != null && skin != null)
+					flavor = cdata.GetDescription(ctype, skin);
 			}
-			else
+			catch { }
+			if (string.IsNullOrWhiteSpace(flavor))
 			{
-				sb.AppendLine($"Starting weapon: {wName}");
+				try { if (cdata != null) flavor = cdata.GetDescription(ctype); } catch { }
+			}
+			if (string.IsNullOrWhiteSpace(flavor))
+			{
+				try { flavor = cdata != null ? cdata.description : null; } catch { }
+			}
+			if (string.IsNullOrWhiteSpace(flavor) && skin != null)
+			{
+				try { flavor = skin._description_k__BackingField; } catch { }
+			}
+			if (!string.IsNullOrWhiteSpace(flavor))
+				sb.AppendLine(flavor.Trim());
 
-				var rows = GameData.BuildEvoRowsFor(starter.Value);
-				if (rows != null && rows.Count > 0)
+			// Starting weapon
+			WeaponType? starter = ResolveStartingWeapon(ui, cdata, skin);
+			if (sb.Length > 0) sb.AppendLine();
+			if (starter.HasValue && GameData.IsRealWeaponType(starter.Value))
+			{
+				string wName = GameData.GetWeaponName(starter.Value);
+				if (string.IsNullOrEmpty(wName))
+					wName = starter.Value.ToString();
+				if (string.Equals(wName, "Void", StringComparison.OrdinalIgnoreCase)
+					|| string.Equals(wName, "VOID", StringComparison.OrdinalIgnoreCase))
 				{
-					sb.AppendLine("Evolution:");
-					foreach (var row in rows)
+					sb.AppendLine("Starting weapon: (unknown)");
+				}
+				else
+				{
+					sb.AppendLine($"Starting weapon: {wName}");
+					try
 					{
-						string passives = "";
-						if (row.Passives != null && row.Passives.Count > 0)
+						var rows = GameData.BuildEvoRowsFor(starter.Value);
+						if (rows != null && rows.Count > 0)
 						{
-							var parts = new List<string>();
-							foreach (var p in row.Passives)
+							sb.AppendLine("Evolution:");
+							foreach (var row in rows)
 							{
-								string pn = string.IsNullOrEmpty(p.Name) ? p.Type.ToString() : p.Name;
-								if (p.RequiresMax) pn += " (max)";
-								parts.Add(pn);
+								string passives = "";
+								if (row.Passives != null && row.Passives.Count > 0)
+								{
+									var parts = new List<string>();
+									foreach (var p in row.Passives)
+									{
+										string pn = string.IsNullOrEmpty(p.Name) ? p.Type.ToString() : p.Name;
+										if (p.RequiresMax) pn += " (max)";
+										parts.Add(pn);
+									}
+									passives = " + " + string.Join(" + ", parts);
+								}
+								string evoName = string.IsNullOrEmpty(row.EvolvedName) ? row.Evolved.ToString() : row.EvolvedName;
+								sb.AppendLine($"  {wName}{passives} → {evoName}");
 							}
-							passives = " + " + string.Join(" + ", parts);
 						}
-						string evoName = string.IsNullOrEmpty(row.EvolvedName) ? row.Evolved.ToString() : row.EvolvedName;
-						sb.AppendLine($"  {wName}{passives} → {evoName}");
+					}
+					catch (Exception ex)
+					{
+						Plugin.Dbg("[CharacterSelect] evo rows: " + ex.Message);
 					}
 				}
 			}
+			else
+			{
+				sb.AppendLine("Starting weapon: (unknown)");
+			}
+
+			string outfitBlock = FormatOtherOutfitWeapons(cdata, starter);
+			if (!string.IsNullOrEmpty(outfitBlock))
+			{
+				sb.AppendLine();
+				sb.AppendLine("Other outfits:");
+				sb.Append(outfitBlock);
+			}
+
+			string stats = FormatNotableStats(cdata, skin);
+			if (!string.IsNullOrEmpty(stats))
+			{
+				sb.AppendLine();
+				sb.AppendLine("Notable stats:");
+				sb.Append(stats);
+			}
 		}
-		else
+		catch (Exception ex)
 		{
-			if (sb.Length > 0) sb.AppendLine();
-			sb.AppendLine("Starting weapon: (unknown)");
+			Plugin.Log.LogWarning("[CharacterSelect] BuildBody: " + ex.Message);
+			if (sb.Length == 0)
+				sb.Append("(tooltip error)");
 		}
 
-		// Other outfits with different starters (helps Para Kooleo etc.)
-		string outfitBlock = FormatOtherOutfitWeapons(cdata, starter);
-		if (!string.IsNullOrEmpty(outfitBlock))
-		{
-			if (sb.Length > 0) sb.AppendLine();
-			sb.AppendLine("Other outfits:");
-			sb.Append(outfitBlock);
-		}
-
-		string stats = FormatNotableStats(cdata, skin);
-		if (!string.IsNullOrEmpty(stats))
-		{
-			if (sb.Length > 0) sb.AppendLine();
-			sb.AppendLine("Notable stats:");
-			sb.Append(stats);
-		}
-
-		return sb.ToString().TrimEnd();
+		string result = sb.ToString().TrimEnd();
+		return string.IsNullOrEmpty(result) ? "(no details)" : result;
 	}
 
-	/// <summary>
-	/// Prefer the weapon icon the game already painted on the card (skin-correct),
-	/// then skin/character startingWeapon fields. Il2Cpp Nullable&lt;WeaponType&gt; often
-	/// reports HasValue with Value=VOID — those are ignored.
-	/// </summary>
 	private static WeaponType? ResolveStartingWeapon(CharacterItemUI ui, CharacterData cdata, Skin skin)
 	{
-		// 1) What the card is actually showing (handles outfits / Para Kooleo correctly)
+		// 1) Card weapon icon (skin/outfit-correct)
 		try
 		{
-			// Skip when game marked void / hidden weapon
 			bool voidWeapon = false;
 			try { voidWeapon = ui._voidWeapon; } catch { }
 			if (!voidWeapon)
 			{
 				Image w = ui._WeaponIcon;
 				if ((Object)(object)w != (Object)null
-					&& ((Component)w).gameObject.activeInHierarchy
 					&& (Object)(object)w.sprite != (Object)null)
 				{
 					if (GameData.TryIdentifyWeaponFromSprite(w.sprite, out WeaponType fromIcon)
 						&& GameData.IsRealWeaponType(fromIcon))
-					{
-						Plugin.Dbg($"[CharacterSelect] starter from icon sprite={w.sprite.name} -> {fromIcon}");
 						return fromIcon;
-					}
-					Plugin.Dbg($"[CharacterSelect] weapon icon sprite unmatched: {w.sprite.name}");
 				}
 			}
 		}
-		catch (Exception ex)
-		{
-			Plugin.Dbg("[CharacterSelect] icon resolve: " + ex.Message);
-		}
+		catch { }
 
-		// 2) Skin override (outfit)
+		// 2) Skin data
 		WeaponType? fromSkin = ReadNullableWeapon(skin);
 		if (fromSkin.HasValue) return fromSkin;
 
-		// 3) Character default
+		// 3) Character data
 		if (cdata != null)
 		{
-			WeaponType? fromChar = null;
-			try { fromChar = ReadNullableWeaponValue(cdata.startingWeapon); } catch { }
-			if (!fromChar.HasValue)
+			try
 			{
-				try { fromChar = ReadNullableWeaponValue(cdata._startingWeapon_k__BackingField); } catch { }
+				var v = ReadNullableWeaponValue(cdata.startingWeapon);
+				if (v.HasValue) return v;
 			}
-			if (fromChar.HasValue) return fromChar;
+			catch { }
+			try
+			{
+				var v = ReadNullableWeaponValue(cdata._startingWeapon_k__BackingField);
+				if (v.HasValue) return v;
+			}
+			catch { }
 		}
-
 		return null;
 	}
 
@@ -485,19 +522,8 @@ public static class CharacterSelectPatches
 		if (n == null) return null;
 		try
 		{
-			// Prefer explicit check — Il2Cpp Nullable can lie about HasValue
-			WeaponType v = default;
-			bool has = false;
-			try
-			{
-				has = n.HasValue;
-				if (has) v = n.Value;
-			}
-			catch
-			{
-				try { v = n.Value; has = true; } catch { return null; }
-			}
-			if (!has) return null;
+			if (!n.HasValue) return null;
+			WeaponType v = n.Value;
 			return GameData.IsRealWeaponType(v) ? v : (WeaponType?)null;
 		}
 		catch { return null; }
@@ -527,8 +553,7 @@ public static class CharacterSelectPatches
 			}
 			string wname = GameData.GetWeaponName(w.Value);
 			if (string.IsNullOrEmpty(wname)
-				|| string.Equals(wname, "Void", StringComparison.OrdinalIgnoreCase)
-				|| string.Equals(wname, "VOID", StringComparison.OrdinalIgnoreCase))
+				|| string.Equals(wname, "Void", StringComparison.OrdinalIgnoreCase))
 				continue;
 			string line = $"  {sname.Trim()}: {wname}";
 			if (seen.Add(line))
@@ -540,7 +565,6 @@ public static class CharacterSelectPatches
 
 	private static string FormatNotableStats(CharacterData data, Skin skin)
 	{
-		// Prefer skin-overridden stats when non-zero, else character
 		float pick(Func<Skin, float> skinGet, Func<CharacterData, float> charGet)
 		{
 			try
@@ -653,61 +677,119 @@ public static class CharacterSelectPatches
 	}
 
 	/// <summary>
-	/// Hover hit-test: only accept UI raycast hits (won't "see through" the bottom info panel).
+	/// Hover hit: raycast first (respects bottom panel), else rect-contains on registered cards.
 	/// </summary>
-	public static bool TryRaycastCharacterHit(Vector2 screenPos, out GameObject hitGo)
+	public static bool TryFindHoveredCard(Vector2 screenPos, out int hitId, out GameObject hitGo)
 	{
+		hitId = -1;
 		hitGo = null;
+
+		// 1) UI raycast — topmost object; only accept if it maps to a registered card
 		try
 		{
 			EventSystem es = EventSystem.current;
-			if ((Object)(object)es == (Object)null) return false;
-			var ped = new PointerEventData(es) { position = screenPos };
-			// IL2CPP EventSystem.RaycastAll requires Il2CppSystem list
-			var results = new Il2CppSystem.Collections.Generic.List<RaycastResult>();
-			es.RaycastAll(ped, results);
-			int count = results.Count;
-			for (int i = 0; i < count; i++)
+			if ((Object)(object)es != (Object)null)
 			{
-				RaycastResult rr = results[i];
-				GameObject go = rr.gameObject;
-				if ((Object)(object)go == (Object)null) continue;
-				// Topmost hits first — if we hit bottom info panel first without a card, stop
-				// (only accept registered grid icons)
-				Transform t = go.transform;
-				while ((Object)(object)t != (Object)null)
+				var ped = new PointerEventData(es) { position = screenPos };
+				var results = new Il2CppSystem.Collections.Generic.List<RaycastResult>();
+				es.RaycastAll(ped, results);
+				if (results.Count > 0)
 				{
-					int id = ((Object)t.gameObject).GetInstanceID();
-					if (ItemTooltipsMod.HasCharacterIcon(id))
-					{
-						hitGo = t.gameObject;
+					// Walk top result parents for a registered card
+					GameObject top = results[0].gameObject;
+					if (TryMapToRegistered(top, out hitId, out hitGo))
 						return true;
-					}
-					if (HitToUi.ContainsKey(id))
-					{
-						// Prefer weapon/portrait child if registered
-						CharacterItemUI ui = HitToUi[id];
-						if ((Object)(object)ui != (Object)null)
-						{
-							GameObject preferred = ResolveHitTarget(ui);
-							if ((Object)(object)preferred != (Object)null && ItemTooltipsMod.HasCharacterIcon(((Object)preferred).GetInstanceID()))
-							{
-								hitGo = preferred;
-								return true;
-							}
-						}
-						hitGo = t.gameObject;
-						return true;
-					}
-					t = t.parent;
+					// Top hit is not a character card (e.g. bottom info) — do not fall through
+					// unless it's a non-blocking area; treat as no-hit for tooltips
+					if (IsBlockingNonCard(top))
+						return false;
 				}
-				// Hit something else on top (e.g. bottom panel chrome) — do not look through it
-				// Only continue if it's a non-blocking graphic; RaycastAll is already sorted by depth.
-				// If first result isn't our card, user is hovering something else.
-				return false;
 			}
 		}
 		catch { }
+
+		// 2) Fallback: rect contains on registered card roots (covers cards without raycast targets)
+		float bestArea = float.MaxValue;
+		foreach (var kv in HitToUi)
+		{
+			CharacterItemUI ui = kv.Value;
+			if ((Object)(object)ui == (Object)null) continue;
+			GameObject card = ((Component)ui).gameObject;
+			if ((Object)(object)card == (Object)null || !card.activeInHierarchy) continue;
+			if (!IsGridCard(ui)) continue;
+
+			RectTransform rt = card.GetComponent<RectTransform>();
+			if ((Object)(object)rt == (Object)null) continue;
+
+			Camera cam = null;
+			try
+			{
+				Canvas c = card.GetComponentInParent<Canvas>();
+				if ((Object)(object)c != (Object)null && c.renderMode != RenderMode.ScreenSpaceOverlay)
+					cam = c.worldCamera;
+			}
+			catch { }
+
+			bool inside = RectTransformUtility.RectangleContainsScreenPoint(rt, screenPos, cam)
+				|| RectTransformUtility.RectangleContainsScreenPoint(rt, screenPos, null);
+			if (!inside) continue;
+
+			float area = Mathf.Max(1f, Mathf.Abs(rt.rect.width) * Mathf.Abs(rt.rect.height));
+			// Prefer smaller cards (grid) over any large strip that slipped through
+			if (area < bestArea)
+			{
+				bestArea = area;
+				hitGo = card;
+				hitId = ((Object)card).GetInstanceID();
+			}
+		}
+		return (Object)(object)hitGo != (Object)null && ItemTooltipsMod.HasCharacterIcon(hitId);
+	}
+
+	private static bool TryMapToRegistered(GameObject go, out int hitId, out GameObject hitGo)
+	{
+		hitId = -1;
+		hitGo = null;
+		Transform t = go.transform;
+		while ((Object)(object)t != (Object)null)
+		{
+			int id = ((Object)t.gameObject).GetInstanceID();
+			if (ItemTooltipsMod.HasCharacterIcon(id))
+			{
+				hitId = id;
+				hitGo = t.gameObject;
+				return true;
+			}
+			if (HitToUi.TryGetValue(id, out CharacterItemUI ui) && (Object)(object)ui != (Object)null)
+			{
+				GameObject card = ((Component)ui).gameObject;
+				int cid = ((Object)card).GetInstanceID();
+				if (ItemTooltipsMod.HasCharacterIcon(cid))
+				{
+					hitId = cid;
+					hitGo = card;
+					return true;
+				}
+			}
+			t = t.parent;
+		}
+		return false;
+	}
+
+	private static bool IsBlockingNonCard(GameObject go)
+	{
+		// If we hit something under an info panel, block
+		Transform t = go.transform;
+		while ((Object)(object)t != (Object)null)
+		{
+			string n = t.name ?? "";
+			if (n.IndexOf("InfoPanel", StringComparison.OrdinalIgnoreCase) >= 0
+				|| n.IndexOf("CharacterInfo", StringComparison.OrdinalIgnoreCase) >= 0
+				|| n.IndexOf("Description", StringComparison.OrdinalIgnoreCase) >= 0
+				|| n.IndexOf("Detail", StringComparison.OrdinalIgnoreCase) >= 0)
+				return true;
+			t = t.parent;
+		}
 		return false;
 	}
 }

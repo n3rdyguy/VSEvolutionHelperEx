@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.9.4] — 2026-08-04
+
+### Fixed
+- Character tooltips only name / few cards: register **whole grid cards** (not tiny weapon icons); relax grid filter; pre-bake full body + live rebuild; rect hover fallback so most characters work.
+
 ## [1.9.3] — 2026-08-04
 
 ### Fixed

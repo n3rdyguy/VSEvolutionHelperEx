@@ -7031,25 +7031,17 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		if (characterIcons.Count == 0) return;
 
 		Vector2 mouse = Input.mousePosition;
-		// Raycast so bottom info panel blocks "through" hits on grid cards
 		bool hit = false;
 		int hitId = -1;
 		MapIconInfo hitInfo = default;
-		GameObject rayGo = null;
-		if (CharacterSelectPatches.TryRaycastCharacterHit(mouse, out rayGo) && (Object)(object)rayGo != (Object)null)
+
+		if (CharacterSelectPatches.TryFindHoveredCard(mouse, out hitId, out GameObject cardGo)
+			&& characterIcons.TryGetValue(hitId, out hitInfo))
 		{
-			if (TryResolveCharacterIcon(rayGo, out hitId, out hitInfo))
-				hit = true;
-			else
-			{
-				// Registered icon may be a child (weapon/portrait)
-				int id = ((Object)rayGo).GetInstanceID();
-				if (characterIcons.TryGetValue(id, out hitInfo))
-				{
-					hit = true;
-					hitId = id;
-				}
-			}
+			hit = true;
+			// Keep Go in sync for positioning / live rebuild
+			if ((Object)(object)cardGo != (Object)null)
+				hitInfo.Go = cardGo;
 		}
 
 		if (hit)
@@ -7138,21 +7130,41 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 		if ((Object)(object)parent == (Object)null) return;
 
-		// Live rebuild so current outfit/skin starter is correct (Para Kooleo etc.)
+		// Prefer live rebuild (current outfit); fall back to pre-baked registration text
 		string label = info.Label;
 		string desc = info.Description;
 		Sprite spr = info.Sprite;
-		if (CharacterSelectPatches.TryBuildLiveTooltip(info.Go, out string liveTitle, out string liveBody, out Sprite liveSpr))
+		try
 		{
-			label = liveTitle;
-			desc = liveBody;
-			if ((Object)(object)liveSpr != (Object)null) spr = liveSpr;
+			if (CharacterSelectPatches.TryBuildLiveTooltip(info.Go, out string liveTitle, out string liveBody, out Sprite liveSpr))
+			{
+				if (!string.IsNullOrEmpty(liveTitle)) label = liveTitle;
+				if (!string.IsNullOrEmpty(liveBody)) desc = liveBody;
+				if ((Object)(object)liveSpr != (Object)null) spr = liveSpr;
+			}
 		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("[Character] live tooltip: " + ex.Message);
+		}
+		if (string.IsNullOrEmpty(desc))
+			desc = "(no details)";
 
+		// Wider popup for multi-line character details
 		characterPopup = CreateSimpleMapPopup(parent, label, desc, spr);
-		if ((Object)(object)characterPopup != (Object)null && (Object)(object)info.Go != (Object)null)
-			PositionPopup(characterPopup, info.Go.transform);
-		Plugin.Dbg($"Character popup label={label}");
+		if ((Object)(object)characterPopup != (Object)null)
+		{
+			try
+			{
+				var rt = characterPopup.GetComponent<RectTransform>();
+				if ((Object)(object)rt != (Object)null && rt.sizeDelta.x < 360f)
+					rt.sizeDelta = new Vector2(360f, rt.sizeDelta.y);
+			}
+			catch { }
+			if ((Object)(object)info.Go != (Object)null)
+				PositionPopup(characterPopup, info.Go.transform);
+		}
+		Plugin.Dbg($"Character popup label={label} descLen={(desc != null ? desc.Length : 0)}");
 	}
 
 	private static void HideCharacterPopup()
