@@ -2,6 +2,35 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.25] — 2026-08-05
+
+### Fixed
+- **Weapon selector tooltips now work.** Hovering a weapon on a selector screen — Arma Dio,
+  and Penshin Fatcha's tuna forms — shows its tooltip. Previously no selector screen had
+  tooltips at all. Three separate faults had to be cleared:
+  - The selector cell type was looked up by searching for an assembly whose name contained
+    `Il2Cpp` — a MelonLoader convention that never matches under BepInEx, so the screen's
+    setup returned before touching a single cell.
+  - Penshin Fatcha binds its cells through `SetPenshinData`, a different method from the
+    `SetData` used elsewhere, so it needed its own hook.
+  - The mod cached the wrong selector view. Two exist side by side and only one is live at a
+    time; it held onto the inactive one, decided no menu was open, and threw each tooltip
+    away after building it.
+- Selector cells re-register when a selector is reopened mid-run, instead of only after
+  unpausing.
+
+### Added
+- `Features.WeaponSelectionTooltips` config toggle (default `true`).
+
+### Changed
+- **Weapon selector and merchant** tooltips are offset down and to the right so they no longer
+  sit on top of the icon you are hovering. These screens use much larger cells than the rest;
+  every other screen keeps its existing placement.
+- Weapon selector cells are resolved through the typed IL2CPP API rather than string-name
+  reflection, and the screen is located by looking for whichever selector view is actually on
+  screen rather than by a fixed scene path — so a renamed or re-parented view no longer
+  silently disables the feature.
+
 ## [1.10.24] — 2026-08-04
 
 Collections tab polish, batched from the 1.10.11 → 1.10.24 iteration into one release.

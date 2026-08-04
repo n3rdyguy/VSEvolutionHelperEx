@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string PluginGuid = "com.nihil.vsevolutionhelper";
     public const string PluginName = "VS Evolution Helper";
-    public const string PluginVersion = "1.10.24";
+    public const string PluginVersion = "1.10.25";
 
     internal static new ManualLogSource Log;
     internal static Plugin Instance;
@@ -29,6 +29,7 @@ public class Plugin : BasePlugin
     internal static bool LevelUpTooltipsEnabled;
     internal static bool CharacterTooltipsEnabled;
     internal static bool AdventureTooltipsEnabled;
+    internal static bool WeaponSelectionTooltipsEnabled;
 
     private ConfigEntry<bool> _debugVerbose;
     private ConfigEntry<float> _tooltipHoverDelay;
@@ -40,6 +41,7 @@ public class Plugin : BasePlugin
     private ConfigEntry<bool> _levelUpTooltipsEnabled;
     private ConfigEntry<bool> _characterTooltipsEnabled;
     private ConfigEntry<bool> _adventureTooltipsEnabled;
+    private ConfigEntry<bool> _weaponSelectionTooltipsEnabled;
 
     public override void Load()
     {
@@ -106,11 +108,17 @@ public class Plugin : BasePlugin
             true,
             "Show cast/weapon summary tooltips when hovering adventures on the Adventures select screen.");
 
+        _weaponSelectionTooltipsEnabled = Config.Bind(
+            "Features",
+            "WeaponSelectionTooltips",
+            true,
+            "Show weapon tooltips on weapon selector screens (Arma Dio, Penshin Fatcha).");
+
         ApplyConfigValues();
 
         Log.LogInfo($"{PluginName} {PluginVersion} loading (BepInEx port)...");
         Log.LogInfo($"Debug.VerboseLogging={DebugVerbose} Tooltips.HoverDelay={TooltipHoverDelay:0.##}s LevelUpHoverDelay={LevelUpHoverDelay:0.##}s");
-        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled} Character={CharacterTooltipsEnabled} Adventure={AdventureTooltipsEnabled}");
+        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled} Character={CharacterTooltipsEnabled} Adventure={AdventureTooltipsEnabled} WeaponSelect={WeaponSelectionTooltipsEnabled}");
 
         ClassInjector.RegisterTypeInIl2Cpp<PluginBehaviour>();
         _behaviour = AddComponent<PluginBehaviour>();
@@ -131,6 +139,7 @@ public class Plugin : BasePlugin
         LevelUpTooltipsEnabled = _levelUpTooltipsEnabled.Value;
         CharacterTooltipsEnabled = _characterTooltipsEnabled.Value;
         AdventureTooltipsEnabled = _adventureTooltipsEnabled.Value;
+        WeaponSelectionTooltipsEnabled = _weaponSelectionTooltipsEnabled.Value;
     }
 
     internal static void Dbg(string message)

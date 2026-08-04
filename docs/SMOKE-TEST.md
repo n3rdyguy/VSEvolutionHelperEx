@@ -1,6 +1,6 @@
 # Smoke test checklist (pre-release)
 
-Run before tagging or uploading a release zip. Game: **VS 1.15.x**, BepInEx 6 IL2CPP only. Plugin version under test: **1.10.24** (or current `PluginVersion`).
+Run before tagging or uploading a release zip. Game: **VS 1.15.x**, BepInEx 6 IL2CPP only. Plugin version under test: **1.10.25** (or current `PluginVersion`).
 
 ## Setup
 
@@ -19,6 +19,16 @@ Run before tagging or uploading a release zip. Game: **VS 1.15.x**, BepInEx 6 IL
 - [ ] Pause **map**: hover a relic/pickup → name/description
 - [ ] **Level Up:** no tooltip until you hover a choice; moving away hides it
 - [ ] Tooltip spacing looks readable (title, description, evo, arcana gaps)
+
+## Weapon selectors
+
+- [ ] **Penshin Fatcha** (Para Kooleo start): hover a tuna form → tooltip; clicking still selects
+- [ ] **Arma Dio**: same — this is a **different view** (`View - WeaponSelection`, not `TP_`) and a different bind method, so it must be checked separately
+- [ ] Open a selector twice in one run: tooltips work the second time too
+
+> **Two views, one cell type.** Both selector views live under `Safe Area` at once and only
+> one is active. A tooltip that builds but never draws means the mod latched onto the inactive
+> one — with `VerboseLogging`, `ShowItemPopup: no modal UI active` is the tell.
 
 ## Collection / Grimoire
 

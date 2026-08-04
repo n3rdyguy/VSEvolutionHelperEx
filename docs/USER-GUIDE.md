@@ -1,7 +1,7 @@
 # VS Evolution Helper — User guide
 
 **Plugin:** VS Evolution Helper (BepInEx)  
-**Current version:** 1.10.24  
+**Current version:** 1.10.25  
 **Game:** Vampire Survivors 1.15 / Unity 6  
 
 This guide describes **every player-facing feature**. For install steps, see the root [README](../README.md). For release history, see [CHANGELOG](../CHANGELOG.md).
@@ -31,6 +31,7 @@ It does **not** change game balance, unlocks, or saves by itself (aside from opt
 │  Level Up choices → same (after real hover)            │
 │  Pause map → relic / pickup tooltips                    │
 │  Merchant / similar UI → weapon & item tooltips        │
+│  Weapon selector screens → weapon tooltips             │
 └────────────────────────────────────────────────────────┘
 
 ┌─ Collection ───────────────────────────────────────────┐
@@ -95,6 +96,19 @@ Data comes from `DataManager.AllArcanas` and reverse indexes (which arcanas list
 
 Kill switch: `Features.MapTooltips`.
 
+### 3.5 Weapon selectors (1.10.25+)
+
+**Where:** the mid-run screen that asks you to pick a weapon — Penshin Fatcha's tuna forms
+(Para Kooleo's starting weapon), and Arma Dio.
+
+**Shows:** the same weapon tooltip you get elsewhere — name, description, and evolution rows.
+
+Hover the weapon's frame or icon. Clicking still selects the weapon as normal.
+
+Before 1.10.25 these screens had no tooltips at all.
+
+Kill switch: `Features.WeaponSelectionTooltips`.
+
 ---
 
 ## 4. Grimoire / collection
@@ -156,8 +170,6 @@ Kill switch: `Features.CharacterTooltips`.
 **Shows:** Adventure title, description when available, cast characters, related weapons when data is present.
 
 Kill switch: `Features.AdventureTooltips`.
-
----
 
 ## 7. Stage selection
 
@@ -245,6 +257,7 @@ File: `BepInEx/config/com.nihil.vsevolutionhelper.cfg`
 | `LevelUpTooltips` | `true` | Level Up evolution tooltips |
 | `CharacterTooltips` | `true` | Character select tooltips |
 | `AdventureTooltips` | `true` | Adventure select tooltips |
+| `WeaponSelectionTooltips` | `true` | Weapon selector screen tooltips |
 
 There is **no** separate kill switch for pause evolution tooltips or grimoire (core behavior). Use delay values if tooltips feel too eager.
 

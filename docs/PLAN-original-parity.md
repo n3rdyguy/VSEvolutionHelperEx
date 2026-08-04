@@ -2,7 +2,7 @@
 
 **Goal:** Match the original Melon mod’s promise — tooltips on every screen where weapon/item icons appear, with the full formula feature set and solid mouse/keyboard/controller support.
 
-**Baseline:** BepInEx port **1.10.24** already has ~90% of formula UX (multi-row evo, arcana, owned/banned/MAX, nested popups, evolved-from, I2) and several **extras** (Stage Guide, character/adventure tooltips, map). This plan closes **gaps**, not rewrites extras.
+**Baseline:** BepInEx port **1.10.25** already has ~90% of formula UX (multi-row evo, arcana, owned/banned/MAX, nested popups, evolved-from, I2) and several **extras** (Stage Guide, character/adventure tooltips, map). This plan closes **gaps**, not rewrites extras.
 
 **Non-goals (stay out of “parity” scope):** Stage Guide polish, character/adventure, map tokens, StageExtraTips content mill.
 
@@ -23,7 +23,7 @@
 | Pause inventory (weapons) | Strong | Confirm accessories/passives same path |
 | Collection / Grimoire | Partial | Collections tab hover/placement done (1.10.11–1.10.24); remaining: multi-icon formula hit; pad dwell on grid |
 | Merchant | **Mouse confirmed** (1.10.24) | Pad/nested unverified; typed SetData patch still worth doing |
-| Weapon selectors — Arma Dio, Penshin Fatcha, likely `EME_SELECTOR` | Code exists, **still unverified** | One shared `View - WeaponSelection` path; type resolved by string name so it may fail silently. Fix once, fixes all |
+| Weapon selectors — Penshin Fatcha + Arma Dio | **Mouse confirmed** (1.10.25) | Both views verified separately. Pad/nested unverified; `EME_SELECTOR` variant still unseen |
 | Owned gold circle | Implemented | Verify `PlayerOwnsWeapon` still correct in 1.15 |
 | Banned red | Implemented | Visual is red bars not “X”; optional polish |
 | MAX labels | Implemented | — |
@@ -42,7 +42,8 @@
 
 Use `docs/SMOKE-TEST.md` plus this table.
 
-**Last session:** 2026-08-04 · plugin **1.10.24** · VS **1.15.113** · owner playtest, **mouse only**.
+**Last session:** 2026-08-05 · plugin **1.10.25** · VS **1.15.113** · owner playtest, **mouse only**.
+(Rows below dated 2026-08-04 were confirmed on 1.10.24 and not re-run.)
 
 | Screen | Mouse hover | Nested click | Pad focus dwell | Nested pad submit | Notes |
 |--------|-------------|--------------|-----------------|-------------------|-------|
@@ -53,34 +54,41 @@ Use `docs/SMOKE-TEST.md` plus this table.
 | Merchant offer | ✅ | — | — | — | |
 | Collection weapon | ✅ | — | — | — | Docked-panel rework (1.10.11–1.10.24) |
 | Grimoire formula L/M/R | ✅ | — | — | — | Multi-icon hit still partial (known) |
-| **Arma Dio list item** | ⬜ | ⬜ | ⬜ | ⬜ | **Not tested.** Weapon selector (base game, 1.10) |
-| **Penshin Fatcha list item** | ⬜ | ⬜ | ⬜ | ⬜ | **Not tested.** Weapon selector (base game, 1.15) — **same code path as Arma Dio** |
+| **Arma Dio list item** | ✅ | ⬜ | ⬜ | ⬜ | Confirmed 2026-08-05 (1.10.25). Base `View - WeaponSelection` + `SetData` — verified separately from Penshin |
+| **Penshin Fatcha list item** | ✅ | ⬜ | ⬜ | ⬜ | Fixed and confirmed 2026-08-05 (1.10.25). Binds via `SetPenshinData` under `View - TP_WeaponSelection` |
 
 **Legend:** ✅ confirmed · ⬜ not tested · — not separately reported this session
 
 **Caveat:** only **mouse hover** was reported. Nested click and all controller columns are
 unverified, not passing — do not read ✅ rows as input-complete.
 
-### Weapon selectors are ONE gap, not two
+### Weapon selectors: one cell type, but NOT one screen (corrected 2026-08-05)
 
-Arma Dio (1.10, unlocked by collecting it in any stage) and Penshin Fatcha (1.15, Para
-Kooleo's starting weapon, offers the tuna forms) are both **weapon selectors**, and the mod
-handles that screen **generically by view path**, not per weapon:
+An earlier revision of this plan asserted the selectors were "ONE gap, not two" — that fixing
+either fixed both, and that testing either exercised the same code. **Fixing Penshin Fatcha
+disproved that.** The shared part is real but shallower than claimed:
 
-```
-ItemTooltipsMod.cs:941    GameObject.Find(".../Safe Area/View - WeaponSelection")
-ItemTooltipsMod.cs:1214   ScanWeaponSelectionView(viewGo)
-```
+| Shared | Not shared |
+|--------|-----------|
+| Cell type `WeaponSelectionItemUI` | **View root**: base `View - WeaponSelection` vs `View - TP_WeaponSelection` |
+| `RegisterWeaponUI` hover path | **Bind method**: `SetData` vs `SetPenshinData` |
 
-Nothing in that path is Arma-Dio-specific, so whichever weapon opens the view gets the same
-treatment. **Fixing it once fixes both**, and testing either one exercises the same code.
-`WeaponType` also has `EME_SELECTOR = 404`, so there is likely a third selector on the same path.
+Both views exist in `Safe Area` simultaneously; only one is active at a time. So testing
+Penshin Fatcha exercises the `TP_` view and the Penshin bind, and says nothing about Arma
+Dio's. `WeaponType` also has `EME_SELECTOR = 404` — assume a third variant until seen.
 
-**Lead — check this before any deep testing:** `:1240` matches `t.Name ==
-"WeaponSelectionItemUI"` and `:1303` calls `GetComponent("WeaponSelectionItemUI")` by string.
-If 1.15 renamed the type, registration fails silently; the tell is
-`LogWarning("WeaponSelectionItemUI type not found in assemblies")` at `:1254`. Enable
-`VerboseLogging`, open either selector, and look for that one line first.
+**Three stacked defects caused the total failure**, each masked by the one before it:
+
+| # | Defect | Why it was invisible |
+|---|--------|----------------------|
+| 1 | Cell type resolved by scanning for an assembly whose name contains `"Il2Cpp"` — a MelonLoader convention; BepInEx interop is unprefixed (`VampireSurvivors.Runtime`) | Logged a warning, but the scan was never reached at all (defect 3) |
+| 2 | Only `SetData` was considered; Penshin Fatcha binds via `SetPenshinData` | Would have looked like "some selectors work" |
+| 3 | `weaponSelectionView` cached the **base** view while it was briefly active, then went inactive. `IsGamePaused()` derives "a modal is open" from that field, and `ShowItemPopup` returns early when it is false — **with no log line** | Hover fired, `ShowItemPopup` logged, popup was built and silently discarded. Log looked identical to success |
+
+**The transferable lesson:** a cached scene object is only meaningful *while it is active*, and
+an early return in a display path must log. Defect 3 cost three build/test cycles purely
+because that branch was silent; it now logs, and views are matched by scanning `Safe Area` for
+an **active** child whose name contains `WeaponSelection` rather than by a fixed path.
 
 **Penshin is also the best stress test for multi-row evolutions.** `WeaponType` carries
 `EX_PENSHIN`, `EX_PENSHIN_EVO1…EVO7`, `EX_PENSHIN_SELECTOR_EVO`, `EX_PENSHIN_UNION`, and
@@ -126,17 +134,24 @@ confirm Phase 2's "multi-row recipes" against something harder than Hollow Heart
 
 **Files likely:** `ItemTooltipsMod.cs` (`TryPatchMerchantPage`), new `MerchantPatches.cs`, `GenericIconPatches.cs`.
 
-### 1.2 Arma Dio / Weapon selection (high priority)
+### 1.2 Weapon selection — **done for Penshin Fatcha** (1.10.25)
 
-| Step | Action |
-|------|--------|
-| 1 | Open Arma Dio in-game; confirm view path still `View - WeaponSelection` |
-| 2 | Replace fragile `GetComponent("WeaponSelectionItemUI")` + Activator with **typed** Il2Cpp type |
-| 3 | Prefer Harmony postfix on `WeaponSelectionItemUI` bind/SetData over one-shot Content scan |
-| 4 | Re-scan when list repopulates (open again, filter, unlock refresh) — clear `scannedWeaponSelection` on hide |
-| 5 | Hit target = full cell (same lesson as Grimoire), not only `WeaponFrame` center |
+| Step | Action | State |
+|------|--------|-------|
+| 1 | Typed `WeaponSelectionItemUI` instead of reflection + `Activator` | Done |
+| 2 | Harmony postfix on **both** `SetData` and `SetPenshinData`, instance-only | Done |
+| 3 | Resolve the view by scanning `Safe Area` for an active `*WeaponSelection*` child | Done |
+| 4 | Re-arm `scannedWeaponSelection` when the view goes inactive or changes | Done |
+| 5 | **Open Arma Dio** and confirm the base view path | Done |
+| 6 | Controller dwell + nested click on selector cells | **Outstanding** |
 
-**Files:** `ItemTooltipsMod.ScanWeaponSelectionView`, possibly `WeaponSelectionPatches.cs`.
+Hit target is `_WeaponFrame` → `_Icon`, deliberately *not* the cell root: registering a hover
+destroys any existing `EventTrigger` on the target, and the root carries the game's own button
+wiring — the same shape as the `CharacterItemUI.SetData` patch that broke character select in
+1.9.1. The root is used only when it has no `EventTrigger` to clobber.
+
+**Files:** `WeaponSelectionPatches.cs`, `ItemTooltipsMod.AdoptWeaponSelectionView` /
+`FindActiveWeaponSelectionView` / `ScanWeaponSelectionView`.
 
 ### 1.3 Pause inventory completeness (medium)
 

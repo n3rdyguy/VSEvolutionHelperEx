@@ -1,6 +1,6 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.10.24** — Evolution, arcana, grimoire, collection, map, stage, character, and adventure tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.10.25** — Evolution, arcana, grimoire, collection, map, stage, character, and adventure tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
@@ -41,6 +41,7 @@ Please support the original authors. This port reuses their design with typed Il
 |---------|----------------|
 | **Character selection** | Hover a character → portrait, flavor (localized), **starting weapon**, evolution path icons, **other outfits**’ starters, **notable stats**. Click-through so you can still select the card. |
 | **Adventure selection** | Hover an adventure → cast / weapon summary (config `AdventureTooltips`) |
+| **Weapon selectors** | Hover a weapon on a selector screen (Penshin Fatcha tuna forms, Arma Dio) → tooltip (config `WeaponSelectionTooltips`) |
 | **Collection / Grimoire** | Tooltips on evolution formula icons and collection grid items/arcanas. Collections tooltips **dock to the right margin** (always visible, never clipped by the grid) and stay **clickable** for nested formula detail; locked cells show an **Unlock:** hint |
 | **Stage selection — relics** | Hover **Relics in stage** icons for name + description (dynamic sizing for long names) |
 | **Stage selection — Music \| Guide** | Tabs above the song panel: **Music** keeps the track list; **Guide** reuses that space for stage help |
@@ -116,7 +117,7 @@ Official bleeding-edge builds: **[https://builds.bepinex.dev/projects/bepinex_be
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.10.24]
+Loading [VS Evolution Helper 1.10.25]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete
@@ -153,6 +154,7 @@ Created on first run:
 | Features | `LevelUpTooltips` | **true** | Evolution tooltips on Level Up choices |
 | Features | `CharacterTooltips` | **true** | Character Selection tooltips |
 | Features | `AdventureTooltips` | **true** | Adventures select tooltips |
+| Features | `WeaponSelectionTooltips` | **true** | Weapon selector screen tooltips |
 
 Restart the game (or re-enter menus) after edits so values reload.
 

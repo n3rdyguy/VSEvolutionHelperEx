@@ -307,9 +307,7 @@ public class ItemTooltipsMod
 
 	private static bool scannedWeaponSelection = false;
 
-	private static Type cachedWeaponSelectionItemType = null;
-
-	private static bool triedFindingWSIType = false;
+	private static bool loggedWeaponSelectDiag = false;
 
 	private static object cachedLevelUpFactory = null;
 
@@ -392,6 +390,9 @@ public class ItemTooltipsMod
 			try {
 				AdventureSelectPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("AdventureSelect patches: " + ex.Message); }
+			try {
+				WeaponSelectionPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("WeaponSelection patches: " + ex.Message); }
 			Plugin.Log.LogInfo("Patches applied successfully");
 		}
 		catch (Exception arg)
@@ -910,9 +911,19 @@ public class ItemTooltipsMod
 		{
 			lastScanTime = unscaledTime;
 			ScanForIcons();
-			if (!scannedWeaponSelection && (Object)(object)weaponSelectionView != (Object)null && weaponSelectionView.activeInHierarchy)
+			if ((Object)(object)weaponSelectionView != (Object)null)
 			{
-				ScanWeaponSelectionView(weaponSelectionView);
+				if (weaponSelectionView.activeInHierarchy)
+				{
+					if (!scannedWeaponSelection)
+						ScanWeaponSelectionView(weaponSelectionView);
+				}
+				else
+				{
+					// Re-arm for the next selector. The view is not a pause overlay, so the
+					// unpause reset never re-armed a selector opened mid-run.
+					scannedWeaponSelection = false;
+				}
 			}
 		}
 	}
@@ -936,9 +947,18 @@ public class ItemTooltipsMod
 		{
 			arcanaView = GameObject.Find("GAME UI/Canvas - Game UI/Safe Area/View - ArcanaMainSelection");
 		}
-		if ((Object)(object)weaponSelectionView == (Object)null)
+		// There is more than one selector view: the base "View - WeaponSelection" plus per-mode
+		// variants such as "View - TP_WeaponSelection" (Penshin Fatcha). Caching the first one
+		// that existed pinned an inactive decoy and made IsGamePaused() report "no modal open"
+		// for the live screen, so re-resolve whenever the cached view is not actually live.
+		if ((Object)(object)weaponSelectionView == (Object)null || !weaponSelectionView.activeInHierarchy)
 		{
-			weaponSelectionView = GameObject.Find("GAME UI/Canvas - Game UI/Safe Area/View - WeaponSelection");
+			GameObject live = FindActiveWeaponSelectionView();
+			if ((Object)(object)live != (Object)null && (Object)(object)live != (Object)(object)weaponSelectionView)
+			{
+				weaponSelectionView = live;
+				scannedWeaponSelection = false;
+			}
 		}
 		if ((Object)(object)pauseView == (Object)null)
 		{
@@ -1211,125 +1231,161 @@ public class ItemTooltipsMod
 		trackedIcons.Clear();
 	}
 
+	/// <summary>
+	/// Adopt the selector's view root from a cell we already hold, instead of looking it up by
+	/// a hardcoded scene path.
+	///
+	/// This is not just about the fallback scan. IsGamePaused() decides "a modal is open" for
+	/// this screen from the same weaponSelectionView field (:1025), and ShowItemPopup returns
+	/// early when that is false (:3742) — silently, as that branch logs nothing. So while the
+	/// field was null every selector tooltip was built and then dropped on the floor, which is
+	/// why hovering logged ShowItemPopup but drew nothing.
+	/// </summary>
+	/// <summary>
+	/// Any Safe Area child that names a weapon selector and is currently on screen. Matching by
+	/// substring covers the base view and the per-mode variants (TP_ and any future prefix)
+	/// without another hardcoded path to go stale.
+	/// </summary>
+	private static GameObject FindActiveWeaponSelectionView()
+	{
+		if ((Object)(object)cachedSafeArea == (Object)null)
+		{
+			GameObject safeArea = GameObject.Find("GAME UI/Canvas - Game UI/Safe Area");
+			if ((Object)(object)safeArea != (Object)null)
+			{
+				cachedSafeArea = safeArea.transform;
+			}
+		}
+		if ((Object)(object)cachedSafeArea == (Object)null)
+		{
+			return null;
+		}
+		for (int i = 0; i < cachedSafeArea.childCount; i++)
+		{
+			Transform child = cachedSafeArea.GetChild(i);
+			if (((Component)child).gameObject.activeInHierarchy && ((Object)child).name.Contains("WeaponSelection"))
+			{
+				return ((Component)child).gameObject;
+			}
+		}
+		return null;
+	}
+
+	internal static void AdoptWeaponSelectionView(Transform cell)
+	{
+		if ((Object)(object)cell == (Object)null)
+		{
+			return;
+		}
+
+		// Report the real hierarchy once per session, before any early return. Which view the
+		// field currently holds, and whether it is live, is the thing that took three builds to
+		// pin down — so it stays diagnosable rather than becoming a silent exit again.
+		if (!loggedWeaponSelectDiag && Plugin.DebugVerbose)
+		{
+			loggedWeaponSelectDiag = true;
+			Plugin.Dbg("WeaponSelect cell path: " + DescribePath(cell));
+			Plugin.Dbg((Object)(object)weaponSelectionView == (Object)null
+				? "WeaponSelect view field: <null> - adopting from cell"
+				: $"WeaponSelect view field: {DescribePath(weaponSelectionView.transform)} active={weaponSelectionView.activeInHierarchy}");
+		}
+
+		// A cached view only counts while it is live. Holding an inactive one is what let the
+		// base selector view mask the tuna variant.
+		if ((Object)(object)weaponSelectionView != (Object)null && weaponSelectionView.activeInHierarchy)
+		{
+			return;
+		}
+
+		// Highest ancestor that still names the selector — the view root, not an inner panel.
+		Transform view = null;
+		for (Transform t = cell; (Object)(object)t != (Object)null; t = t.parent)
+		{
+			if (((Object)t).name.Contains("WeaponSelection"))
+			{
+				view = t;
+			}
+		}
+
+		// Otherwise the view is whichever ancestor sits directly under Safe Area.
+		if ((Object)(object)view == (Object)null)
+		{
+			for (Transform t = cell; (Object)(object)t != (Object)null; t = t.parent)
+			{
+				Transform parent = t.parent;
+				if ((Object)(object)parent != (Object)null && ((Object)parent).name == "Safe Area")
+				{
+					view = t;
+					break;
+				}
+			}
+		}
+
+		if ((Object)(object)view == (Object)null)
+		{
+			Plugin.Log.LogWarning("[WeaponSelect] Could not resolve a view root from " + ((Object)cell).name);
+			return;
+		}
+
+		weaponSelectionView = ((Component)view).gameObject;
+		scannedWeaponSelection = false;
+		Plugin.Log.LogInfo("[WeaponSelect] View root: " + DescribePath(view));
+	}
+
+	private static string DescribePath(Transform t)
+	{
+		string path = ((Object)t).name;
+		for (Transform p = t.parent; (Object)(object)p != (Object)null; p = p.parent)
+		{
+			path = ((Object)p).name + "/" + path;
+		}
+		return path;
+	}
+
+	/// <summary>
+	/// Fallback for cells already bound before WeaponSelectionPatches attached, and for any
+	/// selector whose bind method is not one of the two patched above.
+	///
+	/// The cell type is now referenced directly from the interop assembly. The previous version
+	/// looked for it by walking assemblies for one whose name contained "Il2Cpp" — a MelonLoader
+	/// naming convention. BepInEx interop assemblies are unprefixed (VampireSurvivors.Runtime),
+	/// so that search never matched and this scan returned before touching a single cell, which
+	/// is why no weapon selector ever showed tooltips.
+	///
+	/// Cells are collected by component rather than by walking
+	/// Panel/ScrollViewWithSlider/Viewport/Content, so a layout change no longer breaks the scan.
+	/// </summary>
 	private static void ScanWeaponSelectionView(GameObject viewGo)
 	{
-		//IL_029d: Unknown result type (might be due to invalid IL or missing references)
-		//IL_02a2: Unknown result type (might be due to invalid IL or missing references)
-		//IL_02b2: Unknown result type (might be due to invalid IL or missing references)
-		//IL_02fb: Unknown result type (might be due to invalid IL or missing references)
-		//IL_02e6: Unknown result type (might be due to invalid IL or missing references)
-		//IL_02eb: Unknown result type (might be due to invalid IL or missing references)
-		if (scannedWeaponSelection)
+		if (scannedWeaponSelection || !Plugin.WeaponSelectionTooltipsEnabled)
 		{
 			return;
 		}
 		scannedWeaponSelection = true;
-		if (!triedFindingWSIType)
+
+		var cells = viewGo.GetComponentsInChildren<VampireSurvivors.UI.WeaponSelectionItemUI>(true);
+		if (cells == null || cells.Count == 0)
 		{
-			triedFindingWSIType = true;
-			Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-			Assembly[] array = assemblies;
-			foreach (Assembly assembly in array)
-			{
-				if (!assembly.FullName.Contains("Il2Cpp"))
-				{
-					continue;
-				}
-				try
-				{
-					Type type = assembly.GetTypes().FirstOrDefault((Type t) => t.Name == "WeaponSelectionItemUI");
-					if (type != null)
-					{
-						cachedWeaponSelectionItemType = type;
-						break;
-					}
-				}
-				catch
-				{
-				}
-			}
-		}
-		if (cachedWeaponSelectionItemType == null)
-		{
-			Plugin.Log.LogWarning("WeaponSelectionItemUI type not found in assemblies");
+			Plugin.Log.LogWarning("[WeaponSelect] No WeaponSelectionItemUI cells under the view");
 			return;
 		}
-		Transform val = FindChildRecursive(viewGo.transform, "Panel");
-		if ((Object)(object)val == (Object)null)
+
+		int registered = 0;
+		for (int i = 0; i < cells.Count; i++)
 		{
-			Plugin.Log.LogWarning("Panel not found in WeaponSelection");
-			return;
-		}
-		Transform val2 = val.Find("ScrollViewWithSlider");
-		if ((Object)(object)val2 == (Object)null)
-		{
-			Plugin.Log.LogWarning("ScrollViewWithSlider not found");
-			return;
-		}
-		Transform val3 = val2.Find("Viewport");
-		if ((Object)(object)val3 == (Object)null)
-		{
-			Plugin.Log.LogWarning("Viewport not found");
-			return;
-		}
-		Transform val4 = null;
-		for (int num = 0; num < val3.childCount; num++)
-		{
-			Transform child = val3.GetChild(num);
-			if (((Object)child).name == "Content")
-			{
-				val4 = child;
-				break;
-			}
-		}
-		if ((Object)(object)val4 == (Object)null)
-		{
-			Plugin.Log.LogWarning("Content not found");
-			return;
-		}
-		MethodInfo method = cachedWeaponSelectionItemType.GetMethod("get__type", BindingFlags.Instance | BindingFlags.Public);
-		MethodInfo method2 = cachedWeaponSelectionItemType.GetMethod("GetWeaponType", BindingFlags.Instance | BindingFlags.Public);
-		int num2 = 0;
-		for (int num3 = 0; num3 < val4.childCount; num3++)
-		{
-			Transform child2 = val4.GetChild(num3);
-			if (!((Component)child2).gameObject.activeInHierarchy)
+			var cell = cells[i];
+			if ((Object)(object)cell == (Object)null)
 			{
 				continue;
 			}
-			WeaponType? weaponType = null;
-			try
+			if (!((Component)cell).gameObject.activeInHierarchy)
 			{
-				Component component = ((Component)child2).gameObject.GetComponent("WeaponSelectionItemUI");
-				if ((Object)(object)component != (Object)null)
-				{
-					object obj2 = Activator.CreateInstance(cachedWeaponSelectionItemType, ((Il2CppObjectBase)component).Pointer);
-					if (method != null && method.Invoke(obj2, null) is WeaponType value)
-					{
-						weaponType = value;
-					}
-					if (!weaponType.HasValue && method2 != null && method2.Invoke(obj2, null) is WeaponType value2)
-					{
-						weaponType = value2;
-					}
-				}
+				continue;
 			}
-			catch (Exception ex)
-			{
-				if (num3 == 0)
-				{
-					Plugin.Log.LogWarning("Error reading WSI component: " + ex.Message);
-				}
-			}
-			if (weaponType.HasValue)
-			{
-				Transform val5 = child2.Find("WeaponFrame");
-				GameObject go = (((Object)(object)val5 != (Object)null) ? ((Component)val5).gameObject : ((Component)child2).gameObject);
-				AddHoverToGameObject(go, weaponType, null);
-				num2++;
-			}
+			WeaponSelectionPatches.RegisterCell(cell);
+			registered++;
 		}
-		Plugin.Log.LogInfo($"WeaponSelection: set up hovers on {num2}/{val4.childCount} items");
+		Plugin.Log.LogInfo($"[WeaponSelect] Fallback scan: {registered}/{cells.Count} cells");
 	}
 
 	private static int ScanChildrenForTypes(Transform parent, int depth, int maxDepth)
@@ -3807,6 +3863,9 @@ public class ItemTooltipsMod
 		}
 		if (!IsGamePaused())
 		{
+			// This branch used to return without logging, which hid a whole broken screen:
+			// the popup was built, then discarded here because the view was never recognised.
+			Plugin.Dbg($"ShowItemPopup: no modal UI active (collectionIcons={collectionIcons.Count}) - routing to collection popup or hiding");
 			if (collectionIcons.Count > 0 && (weaponType.HasValue || itemType.HasValue))
 			{
 				currentCollectionHoverId = -1;
@@ -6311,6 +6370,52 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		return list.Count > 0 ? list : null;
 	}
 
+	/// <summary>
+	/// Weapon selector and merchant cells are much larger than the icons on other screens, so
+	/// the default up-and-left popup origin lands on top of the artwork. Nudge it down and
+	/// right on those screens only — every other screen's placement is already tuned.
+	/// </summary>
+	private const float LargeCellPopupOffsetX = 36f;
+
+	private const float LargeCellPopupOffsetY = 48f;
+
+	private static bool UsesLargeCellPopupOffset()
+	{
+		if ((Object)(object)weaponSelectionView != (Object)null && weaponSelectionView.activeInHierarchy)
+		{
+			return true;
+		}
+		return (Object)(object)merchantView != (Object)null && merchantView.activeInHierarchy;
+	}
+
+	/// <summary>Keep a popup fully inside its parent rect after an offset has been applied.</summary>
+	private static void ClampToParent(RectTransform parentRt, float width, float height, ref float x, ref float y)
+	{
+		if ((Object)(object)parentRt == (Object)null)
+		{
+			return;
+		}
+		Rect r = parentRt.rect;
+		float pw = r.width;
+		float ph = r.height;
+		if (x + width > pw / 2f)
+		{
+			x = pw / 2f - width;
+		}
+		if (x < (0f - pw) / 2f)
+		{
+			x = (0f - pw) / 2f;
+		}
+		if (y > ph / 2f)
+		{
+			y = ph / 2f;
+		}
+		if (y - height < (0f - ph) / 2f)
+		{
+			y = (0f - ph) / 2f + height;
+		}
+	}
+
 	private static void PositionPopup(GameObject popup, Transform anchor)
 	{
 		//IL_003c: Unknown result type (might be due to invalid IL or missing references)
@@ -6427,6 +6532,14 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 					num = val.x - x + 20f;
 				}
 			}
+		}
+		// Applied last, after the keep-anchor-near-edge adjustment above, which would otherwise
+		// pull the popup straight back onto the icon it is meant to clear.
+		if (UsesLargeCellPopupOffset())
+		{
+			num += LargeCellPopupOffsetX;
+			num2 -= LargeCellPopupOffsetY;
+			ClampToParent(component2, x, y, ref num, ref num2);
 		}
 		component.anchoredPosition = new Vector2(num, num2);
 	}

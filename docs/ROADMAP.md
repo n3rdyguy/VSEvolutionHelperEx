@@ -1,7 +1,7 @@
 # VS Evolution Helper — Roadmap
 
 **Mod:** BepInEx IL2CPP port of NihilXD’s Evolution Helper for Vampire Survivors 1.15 / Unity 6  
-**Current version:** **1.10.24** (Phase 3 complete; Collections polish — released)  
+**Current version:** **1.10.25** (Phase 3 complete; weapon selector tooltips fixed)  
 **Docs:** [USER-GUIDE](USER-GUIDE.md) · [README](../README.md) · [CHANGELOG](../CHANGELOG.md)
 
 ### Working practices
@@ -13,7 +13,7 @@
 
 ---
 
-## 1. Shipped features (1.10.24)
+## 1. Shipped features (1.10.25)
 
 | Area | Status | What players get |
 |------|--------|------------------|
@@ -29,6 +29,7 @@
 | Stage Music \| Guide | Done | Polished tabs; Guide content; Features; curated tips |
 | Character select tooltips | Done | Flavor, starter, evo, outfits, stats; click-through; loc scrub |
 | Adventure select tooltips | Done | Cast / weapon summary |
+| Weapon selector tooltips | Done | Penshin Fatcha + Arma Dio cells; offset placement clears the icon |
 | Config kill switches + delays | Done | See USER-GUIDE / README |
 | Controller stage Guide | Done | LB/RB tabs, scroll, dwell |
 | Release packaging | Done | `dist/` zip + GitHub releases on demand |
@@ -164,6 +165,7 @@ VSEvolutionHelper-BepInEx-v{VERSION}.zip
 |------|------------|
 | Game update breaks interop | Re-gen interop; pin tested version on release notes |
 | Song panel layout changes | Fall back if `_SongPanel` missing |
+| Cached scene object goes inactive | Re-resolve by scanning for the **active** object; never trust a stale cache (cost 3 build cycles on weapon selectors) |
 | DLL locked while game open | Close game before update |
 | Double loader | README: BepInEx only |
 
@@ -180,8 +182,10 @@ VSEvolutionHelper-BepInEx-v{VERSION}.zip
 
 ## 9. Immediate mode
 
-**Default:** execute **[PLAN-original-parity.md](PLAN-original-parity.md)**. Phase 0 matrix is partly filled (2026-08-04, mouse only): level-up, pause, merchant, collection, grimoire confirmed; **weapon selectors** (Arma Dio, Penshin Fatcha) still untested, and controller columns are unverified across the board.
+**Default:** execute **[PLAN-original-parity.md](PLAN-original-parity.md)**. Phase 0 matrix is partly filled (mouse only): level-up, pause, merchant, collection, grimoire confirmed 2026-08-04; **Penshin Fatcha** confirmed 2026-08-05. Controller columns are unverified across the board.
 
-Next: verify the **weapon selector** view — Arma Dio and Penshin Fatcha share one `View - WeaponSelection` path, so one fix covers both (check for the `WeaponSelectionItemUI type not found` warning first). Then grimoire multi-icon, then the controller pass.
+Both weapon selectors (Penshin Fatcha, Arma Dio) confirmed 2026-08-05 — each on its own view, since the earlier "one fix covers both" assumption proved wrong (see PLAN §0.1).
+
+Next: **grimoire multi-icon**, then the **controller pass** — every pad column in the Phase 0 matrix is still blank, including the two selectors.
 
 Tag **1.11.0** only when parity exit criteria are met (or owner requests an interim release).
