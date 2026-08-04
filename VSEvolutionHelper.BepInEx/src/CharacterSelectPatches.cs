@@ -12,101 +12,68 @@ using Object = UnityEngine.Object;
 namespace VSItemTooltips;
 
 /// <summary>
-/// Character Selection: hover tooltips with starter weapon + evolution path(s).
+/// Character Selection tooltips (starter weapon / evo).
+/// IMPORTANT: do NOT Harmony-patch CharacterItemUI.SetData — under IL2CPP that detour
+/// breaks population (every card stuck on prefab default Pasqualina / blank sprites).
+/// Instead: after Populate / show, scan existing CharacterItemUI instances read-only.
 /// </summary>
 public static class CharacterSelectPatches
 {
+	private static float _lastScanTime = -999f;
+	private const float ScanCooldown = 0.75f;
+
 	public static void Apply(Harmony harmony)
 	{
-		try
-		{
-			// Find SetData that takes CharacterItem (4th arg)
-			MethodInfo setData = null;
-			foreach (var m in typeof(CharacterItemUI).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-			{
-				if (m.Name != "SetData") continue;
-				var ps = m.GetParameters();
-				if (ps.Length >= 4 && ps[3].ParameterType == typeof(CharacterItem))
-				{
-					setData = m;
-					break;
-				}
-			}
-			if (setData == null)
-			{
-				foreach (var m in typeof(CharacterItemUI).GetMethods(BindingFlags.Instance | BindingFlags.Public))
-				{
-					if (m.Name == "SetData" && m.GetParameters().Length >= 4)
-					{
-						setData = m;
-						break;
-					}
-				}
-			}
+		// Never patch CharacterItemUI.SetData (IL2CPP detour corrupts char select).
 
-			if (setData != null)
-			{
-				harmony.Patch(setData, postfix: new HarmonyMethod(typeof(CharacterSelectPatches), nameof(SetData_Postfix)));
-				Plugin.Log.LogInfo("[CharacterSelect] Patched CharacterItemUI.SetData");
-			}
-			else
-				Plugin.Log.LogWarning("[CharacterSelect] CharacterItemUI.SetData not found");
-		}
-		catch (Exception ex)
-		{
-			Plugin.Log.LogWarning("[CharacterSelect] SetData patch: " + ex.Message);
-		}
+		// After list is built
+		TryPatch(harmony, typeof(CharacterSelectionPage), "Populate", nameof(Populate_Postfix), requireZeroParams: false);
+		TryPatch(harmony, typeof(CharacterSelectionPage), "RefreshCharacters", nameof(Populate_Postfix), requireZeroParams: false);
+		TryPatch(harmony, typeof(CharacterSelectionPage), "OnShowFinish", nameof(Show_Postfix), requireZeroParams: false);
+		TryPatch(harmony, typeof(CharacterSelectionPage), "OnShowStart", nameof(Show_Postfix), requireZeroParams: false);
 
-		try
+		// Cleanup
+		foreach (string name in new[] { "OnHideStart", "OnHideFinish", "OnHide", "Hide", "Close" })
 		{
-			foreach (string name in new[] { "OnHideStart", "OnHide", "Hide", "Close" })
-			{
-				var m = typeof(CharacterSelectionPage).GetMethod(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-				if (m != null && m.GetParameters().Length == 0)
-				{
-					harmony.Patch(m, postfix: new HarmonyMethod(typeof(CharacterSelectPatches), nameof(Hide_Postfix)));
-					Plugin.Log.LogInfo($"[CharacterSelect] Patched CharacterSelectionPage.{name} for cleanup");
-					break;
-				}
-			}
-		}
-		catch (Exception ex)
-		{
-			Plugin.Log.LogWarning("[CharacterSelect] hide patch: " + ex.Message);
+			if (TryPatch(harmony, typeof(CharacterSelectionPage), name, nameof(Hide_Postfix), requireZeroParams: false))
+				break;
 		}
 	}
 
-	public static void SetData_Postfix(CharacterItemUI __instance, CharacterItem characterItem)
+	private static bool TryPatch(Harmony harmony, Type type, string methodName, string postfix, bool requireZeroParams)
 	{
 		try
 		{
-			if (!Plugin.CharacterTooltipsEnabled)
-				return;
-			if ((Object)(object)__instance == (Object)null || characterItem == null)
-				return;
-
-			GameData.EnsureLoaded();
-
-			CharacterType ctype = default;
-			CharacterData cdata = null;
-			try { ctype = characterItem.CharacterType; } catch { }
-			try { cdata = characterItem.CharacterData; } catch { }
-			if (cdata == null)
+			MethodInfo best = null;
+			foreach (var m in type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
 			{
-				try { cdata = characterItem._characterData; } catch { }
+				if (m.Name != methodName) continue;
+				if (requireZeroParams && m.GetParameters().Length != 0) continue;
+				// Prefer zero-arg overloads when several exist
+				if (best == null || m.GetParameters().Length < best.GetParameters().Length)
+					best = m;
 			}
-
-			string name = BuildCharacterName(__instance, cdata, ctype);
-			string desc = BuildCharacterTooltip(cdata, ctype, name);
-			Sprite spr = ResolveCharacterSprite(__instance, cdata, ctype);
-			GameObject hit = ResolveHitTarget(__instance);
-
-			ItemTooltipsMod.RegisterCharacterIcon(hit, ctype, name, desc, spr);
+			if (best == null)
+				return false;
+			harmony.Patch(best, postfix: new HarmonyMethod(typeof(CharacterSelectPatches), postfix));
+			Plugin.Log.LogInfo($"[CharacterSelect] Patched {type.Name}.{best.Name} ({best.GetParameters().Length} args)");
+			return true;
 		}
 		catch (Exception ex)
 		{
-			Plugin.Log.LogWarning("[CharacterSelect] SetData postfix: " + ex.Message);
+			Plugin.Log.LogWarning($"[CharacterSelect] {methodName} patch: {ex.Message}");
+			return false;
 		}
+	}
+
+	public static void Populate_Postfix()
+	{
+		ScheduleScan(2);
+	}
+
+	public static void Show_Postfix()
+	{
+		ScheduleScan(3);
 	}
 
 	public static void Hide_Postfix()
@@ -114,26 +81,113 @@ public static class CharacterSelectPatches
 		ItemTooltipsMod.ClearCharacterIcons();
 	}
 
-	private static GameObject ResolveHitTarget(CharacterItemUI ui)
+	private static void ScheduleScan(int frames)
 	{
-		// Prefer the full card root for larger hover area
-		GameObject go = ((Component)ui).gameObject;
+		if (!Plugin.CharacterTooltipsEnabled)
+			return;
+		ItemTooltipsMod.DelayFrames(frames, ScanAndRegister);
+	}
+
+	/// <summary>Optional light rescan from Update if icons empty while page looks open.</summary>
+	public static void Tick()
+	{
+		if (!Plugin.CharacterTooltipsEnabled)
+			return;
+		if (ItemTooltipsMod.CharacterIconCount > 0)
+			return;
+		if (Time.unscaledTime - _lastScanTime < ScanCooldown)
+			return;
+		// Cheap probe: is a CharacterItemUI active?
 		try
 		{
-			// Weapon icon is a nice secondary target if card has no raycast
-			Image weapon = ui._WeaponIcon;
-			if ((Object)(object)weapon != (Object)null)
+			var any = Object.FindObjectOfType<CharacterItemUI>();
+			if ((Object)(object)any == (Object)null || !((Component)any).gameObject.activeInHierarchy)
+				return;
+		}
+		catch { return; }
+		ScanAndRegister();
+	}
+
+	public static void ScanAndRegister()
+	{
+		if (!Plugin.CharacterTooltipsEnabled)
+			return;
+		_lastScanTime = Time.unscaledTime;
+		try
+		{
+			GameData.EnsureLoaded();
+			ItemTooltipsMod.ClearCharacterIcons();
+
+			CharacterItemUI[] uis = null;
+			try
 			{
-				// Keep root if it has a Graphic raycast; else use weapon
-				var g = go.GetComponent<Graphic>();
-				if ((Object)(object)g == (Object)null || !((Graphic)g).raycastTarget)
+				// includeInactive: pooled / off-screen cards
+				uis = Object.FindObjectsOfType<CharacterItemUI>(true);
+			}
+			catch
+			{
+				try { uis = Object.FindObjectsOfType<CharacterItemUI>(); } catch { }
+			}
+			if (uis == null || uis.Length == 0)
+			{
+				Plugin.Dbg("[CharacterSelect] scan: no CharacterItemUI found");
+				return;
+			}
+
+			int n = 0;
+			foreach (CharacterItemUI ui in uis)
+			{
+				if ((Object)(object)ui == (Object)null) continue;
+				try
 				{
-					// Still register the root — Image children usually catch hits
+					if (!((Component)ui).gameObject.activeInHierarchy)
+						continue;
+					if (!RegisterOne(ui))
+						continue;
+					n++;
+				}
+				catch (Exception ex)
+				{
+					Plugin.Dbg("[CharacterSelect] register one: " + ex.Message);
 				}
 			}
+			Plugin.Dbg($"[CharacterSelect] scan registered {n}/{uis.Length} cards");
+			if (n > 0)
+				Plugin.Log.LogInfo($"[CharacterSelect] Registered tooltips for {n} characters");
 		}
-		catch { }
-		return go;
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("[CharacterSelect] ScanAndRegister: " + ex.Message);
+		}
+	}
+
+	private static bool RegisterOne(CharacterItemUI ui)
+	{
+		CharacterItem characterItem = null;
+		try { characterItem = ui.CharacterItem; } catch { }
+		if (characterItem == null)
+			return false;
+
+		CharacterType ctype = default;
+		CharacterData cdata = null;
+		try { ctype = characterItem.CharacterType; } catch { try { ctype = characterItem._characterType; } catch { } }
+		try { cdata = characterItem.CharacterData; } catch { }
+		if (cdata == null)
+		{
+			try { cdata = characterItem._characterData; } catch { }
+		}
+
+		string name = BuildCharacterName(ui, cdata, ctype);
+		// Skip still-uninitialized prefab shells
+		if (string.IsNullOrWhiteSpace(name))
+			return false;
+
+		string desc = BuildCharacterTooltip(cdata, ctype);
+		Sprite spr = ResolveCharacterSprite(ui);
+		GameObject hit = ((Component)ui).gameObject;
+
+		ItemTooltipsMod.RegisterCharacterIcon(hit, ctype, name, desc, spr);
+		return true;
 	}
 
 	private static string BuildCharacterName(CharacterItemUI ui, CharacterData data, CharacterType type)
@@ -147,22 +201,37 @@ public static class CharacterSelectPatches
 		catch { }
 		try
 		{
+			if ((Object)(object)ui._CharacterName != (Object)null)
+			{
+				string t = ((TMPro.TMP_Text)ui._CharacterName).text;
+				if (!string.IsNullOrWhiteSpace(t))
+					return t.Trim();
+			}
+		}
+		catch { }
+		try
+		{
 			if (data != null)
 			{
-				string prefix = data.prefix ?? "";
-				string charName = data.charName ?? "";
-				string surname = data.surname ?? "";
-				string combined = $"{prefix} {charName} {surname}".Trim();
+				string combined = $"{data.prefix} {data.charName} {data.surname}".Trim();
 				if (!string.IsNullOrWhiteSpace(combined))
 					return combined;
 			}
 		}
 		catch { }
-		return type.ToString();
+		try
+		{
+			string s = type.ToString();
+			if (!string.IsNullOrEmpty(s) && s != "0")
+				return s;
+		}
+		catch { }
+		return null;
 	}
 
-	private static Sprite ResolveCharacterSprite(CharacterItemUI ui, CharacterData data, CharacterType type)
+	private static Sprite ResolveCharacterSprite(CharacterItemUI ui)
 	{
+		// Read-only — do not call GetCharSprite (can hit asset pipelines / side effects)
 		try
 		{
 			Image icon = ui._CharacterIcon;
@@ -172,18 +241,18 @@ public static class CharacterSelectPatches
 		catch { }
 		try
 		{
-			if (data != null)
-				return ui.GetCharSprite(type, data);
+			Image w = ui._WeaponIcon;
+			if ((Object)(object)w != (Object)null && (Object)(object)w.sprite != (Object)null)
+				return w.sprite;
 		}
 		catch { }
 		return null;
 	}
 
-	private static string BuildCharacterTooltip(CharacterData data, CharacterType type, string displayName)
+	private static string BuildCharacterTooltip(CharacterData data, CharacterType type)
 	{
 		var sb = new StringBuilder();
 
-		// Flavor / description
 		string flavor = null;
 		try
 		{
@@ -198,7 +267,6 @@ public static class CharacterSelectPatches
 		if (!string.IsNullOrWhiteSpace(flavor))
 			sb.AppendLine(flavor.Trim());
 
-		// Starting weapon + evo paths
 		WeaponType? starter = TryGetStartingWeapon(data);
 		if (starter.HasValue)
 		{
@@ -238,7 +306,6 @@ public static class CharacterSelectPatches
 			sb.Append("No starting weapon data.");
 		}
 
-		// Compact stat bonuses (only non-default-ish)
 		string stats = FormatNotableStats(data);
 		if (!string.IsNullOrEmpty(stats))
 		{
@@ -263,7 +330,6 @@ public static class CharacterSelectPatches
 		{
 			try
 			{
-				// Field fallback
 				var field = data._startingWeapon_k__BackingField;
 				if (field != null && field.HasValue)
 					return field.Value;
@@ -283,7 +349,6 @@ public static class CharacterSelectPatches
 			{
 				if (Mathf.Abs(v - ignoreNear) < 0.001f) return;
 				if (Mathf.Approximately(v, 0f)) return;
-				// Many char stats are deltas (0 = default)
 				string fmt = Mathf.Abs(v) >= 10f || Mathf.Approximately(v, Mathf.Round(v))
 					? v.ToString("0")
 					: v.ToString("0.##");
@@ -292,7 +357,7 @@ public static class CharacterSelectPatches
 			add("Max HP", data.maxHp);
 			add("Armor", data.armor);
 			add("Regen", data.regen);
-			add("Move Speed", data.moveSpeed, 1f); // 1 often means default
+			add("Move Speed", data.moveSpeed, 1f);
 			add("Area", data.area, 1f);
 			add("Speed", data.speed, 1f);
 			add("Duration", data.duration, 1f);
@@ -313,7 +378,6 @@ public static class CharacterSelectPatches
 			Plugin.Dbg("[CharacterSelect] stats: " + ex.Message);
 		}
 		if (lines.Count == 0) return null;
-		// Cap length so popup stays readable
 		if (lines.Count > 8)
 			lines = lines.GetRange(0, 8);
 		return string.Join("\n", lines);

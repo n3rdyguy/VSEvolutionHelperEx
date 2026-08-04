@@ -189,6 +189,7 @@ public class ItemTooltipsMod
 	private static int pendingCharacterHoverId = -1;
 	private static float characterHoverStartTime = 0f;
 	private static GameObject characterPopup = null;
+	public static int CharacterIconCount => characterIcons.Count;
 
 	private static int currentCollectionHoverId = -1;
 
@@ -811,15 +812,19 @@ public class ItemTooltipsMod
 			else
 				UpdateStageRelicHover();
 		}
-		// Character Selection: starter weapon / evo tooltips
-		if (Plugin.CharacterTooltipsEnabled && characterIcons.Count > 0)
+		// Character Selection: scan (if needed) + starter weapon / evo tooltips
+		if (Plugin.CharacterTooltipsEnabled)
 		{
-			if (usingController)
-				UpdateCharacterControllerDwell();
-			else
-				UpdateCharacterHover();
+			CharacterSelectPatches.Tick();
+			if (characterIcons.Count > 0)
+			{
+				if (usingController)
+					UpdateCharacterControllerDwell();
+				else
+					UpdateCharacterHover();
+			}
 		}
-		else if (!Plugin.CharacterTooltipsEnabled && characterIcons.Count > 0)
+		else if (characterIcons.Count > 0)
 		{
 			ClearCharacterIcons();
 		}

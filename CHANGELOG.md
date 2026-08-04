@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.9.1] — 2026-08-04
+
+### Fixed
+- **Character Selection broken** (every card “Pasqualina” / blank art): removed Harmony patch on `CharacterItemUI.SetData` (IL2CPP detour corrupted population). Tooltips now register by scanning cards after Populate/show only.
+
 ## [1.9.0] — 2026-08-04
 
 ### Added
