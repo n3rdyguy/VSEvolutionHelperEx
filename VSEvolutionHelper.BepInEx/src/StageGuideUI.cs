@@ -53,6 +53,8 @@ public static class StageGuideUI
 	private static readonly Color Muted = new Color(0.65f, 0.7f, 0.85f, 1f);
 	private const float TabHeight = 36f;
 	private const float TabGap = 3f;
+	/// <summary>Space between bottom of tab strip and top of song panel.</summary>
+	private const float TabPanelGap = 8f;
 
 	public static void OnStageSelected(StageSelectPage page, StageItemUI item, StageData stage, StageType type)
 	{
@@ -401,24 +403,24 @@ public static class StageGuideUI
 
 		if (stretchX)
 		{
-			// Stretch horizontally like the song panel; pin to its top edge
+			// Stretch horizontally like the song panel; sit above its top edge with a gap
 			tabRt.anchorMin = new Vector2(songRt.anchorMin.x, songRt.anchorMax.y);
 			tabRt.anchorMax = new Vector2(songRt.anchorMax.x, songRt.anchorMax.y);
 			tabRt.pivot = new Vector2(0.5f, 0f);
-			// Horizontal offsets match the song frame; height via sizeDelta.y
-			tabRt.offsetMin = new Vector2(songRt.offsetMin.x, 0f);
-			tabRt.offsetMax = new Vector2(songRt.offsetMax.x, TabHeight);
+			// Horizontal offsets match the song frame; lift by TabPanelGap
+			tabRt.offsetMin = new Vector2(songRt.offsetMin.x, TabPanelGap);
+			tabRt.offsetMax = new Vector2(songRt.offsetMax.x, TabPanelGap + TabHeight);
 			tabRt.anchoredPosition = Vector2.zero;
 		}
 		else
 		{
-			// Point anchors: same X as song, width = song width, bottom on song top
+			// Point anchors: same X as song, width = song width, gap above song top
 			tabRt.anchorMin = songRt.anchorMin;
 			tabRt.anchorMax = songRt.anchorMax;
 			tabRt.pivot = new Vector2(songRt.pivot.x, 0f);
 			Vector2 songPos = songRt.anchoredPosition;
 			Vector2 songSize = songRt.sizeDelta;
-			float topY = songPos.y + songSize.y * (1f - songRt.pivot.y);
+			float topY = songPos.y + songSize.y * (1f - songRt.pivot.y) + TabPanelGap;
 			tabRt.anchoredPosition = new Vector2(songPos.x, topY);
 			tabRt.sizeDelta = new Vector2(songSize.x, TabHeight);
 		}
@@ -850,19 +852,25 @@ public static class StageGuideUI
 		GameObject textGo = new GameObject("Label");
 		textGo.transform.SetParent(go.transform, false);
 		RectTransform tr = textGo.AddComponent<RectTransform>();
+		// Stretch fill; equal insets so Midline centers cleanly in the button
 		tr.anchorMin = Vector2.zero;
 		tr.anchorMax = Vector2.one;
-		tr.offsetMin = new Vector2(2f, 1f);
-		tr.offsetMax = new Vector2(-2f, -1f);
+		tr.pivot = new Vector2(0.5f, 0.5f);
+		tr.offsetMin = new Vector2(4f, 0f);
+		tr.offsetMax = new Vector2(-4f, 0f);
+		tr.anchoredPosition = Vector2.zero;
 		TextMeshProUGUI tmp = textGo.AddComponent<TextMeshProUGUI>();
 		((TMP_Text)tmp).font = font;
 		((TMP_Text)tmp).text = label;
 		((TMP_Text)tmp).fontSize = 16f;
 		((TMP_Text)tmp).fontStyle = (FontStyles)1;
 		((Graphic)tmp).color = Soft;
-		((TMP_Text)tmp).alignment = (TextAlignmentOptions)514; // mid
+		// Midline+Center (4098) — better optical center for single-line UI labels than Middle
+		((TMP_Text)tmp).alignment = (TextAlignmentOptions)4098;
 		((TMP_Text)tmp).enableWordWrapping = false;
 		((TMP_Text)tmp).overflowMode = TextOverflowModes.Ellipsis;
+		((TMP_Text)tmp).margin = Vector4.zero;
+		try { ((TMP_Text)tmp).extraPadding = true; } catch { }
 		((Graphic)tmp).raycastTarget = false;
 		tmpOut = tmp;
 		return img;
