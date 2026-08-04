@@ -137,17 +137,19 @@ public static class GrimoirePatches
 		}
 	}
 
-	// Use positional __2 / __args — named _wType can fail to bind under IL2CPP Harmony
-	public static void CollectionItem_SetData_Postfix(CollectionItemUI __instance, WeaponData __0, CollectionsPage __1, WeaponType __2, bool __3)
+	/// <summary>
+	/// Instance-only postfix — read types from the UI to avoid IL2CPP Harmony arg marshaling crashes.
+	/// </summary>
+	public static void CollectionItem_SetData_Postfix(CollectionItemUI __instance)
 	{
 		try
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 			GameObject go = ((Component)__instance).gameObject;
+			WeaponType wt = __instance.GetWeaponType();
+			if (!GameData.IsRealWeaponType(wt)) return;
 			PrepareIconHitArea(go);
-			ItemTooltipsMod.RegisterWeaponUI(((Object)go).GetInstanceID(), go, __2, isAddMethod: false);
-			RegisterChildGraphicsAsWeapon(go, __2);
-			Plugin.Dbg($"[Collections] SetData weapon={__2}");
+			ItemTooltipsMod.RegisterWeaponUI(((Object)go).GetInstanceID(), go, wt, isAddMethod: false);
 		}
 		catch (Exception ex)
 		{
@@ -155,16 +157,15 @@ public static class GrimoirePatches
 		}
 	}
 
-	public static void CollectionItem_SetItem_Postfix(CollectionItemUI __instance, ItemData __0, CollectionsPage __1, ItemType __2, bool __3)
+	public static void CollectionItem_SetItem_Postfix(CollectionItemUI __instance)
 	{
 		try
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 			GameObject go = ((Component)__instance).gameObject;
+			ItemType it = __instance.GetItemType();
 			PrepareIconHitArea(go);
-			ItemTooltipsMod.RegisterItemUI(((Object)go).GetInstanceID(), go, __2, isAddMethod: false);
-			RegisterChildGraphicsAsItem(go, __2);
-			Plugin.Dbg($"[Collections] SetItem item={__2}");
+			ItemTooltipsMod.RegisterItemUI(((Object)go).GetInstanceID(), go, it, isAddMethod: false);
 		}
 		catch (Exception ex)
 		{
@@ -172,15 +173,15 @@ public static class GrimoirePatches
 		}
 	}
 
-	public static void CollectionItem_SetArcana_Postfix(CollectionItemUI __instance, ArcanaData __0, CollectionsPage __1, ArcanaType __2)
+	public static void CollectionItem_SetArcana_Postfix(CollectionItemUI __instance)
 	{
 		try
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 			GameObject go = ((Component)__instance).gameObject;
+			ArcanaType at = __instance.GetArcanaType();
 			PrepareIconHitArea(go);
-			ItemTooltipsMod.RegisterArcanaUI(((Object)go).GetInstanceID(), go, __2);
-			Plugin.Dbg($"[Collections] SetArcana arcana={__2}");
+			ItemTooltipsMod.RegisterArcanaUI(((Object)go).GetInstanceID(), go, at);
 		}
 		catch (Exception ex)
 		{

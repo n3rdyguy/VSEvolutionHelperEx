@@ -1,34 +1,29 @@
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.UI;
 using VampireSurvivors.Data;
-using VampireSurvivors.Data.Items;
-using VampireSurvivors.Data.Weapons;
 using VampireSurvivors.UI;
 using Object = UnityEngine.Object;
 
 namespace VSItemTooltips;
 
 /// <summary>
-/// Reliable Collections-page tooltips via post-Populate scan (SetData-only registration
-/// can miss pooled / filtered / tab-switched cells). Also surfaces unlock tips for locked entries.
+/// Collections-page tooltips via delayed scan after Populate/Show.
+/// Avoids per-frame FindObjectsOfType&lt;Transform&gt; (that can freeze/crash Unity).
 /// </summary>
 public static class CollectionSelectPatches
 {
 	private static float _lastScan = -999f;
-	private const float ScanCooldown = 0.4f;
+	private const float ScanCooldown = 1.0f;
+	private static bool _scanQueued;
 
 	public static void Apply(Harmony harmony)
 	{
+		// Only safe, high-signal hooks — do NOT patch Sort* (re-entrancy / mid-layout)
 		TryPatch(harmony, typeof(CollectionsPage), "OnShowStart", nameof(Page_Postfix));
-		TryPatch(harmony, typeof(CollectionsPage), "OnShowFinish", nameof(Page_Postfix));
 		TryPatch(harmony, typeof(CollectionsPage), "Populate", nameof(Page_Postfix));
-		// Filter / sort rebuilds the grid without always re-calling every SetData path we expect
-		foreach (string n in new[] { "SortByType", "SortByVersion", "Filter", "Refresh", "ShowWeapons", "ShowItems", "ShowArcanas", "ShowRelics" })
-			TryPatch(harmony, typeof(CollectionsPage), n, nameof(Page_Postfix));
 	}
 
 	private static bool TryPatch(Harmony harmony, Type type, string methodName, string postfix)
@@ -39,12 +34,25 @@ public static class CollectionSelectPatches
 			foreach (var m in type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
 			{
 				if (m.Name != methodName) continue;
+				// Prefer declared on CollectionsPage, not base virtuals
+				if (m.DeclaringType != type && methodName.StartsWith("OnShow", StringComparison.Ordinal))
+					continue;
 				if (best == null || m.GetParameters().Length < best.GetParameters().Length)
 					best = m;
 			}
+			// Fallback: any match
+			if (best == null)
+			{
+				foreach (var m in type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+				{
+					if (m.Name != methodName) continue;
+					if (best == null || m.GetParameters().Length < best.GetParameters().Length)
+						best = m;
+				}
+			}
 			if (best == null) return false;
 			harmony.Patch(best, postfix: new HarmonyMethod(typeof(CollectionSelectPatches), postfix));
-			Plugin.Log.LogInfo($"[Collections] Patched {type.Name}.{best.Name}");
+			Plugin.Log.LogInfo($"[Collections] Patched {type.Name}.{best.Name} (decl={best.DeclaringType?.Name})");
 			return true;
 		}
 		catch (Exception ex)
@@ -54,74 +62,59 @@ public static class CollectionSelectPatches
 		}
 	}
 
-	public static void Page_Postfix() => ItemTooltipsMod.DelayFrames(2, ScanAndRegister);
+	public static void Page_Postfix()
+	{
+		// One delayed scan after UI settles — never scan re-entrantly from Sort
+		if (_scanQueued) return;
+		_scanQueued = true;
+		ItemTooltipsMod.DelayFrames(3, () =>
+		{
+			_scanQueued = false;
+			try { ScanAndRegister(); }
+			catch (Exception ex) { Plugin.Log.LogWarning("[Collections] delayed scan: " + ex.Message); }
+		});
+	}
 
-	/// <summary>Called from Update when Collections view is visible.</summary>
+	/// <summary>Light tick: only re-scan if Collections view is open and we have almost no icons.</summary>
 	public static void Tick()
 	{
 		try
 		{
-			// App UI collections (not in-run pause)
-			GameObject view = GameObject.Find("UI/Canvas - App/Safe Area/View - Collections");
-			if ((Object)(object)view == (Object)null)
-				view = GameObject.Find("UI/Canvas - App/Safe Area/View - Collection");
-			bool open = (Object)(object)view != (Object)null && view.activeInHierarchy;
-			if (!open)
-			{
-				// Secrets is often a sibling page under App canvas
-				GameObject secrets = FindSecretsView();
-				open = (Object)(object)secrets != (Object)null && secrets.activeInHierarchy;
-			}
-			if (!open) return;
+			if (!IsCollectionsOpen()) return;
 			if (Time.unscaledTime - _lastScan < ScanCooldown) return;
-			// Keep registration warm while open (tab switches)
-			if (ItemTooltipsMod.CollectionIconCount < 8)
-				ScanAndRegister();
+			if (ItemTooltipsMod.CollectionIconCount >= 4) return;
+			if (_scanQueued) return;
+			_scanQueued = true;
+			ItemTooltipsMod.DelayFrames(1, () =>
+			{
+				_scanQueued = false;
+				try { ScanAndRegister(); }
+				catch (Exception ex) { Plugin.Log.LogWarning("[Collections] tick scan: " + ex.Message); }
+			});
 		}
-		catch { }
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("[Collections] Tick: " + ex.Message);
+		}
 	}
 
-	private static GameObject FindSecretsView()
+	private static bool IsCollectionsOpen()
 	{
 		foreach (string path in new[]
 		{
-			"UI/Canvas - App/Safe Area/View - Secrets",
-			"UI/Canvas - App/Safe Area/View - Secret",
-			"UI/Canvas - App/Safe Area/View - SecretsPage",
+			"UI/Canvas - App/Safe Area/View - Collections",
+			"UI/Canvas - App/Safe Area/View - Collection",
 		})
 		{
 			try
 			{
 				var go = GameObject.Find(path);
-				if ((Object)(object)go != (Object)null) return go;
+				if ((Object)(object)go != (Object)null && go.activeInHierarchy)
+					return true;
 			}
 			catch { }
 		}
-		// Name contains search among active canvases (cheap-ish)
-		try
-		{
-			// Any active GO with "Secret" in the name under App canvas
-			var all = Object.FindObjectsOfType<Transform>(true);
-			if (all != null)
-			{
-				int len = all.Length;
-				for (int i = 0; i < len; i++)
-				{
-					var t = all[i];
-					if ((Object)(object)t == (Object)null) continue;
-					string n = ((Object)t).name ?? "";
-					if (n.IndexOf("Secret", StringComparison.OrdinalIgnoreCase) < 0) continue;
-					if (n.IndexOf("View", StringComparison.OrdinalIgnoreCase) < 0
-						&& n.IndexOf("Page", StringComparison.OrdinalIgnoreCase) < 0
-						&& n.IndexOf("Panel", StringComparison.OrdinalIgnoreCase) < 0)
-						continue;
-					if (t.gameObject.activeInHierarchy)
-						return t.gameObject;
-				}
-			}
-		}
-		catch { }
-		return null;
+		return false;
 	}
 
 	public static void ScanAndRegister()
@@ -129,11 +122,18 @@ public static class CollectionSelectPatches
 		_lastScan = Time.unscaledTime;
 		try
 		{
+			if (!IsCollectionsOpen())
+				return;
+
 			GameData.EnsureLoaded();
 			ItemTooltipsMod.ClearCollectionUnlockHints();
+
 			CollectionItemUI[] uis = null;
-			try { uis = Object.FindObjectsOfType<CollectionItemUI>(true); }
-			catch { try { uis = Object.FindObjectsOfType<CollectionItemUI>(); } catch { } }
+			try { uis = Object.FindObjectsOfType<CollectionItemUI>(false); } // active only — safer
+			catch
+			{
+				try { uis = Object.FindObjectsOfType<CollectionItemUI>(); } catch { }
+			}
 			if (uis == null || uis.Length == 0)
 			{
 				Plugin.Dbg("[Collections] Scan: 0 CollectionItemUI");
@@ -141,13 +141,24 @@ public static class CollectionSelectPatches
 			}
 
 			int n = 0;
-			foreach (var ui in uis)
+			int len = uis.Length;
+			// Cap work per scan to avoid hitches on huge grids
+			int max = Math.Min(len, 400);
+			for (int i = 0; i < max; i++)
 			{
+				CollectionItemUI ui = uis[i];
 				if ((Object)(object)ui == (Object)null) continue;
-				if (!((Component)ui).gameObject.activeInHierarchy) continue;
-				if (RegisterOne(ui)) n++;
+				try
+				{
+					if (!((Component)ui).gameObject.activeInHierarchy) continue;
+					if (RegisterOne(ui)) n++;
+				}
+				catch (Exception ex)
+				{
+					Plugin.Dbg("[Collections] RegisterOne: " + ex.Message);
+				}
 			}
-			Plugin.Log.LogInfo($"[Collections] Registered {n}/{uis.Length} collection cells for tooltips");
+			Plugin.Log.LogInfo($"[Collections] Registered {n}/{max} collection cells");
 		}
 		catch (Exception ex)
 		{
@@ -157,153 +168,63 @@ public static class CollectionSelectPatches
 
 	private static bool RegisterOne(CollectionItemUI ui)
 	{
-		try
-		{
-			GameObject go = ((Component)ui).gameObject;
-			EnsureRaycast(go);
+		GameObject go = ((Component)ui).gameObject;
+		EnsureRaycast(go);
 
-			// Prefer typed getters on CollectionItemUI
-			if (TryWeapon(ui, go)) return true;
-			if (TryItem(ui, go)) return true;
-			if (TryArcana(ui, go)) return true;
-
-			// Fallback: fields
-			try
-			{
-				WeaponType wt = ui.GetWeaponType();
-				if (GameData.IsRealWeaponType(wt))
-				{
-					ItemTooltipsMod.RegisterWeaponUI(((Object)go).GetInstanceID(), go, wt, false);
-					return true;
-				}
-			}
-			catch { }
-			try
-			{
-				ItemType it = ui.GetItemType();
-				if (Enum.IsDefined(typeof(ItemType), it))
-				{
-					RegisterItemWithUnlockHint(go, it, ui);
-					return true;
-				}
-			}
-			catch { }
-			try
-			{
-				ArcanaType at = ui.GetArcanaType();
-				if (at.ToString() != "VOID" && Enum.IsDefined(typeof(ArcanaType), at))
-				{
-					ItemTooltipsMod.RegisterArcanaUI(((Object)go).GetInstanceID(), go, at);
-					return true;
-				}
-			}
-			catch { }
-
-			return false;
-		}
-		catch (Exception ex)
-		{
-			Plugin.Dbg("[Collections] RegisterOne: " + ex.Message);
-			return false;
-		}
-	}
-
-	private static bool TryWeapon(CollectionItemUI ui, GameObject go)
-	{
-		try
-		{
-			if (!ui.IsWeapon() && !ui.IsPassive()) return false;
-		}
-		catch { /* fall through and try type anyway */ }
+		// Read types via getters only (no heavy child graphic registration here)
 		try
 		{
 			WeaponType wt = ui.GetWeaponType();
-			if (!GameData.IsRealWeaponType(wt)) return false;
-			ItemTooltipsMod.RegisterWeaponUI(((Object)go).GetInstanceID(), go, wt, false);
-			// Also map icon child for easier hit
-			try
+			if (GameData.IsRealWeaponType(wt))
 			{
-				if ((Object)(object)ui.UnlockedIcon != (Object)null)
-				{
-					var ig = ((Component)ui.UnlockedIcon).gameObject;
-					ItemTooltipsMod.RegisterWeaponUI(((Object)ig).GetInstanceID(), ig, wt, false);
-				}
+				ItemTooltipsMod.RegisterWeaponUI(((Object)go).GetInstanceID(), go, wt, false);
+				return true;
 			}
-			catch { }
-			return true;
-		}
-		catch { return false; }
-	}
-
-	private static bool TryItem(CollectionItemUI ui, GameObject go)
-	{
-		try
-		{
-			if (!ui.IsItem() && !ui.IsRelic()) return false;
 		}
 		catch { }
+
 		try
 		{
 			ItemType it = ui.GetItemType();
-			RegisterItemWithUnlockHint(go, it, ui);
-			try
+			// 0 / invalid enum often means "not an item cell"
+			string its = it.ToString();
+			if (!string.IsNullOrEmpty(its) && its != "0" && Enum.IsDefined(typeof(ItemType), it))
 			{
-				if ((Object)(object)ui.UnlockedIcon != (Object)null)
+				ItemTooltipsMod.RegisterItemUI(((Object)go).GetInstanceID(), go, it, false);
+				if (IsVisuallyLocked(ui))
 				{
-					var ig = ((Component)ui.UnlockedIcon).gameObject;
-					RegisterItemWithUnlockHint(ig, it, ui);
+					string name = GameData.GetItemName(it) ?? GameData.HumanizeEnum(its);
+					string hint = GameData.GetItemUnlockHint(it);
+					string body = !string.IsNullOrEmpty(hint)
+						? "Unlock: " + hint
+						: "Locked — keep playing to unlock.";
+					Sprite spr = null;
+					try
+					{
+						if ((Object)(object)ui.LockedIcon != (Object)null)
+							spr = ui.LockedIcon.sprite;
+					}
+					catch { }
+					ItemTooltipsMod.RegisterCollectionUnlockHint(go, name, body, spr ?? GameData.GetItemSprite(it));
 				}
+				return true;
 			}
-			catch { }
-			return true;
-		}
-		catch { return false; }
-	}
-
-	private static bool TryArcana(CollectionItemUI ui, GameObject go)
-	{
-		try
-		{
-			if (!ui.IsArcana()) return false;
 		}
 		catch { }
+
 		try
 		{
 			ArcanaType at = ui.GetArcanaType();
-			ItemTooltipsMod.RegisterArcanaUI(((Object)go).GetInstanceID(), go, at);
-			return true;
-		}
-		catch { return false; }
-	}
-
-	/// <summary>
-	/// Items/relics: normal item tooltip registration. Unlock hints are folded into description
-	/// lookup via GameData when achievement tips exist (see GetItemUnlockHint).
-	/// </summary>
-	private static void RegisterItemWithUnlockHint(GameObject go, ItemType it, CollectionItemUI ui)
-	{
-		ItemTooltipsMod.RegisterItemUI(((Object)go).GetInstanceID(), go, it, false);
-		// If locked, also register as simple map-style so we can show unlock tip even when
-		// full item tooltip would be empty/hidden
-		bool locked = IsVisuallyLocked(ui);
-		if (locked)
-		{
-			string name = GameData.GetItemName(it) ?? GameData.HumanizeEnum(it.ToString());
-			string hint = GameData.GetItemUnlockHint(it);
-			string body = !string.IsNullOrEmpty(hint)
-				? "Unlock: " + hint
-				: "Locked — keep playing to unlock.";
-			Sprite spr = null;
-			try
+			string ats = at.ToString();
+			if (!string.IsNullOrEmpty(ats) && ats != "VOID" && ats != "0" && Enum.IsDefined(typeof(ArcanaType), at))
 			{
-				if ((Object)(object)ui.LockedIcon != (Object)null)
-					spr = ui.LockedIcon.sprite;
-				if ((Object)(object)spr == (Object)null && (Object)(object)ui.UnlockedIcon != (Object)null)
-					spr = ui.UnlockedIcon.sprite;
+				ItemTooltipsMod.RegisterArcanaUI(((Object)go).GetInstanceID(), go, at);
+				return true;
 			}
-			catch { }
-			ItemTooltipsMod.RegisterCollectionUnlockHint(go, name, body, spr ?? GameData.GetItemSprite(it));
 		}
+		catch { }
+
+		return false;
 	}
 
 	private static bool IsVisuallyLocked(CollectionItemUI ui)
@@ -312,13 +233,6 @@ public static class CollectionSelectPatches
 		{
 			var locked = ui.LockedIcon;
 			if ((Object)(object)locked != (Object)null && ((Component)locked).gameObject.activeInHierarchy)
-				return true;
-		}
-		catch { }
-		try
-		{
-			var unlocked = ui.UnlockedIcon;
-			if ((Object)(object)unlocked != (Object)null && !((Component)unlocked).gameObject.activeInHierarchy)
 				return true;
 		}
 		catch { }
@@ -331,17 +245,17 @@ public static class CollectionSelectPatches
 		{
 			var g = go.GetComponent<Graphic>();
 			if ((Object)(object)g != (Object)null)
-				g.raycastTarget = true;
-			else
 			{
-				var img = go.GetComponent<Image>();
-				if ((Object)(object)img == (Object)null)
-				{
-					img = go.AddComponent<Image>();
-					img.color = new Color(1f, 1f, 1f, 0.01f);
-				}
-				((Graphic)img).raycastTarget = true;
+				g.raycastTarget = true;
+				return;
 			}
+			var img = go.GetComponent<Image>();
+			if ((Object)(object)img == (Object)null)
+			{
+				img = go.AddComponent<Image>();
+				img.color = new Color(1f, 1f, 1f, 0.01f);
+			}
+			((Graphic)img).raycastTarget = true;
 		}
 		catch { }
 	}
