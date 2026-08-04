@@ -3988,12 +3988,21 @@ public class ItemTooltipsMod
 				else
 					text2 = "";
 			}
-			// Collections only: extra flavor line for this relic
+			// Collections only: official blurb, then a short flavor line
 			if (_collectionMenuTooltipContext && itemType.Value == ItemType.RELIC_YELLOW)
 			{
-				text2 = "The Sign is patient. "
-					+ "A small door opens in your sense of safety. "
-					+ "Nothing bad has ever come from obeying a pink occult square. Probably.";
+				string official = text2;
+				if (string.IsNullOrEmpty(official) || GameData.LooksLikeLocKey(official))
+				{
+					// Re-resolve official I2 line even if we cleared it earlier
+					string d = GameData.GetItemDescription(itemType.Value);
+					if (!string.IsNullOrEmpty(d) && !GameData.LooksLikeLocKey(d))
+						official = d;
+					else
+						official = "";
+				}
+				const string wink = "Some hungers are counted in sevens.";
+				text2 = string.IsNullOrEmpty(official) ? wink : (official.TrimEnd() + "\n\n" + wink);
 			}
 		}
 		// Never paint raw I2 paths as title
