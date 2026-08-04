@@ -3,6 +3,8 @@ using HarmonyLib;
 using UnityEngine;
 using UnityEngine.UI;
 using VampireSurvivors.Data;
+using VampireSurvivors.Data.Items;
+using VampireSurvivors.Data.Weapons;
 using VampireSurvivors.UI;
 using Object = UnityEngine.Object;
 
@@ -135,15 +137,17 @@ public static class GrimoirePatches
 		}
 	}
 
-	public static void CollectionItem_SetData_Postfix(CollectionItemUI __instance, WeaponType _wType)
+	// Use positional __2 / __args — named _wType can fail to bind under IL2CPP Harmony
+	public static void CollectionItem_SetData_Postfix(CollectionItemUI __instance, WeaponData __0, CollectionsPage __1, WeaponType __2, bool __3)
 	{
 		try
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 			GameObject go = ((Component)__instance).gameObject;
 			PrepareIconHitArea(go);
-			ItemTooltipsMod.RegisterWeaponUI(((Object)go).GetInstanceID(), go, _wType, isAddMethod: false);
-			RegisterChildGraphicsAsWeapon(go, _wType);
+			ItemTooltipsMod.RegisterWeaponUI(((Object)go).GetInstanceID(), go, __2, isAddMethod: false);
+			RegisterChildGraphicsAsWeapon(go, __2);
+			Plugin.Dbg($"[Collections] SetData weapon={__2}");
 		}
 		catch (Exception ex)
 		{
@@ -151,15 +155,16 @@ public static class GrimoirePatches
 		}
 	}
 
-	public static void CollectionItem_SetItem_Postfix(CollectionItemUI __instance, ItemType _item)
+	public static void CollectionItem_SetItem_Postfix(CollectionItemUI __instance, ItemData __0, CollectionsPage __1, ItemType __2, bool __3)
 	{
 		try
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 			GameObject go = ((Component)__instance).gameObject;
 			PrepareIconHitArea(go);
-			ItemTooltipsMod.RegisterItemUI(((Object)go).GetInstanceID(), go, _item, isAddMethod: false);
-			RegisterChildGraphicsAsItem(go, _item);
+			ItemTooltipsMod.RegisterItemUI(((Object)go).GetInstanceID(), go, __2, isAddMethod: false);
+			RegisterChildGraphicsAsItem(go, __2);
+			Plugin.Dbg($"[Collections] SetItem item={__2}");
 		}
 		catch (Exception ex)
 		{
@@ -167,14 +172,15 @@ public static class GrimoirePatches
 		}
 	}
 
-	public static void CollectionItem_SetArcana_Postfix(CollectionItemUI __instance, ArcanaType type)
+	public static void CollectionItem_SetArcana_Postfix(CollectionItemUI __instance, ArcanaData __0, CollectionsPage __1, ArcanaType __2)
 	{
 		try
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 			GameObject go = ((Component)__instance).gameObject;
 			PrepareIconHitArea(go);
-			ItemTooltipsMod.RegisterArcanaUI(((Object)go).GetInstanceID(), go, type);
+			ItemTooltipsMod.RegisterArcanaUI(((Object)go).GetInstanceID(), go, __2);
+			Plugin.Dbg($"[Collections] SetArcana arcana={__2}");
 		}
 		catch (Exception ex)
 		{

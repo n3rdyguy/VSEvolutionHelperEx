@@ -1394,6 +1394,29 @@ public static class GameData
         return desc;
     }
 
+    /// <summary>
+    /// How to unlock this item/relic (achievement tip). Used for locked Collection cells.
+    /// </summary>
+    public static string GetItemUnlockHint(ItemType type)
+    {
+        EnsureLoaded();
+        var data = GetItemData(type);
+        if (data == null) return null;
+        try
+        {
+            string t = LocalizeDisplayText(data.GetLocalizedAchievementTips(type));
+            if (!string.IsNullOrEmpty(t)) return t;
+        }
+        catch { }
+        try
+        {
+            string t = LocalizeDisplayText(data.achievementTips);
+            if (!string.IsNullOrEmpty(t)) return t;
+        }
+        catch { }
+        return null;
+    }
+
     public static Sprite GetItemSprite(ItemType type)
     {
         EnsureLoaded();

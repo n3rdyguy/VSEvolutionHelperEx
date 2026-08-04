@@ -378,6 +378,9 @@ public class ItemTooltipsMod
 				GrimoirePatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("Grimoire patches: " + ex.Message); }
 			try {
+				CollectionSelectPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("Collection scan patches: " + ex.Message); }
+			try {
 				MapPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("Map patches: " + ex.Message); }
 			try {
@@ -839,6 +842,10 @@ public class ItemTooltipsMod
 		{
 			ClearCharacterIcons();
 		}
+		// Collections / Secrets (main menu): keep grid icons registered
+		CollectionSelectPatches.Tick();
+		if (collectionUnlockIcons.Count > 0)
+			UpdateCollectionUnlockHover();
 		// Adventures select tooltips
 		if (Plugin.AdventureTooltipsEnabled)
 		{
@@ -6454,6 +6461,83 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		popupAnchorIds.RemoveAt(popupAnchorIds.Count - 1);
 	}
 
+	private static void UpdateCollectionUnlockHover()
+	{
+		// Same hit style as stage relics / simple map popups
+		List<int> dead = null;
+		foreach (var kv in collectionUnlockIcons)
+		{
+			if ((Object)(object)kv.Value.Go == (Object)null)
+			{
+				dead ??= new List<int>();
+				dead.Add(kv.Key);
+			}
+		}
+		if (dead != null)
+			foreach (int k in dead) collectionUnlockIcons.Remove(k);
+
+		Vector2 mouse = (Vector2)Input.mousePosition;
+		int hitId = -1;
+		MapIconInfo hitInfo = default;
+		float bestScore = float.MaxValue;
+		foreach (var kv in collectionUnlockIcons)
+		{
+			GameObject go = kv.Value.Go;
+			if ((Object)(object)go == (Object)null || !go.activeInHierarchy) continue;
+			RectTransform rt = go.GetComponent<RectTransform>();
+			if ((Object)(object)rt == (Object)null) continue;
+			if (!ScreenPointHitsUi(rt, mouse, 8f, out float area, out float distSq)) continue;
+			float score = Mathf.Sqrt(distSq) + area / 50000f;
+			if (score < bestScore)
+			{
+				bestScore = score;
+				hitId = kv.Key;
+				hitInfo = kv.Value;
+			}
+		}
+		if (hitId != -1 && hitId != currentCollectionUnlockHoverId)
+		{
+			if (hitId != pendingCollectionUnlockHoverId)
+			{
+				pendingCollectionUnlockHoverId = hitId;
+				collectionUnlockHoverStartTime = Time.unscaledTime;
+				return;
+			}
+			if (Time.unscaledTime - collectionUnlockHoverStartTime >= Plugin.TooltipHoverDelay)
+			{
+				currentCollectionUnlockHoverId = hitId;
+				pendingCollectionUnlockHoverId = -1;
+				if ((Object)(object)collectionUnlockPopup != (Object)null)
+					Object.Destroy((Object)(object)collectionUnlockPopup);
+				Transform parent = FindPopupParent(hitInfo.Go != null ? hitInfo.Go.transform : null);
+				if ((Object)(object)parent == (Object)null) return;
+				collectionUnlockPopup = CreateSimpleMapPopup(parent, hitInfo.Label, hitInfo.Description, hitInfo.Sprite);
+				if ((Object)(object)collectionUnlockPopup != (Object)null && (Object)(object)hitInfo.Go != (Object)null)
+				{
+					DisablePopupRaycasts(collectionUnlockPopup);
+					PositionPopup(collectionUnlockPopup, hitInfo.Go.transform);
+				}
+			}
+		}
+		else if (hitId == currentCollectionUnlockHoverId)
+		{
+			pendingCollectionUnlockHoverId = -1;
+		}
+		else
+		{
+			pendingCollectionUnlockHoverId = -1;
+			if (currentCollectionUnlockHoverId != -1)
+			{
+				currentCollectionUnlockHoverId = -1;
+				if ((Object)(object)collectionUnlockPopup != (Object)null)
+				{
+					Object.Destroy((Object)(object)collectionUnlockPopup);
+					collectionUnlockPopup = null;
+				}
+			}
+		}
+	}
+
 	private static void UpdateCollectionHover()
 	{
 		List<int> list = new List<int>();
@@ -6852,6 +6936,45 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		else
 		{
 			AddHoverToGameObject(go, null, type);
+		}
+	}
+
+	/// <summary>How many App-UI collection icons are currently registered (for scan warm-up).</summary>
+	public static int CollectionIconCount => collectionIcons.Count;
+
+	private static readonly Dictionary<int, MapIconInfo> collectionUnlockIcons = new Dictionary<int, MapIconInfo>();
+	private static int currentCollectionUnlockHoverId = -1;
+	private static int pendingCollectionUnlockHoverId = -1;
+	private static float collectionUnlockHoverStartTime;
+	private static GameObject collectionUnlockPopup;
+
+	/// <summary>
+	/// Locked collection cell: simple name + unlock hint popup (no full evo tree).
+	/// </summary>
+	public static void RegisterCollectionUnlockHint(GameObject go, string label, string unlockBody, Sprite sprite)
+	{
+		if ((Object)(object)go == (Object)null) return;
+		int id = ((Object)go).GetInstanceID();
+		collectionUnlockIcons[id] = new MapIconInfo
+		{
+			Go = go,
+			Item = null,
+			Weapon = null,
+			Label = label ?? "Locked",
+			Description = unlockBody ?? "",
+			Sprite = sprite
+		};
+	}
+
+	public static void ClearCollectionUnlockHints()
+	{
+		collectionUnlockIcons.Clear();
+		currentCollectionUnlockHoverId = -1;
+		pendingCollectionUnlockHoverId = -1;
+		if ((Object)(object)collectionUnlockPopup != (Object)null)
+		{
+			Object.Destroy((Object)(object)collectionUnlockPopup);
+			collectionUnlockPopup = null;
 		}
 	}
 

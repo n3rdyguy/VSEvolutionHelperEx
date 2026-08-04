@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.10.11] — polish (unreleased tag)
+
+### Fixed / Added
+- **Collections tab:** rescan all `CollectionItemUI` on page open/filter; fixed IL2CPP SetData parameter binding; locked cells show **Unlock:** tips from game achievement text.
+- Phase 0 playtest: level-up, pause, merchant confirmed working (1.15.113).
 All notable changes to this BepInEx port are listed here.
 
 ## [1.10.10] — 2026-08-04
