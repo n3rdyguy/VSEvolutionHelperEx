@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.9.5] — 2026-08-04
+
+### Fixed
+- Character tooltip sits **to the right** of the card (flips left if no room) and **does not capture mouse**, so you can still click to select.
+
 ## [1.9.4] — 2026-08-04
 
 ### Fixed

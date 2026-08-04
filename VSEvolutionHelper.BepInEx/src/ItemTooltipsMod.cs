@@ -7161,10 +7161,104 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 					rt.sizeDelta = new Vector2(360f, rt.sizeDelta.y);
 			}
 			catch { }
+			// Never steal clicks from the character grid
+			DisablePopupRaycasts(characterPopup);
 			if ((Object)(object)info.Go != (Object)null)
-				PositionPopup(characterPopup, info.Go.transform);
+				PositionCharacterPopupToRight(characterPopup, info.Go.transform);
 		}
 		Plugin.Dbg($"Character popup label={label} descLen={(desc != null ? desc.Length : 0)}");
+	}
+
+	/// <summary>Place tooltip just to the right of the character card (top-aligned).</summary>
+	private static void PositionCharacterPopupToRight(GameObject popup, Transform anchor)
+	{
+		try
+		{
+			RectTransform popupRt = popup.GetComponent<RectTransform>();
+			if ((Object)(object)popupRt == (Object)null || (Object)(object)anchor == (Object)null)
+				return;
+			Transform parent = popup.transform.parent;
+			if ((Object)(object)parent == (Object)null) return;
+
+			RectTransform anchorRt = anchor as RectTransform;
+			if ((Object)(object)anchorRt == (Object)null)
+				anchorRt = anchor.GetComponent<RectTransform>();
+
+			const float gap = 14f;
+			Vector3 worldAnchor;
+			if ((Object)(object)anchorRt != (Object)null)
+			{
+				// World corners: 0=BL, 1=TL, 2=TR, 3=BR
+				Vector3[] corners = new Vector3[4];
+				anchorRt.GetWorldCorners(corners);
+				// Just outside the right edge, aligned to top of card
+				worldAnchor = corners[2] + new Vector3(gap, 0f, 0f);
+			}
+			else
+			{
+				worldAnchor = anchor.position + new Vector3(gap * 0.02f, 0f, 0f);
+			}
+
+			Vector3 local = parent.InverseTransformPoint(worldAnchor);
+			RectTransform parentRt = parent.GetComponent<RectTransform>();
+			if ((Object)(object)parentRt != (Object)null)
+			{
+				Rect rect = parentRt.rect;
+				Vector2 center = rect.center;
+				local.x -= center.x;
+				local.y -= center.y;
+
+				// Pivot is top-left (0,1) — keep on screen
+				float pw = popupRt.sizeDelta.x;
+				float ph = popupRt.sizeDelta.y;
+				float halfW = rect.width * 0.5f;
+				float halfH = rect.height * 0.5f;
+				// If not enough room on the right, flip to the left of the card
+				if (local.x + pw > halfW - 8f && (Object)(object)anchorRt != (Object)null)
+				{
+					Vector3[] corners = new Vector3[4];
+					anchorRt.GetWorldCorners(corners);
+					// Left of card: top-left corner minus popup width
+					Vector3 leftWorld = corners[1] - new Vector3(gap, 0f, 0f);
+					Vector3 leftLocal = parent.InverseTransformPoint(leftWorld);
+					leftLocal.x -= center.x;
+					leftLocal.y -= center.y;
+					local.x = leftLocal.x - pw;
+					local.y = leftLocal.y;
+				}
+				if (local.x + pw > halfW - 4f)
+					local.x = halfW - pw - 4f;
+				if (local.x < -halfW + 4f)
+					local.x = -halfW + 4f;
+				if (local.y > halfH - 4f)
+					local.y = halfH - 4f;
+				if (local.y - ph < -halfH + 4f)
+					local.y = -halfH + 4f + ph;
+			}
+
+			// Pivot top-left: position is top-left corner of popup
+			popupRt.pivot = new Vector2(0f, 1f);
+			popupRt.anchoredPosition = new Vector2(local.x, local.y);
+		}
+		catch (Exception ex)
+		{
+			Plugin.Dbg("[Character] PositionCharacterPopupToRight: " + ex.Message);
+			try { PositionPopup(popup, anchor); } catch { }
+		}
+	}
+
+	private static void DisablePopupRaycasts(GameObject popup)
+	{
+		if ((Object)(object)popup == (Object)null) return;
+		try
+		{
+			foreach (var g in popup.GetComponentsInChildren<Graphic>(true))
+			{
+				if ((Object)(object)g != (Object)null)
+					((Graphic)g).raycastTarget = false;
+			}
+		}
+		catch { }
 	}
 
 	private static void HideCharacterPopup()
@@ -7457,7 +7551,9 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		val2.pivot = new Vector2(0f, 1f);
 		Image bg = val.AddComponent<Image>();
 		((Graphic)bg).color = PopupBgColor;
-		((Graphic)bg).raycastTarget = true;
+		// Default false so menu tooltips (character select) never block clicks;
+		// map/stage can re-enable if they need hover-on-tooltip later.
+		((Graphic)bg).raycastTarget = false;
 		Outline outline = val.AddComponent<Outline>();
 		((Shadow)outline).effectColor = new Color(0.9f, 0.75f, 0.3f, 1f);
 		((Shadow)outline).effectDistance = new Vector2(2f, 2f);
