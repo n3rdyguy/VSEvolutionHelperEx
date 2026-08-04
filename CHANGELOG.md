@@ -2,6 +2,14 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.8.0] — 2026-08-04
+
+### Added
+- **Config surface** (`com.nihil.vsevolutionhelper.cfg`): hover delays, map/stage-guide/level-up feature toggles, default Guide tab option.
+
+### Fixed (also 1.7.1–1.7.3)
+- Level Up no longer shows an unsolicited tooltip on open; requires mouse move + short icon hover.
+
 ## [1.7.2] — 2026-08-04
 
 ### Fixed

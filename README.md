@@ -1,6 +1,6 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.7.0** — Interactive evolution, arcana, grimoire, map, and stage-select tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.8.0** — Interactive evolution, arcana, grimoire, map, and stage-select tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
@@ -49,7 +49,7 @@ Please support the original authors. This port reuses their design with typed Il
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.7.0]
+Loading [VS Evolution Helper 1.8.0]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete
@@ -72,9 +72,18 @@ File (created on first run):
 
 `BepInEx/config/com.nihil.vsevolutionhelper.cfg`
 
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `Debug.VerboseLogging` | **false** | Extra `[DBG]` lines in the BepInEx console |
+| Section | Key | Default | Meaning |
+|---------|-----|---------|---------|
+| Debug | `VerboseLogging` | **false** | Extra `[DBG]` lines in the console |
+| Tooltips | `HoverDelay` | **0.4** | Seconds before collection / map / stage-relic tooltips |
+| Tooltips | `LevelUpHoverDelay` | **0.15** | Hold time on Level Up icons (after you move the mouse) |
+| Tooltips | `ControllerDwellDelay` | **0.5** | Controller focus dwell before tooltip |
+| Features | `MapTooltips` | **true** | Pause-map hover tooltips |
+| Features | `StageGuide` | **true** | Music \| Guide tabs on stage select |
+| Features | `StageGuideDefaultToGuide` | **false** | Open Guide tab first instead of Music |
+| Features | `LevelUpTooltips` | **true** | Evolution tooltips on Level Up choices |
+
+Edit the cfg and restart the game (or re-enter menus) for changes to apply on next load.
 
 ## In-game use
 

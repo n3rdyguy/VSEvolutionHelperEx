@@ -195,7 +195,7 @@ public class ItemTooltipsMod
 
 	private static float dwellStartTime = 0f;
 
-	private static readonly float DwellDelay = 0.5f;
+	private static float DwellDelay => Plugin.ControllerDwellDelay;
 
 	private static GameObject dwellTarget = null;
 
@@ -210,8 +210,8 @@ public class ItemTooltipsMod
 	private static WeaponType? levelUpPendingWeapon = null;
 	private static ItemType? levelUpPendingItem = null;
 	private static float levelUpPendingSince = -1f;
-	// Short settle delay only — main guard is "mouse must move after Level Up opens"
-	private const float LevelUpHoverDelay = 0.15f;
+	// Short settle delay — main guard is "mouse must move after Level Up opens" (config: Tooltips.LevelUpHoverDelay)
+	private static float LevelUpHoverDelay => Plugin.LevelUpHoverDelay;
 
 	private static bool interactiveMode = false;
 
@@ -299,7 +299,7 @@ public class ItemTooltipsMod
 
 	private static float collectionHoverStartTime = 0f;
 
-	private static readonly float CollectionHoverDelay = 1f;
+	private static float CollectionHoverDelay => Plugin.TooltipHoverDelay;
 
 	private static int pendingCollectionHoverId = -1;
 
@@ -779,13 +779,17 @@ public class ItemTooltipsMod
 		}
 		wasGamePaused = flag;
 		// Map tooltips while paused (map is a pause-UI overlay)
-		if (flag && mapIcons.Count > 0)
+		if (Plugin.MapTooltipsEnabled && flag && mapIcons.Count > 0)
 		{
 			UpdateMapHover();
 		}
 		else if (!flag && mapIcons.Count > 0)
 		{
 			// Map closed with unpause
+			HideMapPopup();
+		}
+		else if (!Plugin.MapTooltipsEnabled && mapIcons.Count > 0)
+		{
 			HideMapPopup();
 		}
 		// Stage Selection relic icons (main menu / pre-run)
@@ -2609,6 +2613,8 @@ public class ItemTooltipsMod
 	/// <summary>Level Up only: queue hover for delayed show (called from EventTrigger).</summary>
 	private static void RequestLevelUpHover(Transform anchor, WeaponType? weaponType, ItemType? itemType)
 	{
+		if (!Plugin.LevelUpTooltipsEnabled)
+			return;
 		if (!IsLevelUpViewActive())
 		{
 			ShowItemPopup(anchor, weaponType, itemType);
@@ -6869,6 +6875,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 	public static void RegisterMapIcon(GameObject go, ItemType? item, WeaponType? weapon, string label, string description, Sprite sprite)
 	{
+		if (!Plugin.MapTooltipsEnabled) return;
 		if ((Object)(object)go == (Object)null) return;
 		int id = ((Object)go).GetInstanceID();
 		mapIcons[id] = new MapIconInfo

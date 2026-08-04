@@ -78,6 +78,8 @@ public static class MapPatches
 	{
 		try
 		{
+			if (!Plugin.MapTooltipsEnabled)
+				return;
 			if ((Object)(object)__result == (Object)null)
 				return;
 

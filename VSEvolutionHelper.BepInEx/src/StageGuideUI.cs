@@ -21,6 +21,7 @@ public static class StageGuideUI
 	private enum Tab { Music, Guide }
 
 	private static Tab _tab = Tab.Music;
+	private static bool _tabInitialized;
 	private static GameObject _tabBar;
 	private static GameObject _guideRoot;
 	private static GameObject _guideViewport;
@@ -46,6 +47,11 @@ public static class StageGuideUI
 	{
 		try
 		{
+			if (!Plugin.StageGuideEnabled)
+			{
+				Hide();
+				return;
+			}
 			if ((Object)(object)page == (Object)null || stage == null)
 				return;
 			_stage = stage;
@@ -53,6 +59,11 @@ public static class StageGuideUI
 			_stageItem = item;
 			if (!EnsureChrome(page))
 				return;
+			if (!_tabInitialized)
+			{
+				_tab = Plugin.StageGuideDefaultToGuide ? Tab.Guide : Tab.Music;
+				_tabInitialized = true;
+			}
 			RebuildGuideContent();
 			ApplyTabVisibility();
 			Plugin.Dbg($"StageGuide: stage={type} tab={_tab}");
@@ -90,6 +101,7 @@ public static class StageGuideUI
 		_stage = null;
 		_stageItem = null;
 		_tab = Tab.Music;
+		_tabInitialized = false;
 	}
 
 	private static bool EnsureChrome(StageSelectPage page)
