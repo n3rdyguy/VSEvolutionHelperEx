@@ -6792,6 +6792,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		{
 			TryCacheDataManagerStatic();
 		}
+		try
+		{
 		_collectionMenuTooltipContext = true;
 
 		// Parent under the same canvas as the hovered cell (or Collections view / App Safe Area)
@@ -6868,7 +6870,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		// Keep clickable — user moves to the right panel to click formula icons
 		EnableCollectionPanelInteraction(collectionPopup);
 		try { collectionPopup.SetActive(true); } catch { }
-		_collectionMenuTooltipContext = false;
+		}
+		finally
+		{
+			_collectionMenuTooltipContext = false;
+		}
 	}
 
 	/// <summary>
