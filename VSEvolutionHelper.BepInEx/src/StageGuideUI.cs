@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.UI;
+using VampireSurvivors.App.Objects;
 using VampireSurvivors.Data;
 using VampireSurvivors.Data.Stage;
 using VampireSurvivors.UI;
@@ -403,7 +404,7 @@ public static class StageGuideUI
 		string name = SafeLoc(() => _stage.GetLocalizedName(_stageType), _stage.stageName);
 		y = AddHeader(_guideScrollContent.transform, font, name, Gold, 18f, width, y);
 
-		// Progression
+		// Progression + modifier summary
 		string hyper = "?";
 		try
 		{
@@ -411,8 +412,23 @@ public static class StageGuideUI
 				hyper = _stageItem.HasHyperUnlocked() ? "Yes" : "No";
 		}
 		catch { }
+		var progLines = new List<string> { $"Hyper unlocked: {hyper}" };
+		try
+		{
+			int minutes = _stage.minute;
+			if (minutes > 0)
+				progLines.Add($"Stage length: {minutes} min" + (_stage.randomMinutes ? " (random)" : ""));
+		}
+		catch { }
+		string modSummary = FormatStageMods("Normal", SafeStageMods(() => _stage.mods));
+		if (!string.IsNullOrEmpty(modSummary)) progLines.Add(modSummary);
+		string hyperMods = FormatStageMods("Hyper", SafeStageMods(() => _stage.hyper));
+		if (!string.IsNullOrEmpty(hyperMods)) progLines.Add(hyperMods);
+		string invMods = FormatStageMods("Inverse", SafeStageMods(() => _stage.inverse));
+		if (!string.IsNullOrEmpty(invMods)) progLines.Add(invMods);
+
 		y = AddHeader(_guideScrollContent.transform, font, "Progression", Gold, 14f, width, y + 4f);
-		y = AddBody(_guideScrollContent.transform, font, $"Hyper unlocked: {hyper}", Muted, 12f, width, y, 2f);
+		y = AddBody(_guideScrollContent.transform, font, string.Join("\n", progLines), Muted, 12f, width, y, 2f);
 
 		// Relics / unlocks — omit entire section when empty (quieter for stages like LABORRATORY)
 		var relics = CollectRelics(_stage);
@@ -517,6 +533,52 @@ public static class StageGuideUI
 		try { add(stage.relics2); } catch { }
 		try { add(stage.yellowRelics); } catch { }
 		return list;
+	}
+
+	private static StageModifiers SafeStageMods(Func<StageModifiers> getter)
+	{
+		try { return getter(); } catch { return null; }
+	}
+
+	/// <summary>One-line summary of notable StageModifiers (skips empty / default).</summary>
+	private static string FormatStageMods(string label, StageModifiers mods)
+	{
+		if (mods == null) return null;
+		var parts = new List<string>();
+		void add(string name, Il2CppSystem.Nullable<float> n)
+		{
+			try
+			{
+				if (n != null && n.HasValue)
+				{
+					float v = n.Value;
+					if (Mathf.Abs(v) < 0.001f) return;
+					parts.Add($"{name}×{v:0.##}");
+				}
+			}
+			catch { }
+		}
+		try
+		{
+			add("HP", mods.EnemyHealthMultiplier);
+			add("Gold", mods.GoldMultiplier);
+			add("EnemySpd", mods.EnemySpeed);
+			add("PlayerSpd", mods.PlayerPxSpeed);
+			add("XP", mods.XpBonus);
+			add("Luck", mods.LuckBonus);
+			add("Proj", mods.ProjectileSpeed);
+			add("Clock", mods.ClockSpeed);
+			try
+			{
+				var tl = mods.TimeLimit;
+				if (tl != null && tl.HasValue && tl.Value > 0f)
+					parts.Add($"TimeLimit {tl.Value:0.#}m");
+			}
+			catch { }
+		}
+		catch { return null; }
+		if (parts.Count == 0) return null;
+		return $"{label}: {string.Join(", ", parts)}";
 	}
 
 	private static float ResolveContentWidth()

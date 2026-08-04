@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string PluginGuid = "com.nihil.vsevolutionhelper";
     public const string PluginName = "VS Evolution Helper";
-    public const string PluginVersion = "1.8.1";
+    public const string PluginVersion = "1.9.0";
 
     internal static new ManualLogSource Log;
     internal static Plugin Instance;
@@ -27,6 +27,7 @@ public class Plugin : BasePlugin
     internal static bool StageGuideEnabled;
     internal static bool StageGuideDefaultToGuide;
     internal static bool LevelUpTooltipsEnabled;
+    internal static bool CharacterTooltipsEnabled;
 
     private ConfigEntry<bool> _debugVerbose;
     private ConfigEntry<float> _tooltipHoverDelay;
@@ -36,6 +37,7 @@ public class Plugin : BasePlugin
     private ConfigEntry<bool> _stageGuideEnabled;
     private ConfigEntry<bool> _stageGuideDefaultToGuide;
     private ConfigEntry<bool> _levelUpTooltipsEnabled;
+    private ConfigEntry<bool> _characterTooltipsEnabled;
 
     public override void Load()
     {
@@ -90,11 +92,17 @@ public class Plugin : BasePlugin
             true,
             "Show evolution tooltips when hovering Level Up choice icons.");
 
+        _characterTooltipsEnabled = Config.Bind(
+            "Features",
+            "CharacterTooltips",
+            true,
+            "Show starter weapon / evolution tooltips when hovering characters on Character Selection.");
+
         ApplyConfigValues();
 
         Log.LogInfo($"{PluginName} {PluginVersion} loading (BepInEx port)...");
         Log.LogInfo($"Debug.VerboseLogging={DebugVerbose} Tooltips.HoverDelay={TooltipHoverDelay:0.##}s LevelUpHoverDelay={LevelUpHoverDelay:0.##}s");
-        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled}");
+        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled} Character={CharacterTooltipsEnabled}");
 
         ClassInjector.RegisterTypeInIl2Cpp<PluginBehaviour>();
         _behaviour = AddComponent<PluginBehaviour>();
@@ -113,6 +121,7 @@ public class Plugin : BasePlugin
         StageGuideEnabled = _stageGuideEnabled.Value;
         StageGuideDefaultToGuide = _stageGuideDefaultToGuide.Value;
         LevelUpTooltipsEnabled = _levelUpTooltipsEnabled.Value;
+        CharacterTooltipsEnabled = _characterTooltipsEnabled.Value;
     }
 
     internal static void Dbg(string message)

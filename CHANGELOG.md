@@ -2,6 +2,12 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.9.0] — 2026-08-04
+
+### Added
+- **Character Selection tooltips:** hover a character for flavor text, starting weapon, evolution path(s), and notable stats. Config: `Features.CharacterTooltips` (default true).
+- **Stage Guide progression:** stage length minutes; Normal / Hyper / Inverse modifier summary (HP, gold, speeds, etc. when present in data).
+
 ## [1.8.1] — 2026-08-04
 
 ### Added

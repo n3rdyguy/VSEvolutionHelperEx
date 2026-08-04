@@ -24,8 +24,10 @@ Run before tagging or uploading a Nexus zip. Game build under test: **VS 1.15.x*
 - [ ] Stage selection: left **Relics in stage** icon tooltips
 - [ ] Stage selection: **Music \| Guide** tabs switch without breaking music
 - [ ] Guide: tips wrap; long relic names wrap; long content scrolls if needed
+- [ ] Guide **Progression:** shows stage length and/or Normal/Hyper mod summary when data exists
 - [ ] Stages with **no** relics: no empty “Unlocks” clutter (or quiet empty state)
 - [ ] **Controller:** LB/RB (or Q/E) switch Music|Guide; Guide scrolls with stick; relic icons dwell-show tooltip
+- [ ] **Character selection:** hover a character → starter weapon + evolution line(s); leave hides tooltip
 
 ## Regression
 

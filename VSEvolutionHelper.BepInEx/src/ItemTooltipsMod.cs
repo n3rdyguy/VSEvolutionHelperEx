@@ -183,6 +183,13 @@ public class ItemTooltipsMod
 	private static float stageRelicHoverStartTime = 0f;
 	private static GameObject stageRelicPopup = null;
 
+	/// <summary>Character Selection card hover tooltips.</summary>
+	private static Dictionary<int, MapIconInfo> characterIcons = new Dictionary<int, MapIconInfo>();
+	private static int currentCharacterHoverId = -1;
+	private static int pendingCharacterHoverId = -1;
+	private static float characterHoverStartTime = 0f;
+	private static GameObject characterPopup = null;
+
 	private static int currentCollectionHoverId = -1;
 
 	private static GameObject collectionPopup = null;
@@ -367,6 +374,9 @@ public class ItemTooltipsMod
 			try {
 				StageSelectPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("StageSelect patches: " + ex.Message); }
+			try {
+				CharacterSelectPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("CharacterSelect patches: " + ex.Message); }
 			Plugin.Log.LogInfo("Patches applied successfully");
 		}
 		catch (Exception arg)
@@ -800,6 +810,18 @@ public class ItemTooltipsMod
 				UpdateStageRelicControllerDwell();
 			else
 				UpdateStageRelicHover();
+		}
+		// Character Selection: starter weapon / evo tooltips
+		if (Plugin.CharacterTooltipsEnabled && characterIcons.Count > 0)
+		{
+			if (usingController)
+				UpdateCharacterControllerDwell();
+			else
+				UpdateCharacterHover();
+		}
+		else if (!Plugin.CharacterTooltipsEnabled && characterIcons.Count > 0)
+		{
+			ClearCharacterIcons();
 		}
 		if (!flag && collectionIcons.Count > 0)
 		{
@@ -6713,6 +6735,30 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		};
 	}
 
+	public static void RegisterCharacterIcon(GameObject go, CharacterType character, string label, string description, Sprite sprite)
+	{
+		if (!Plugin.CharacterTooltipsEnabled) return;
+		if ((Object)(object)go == (Object)null) return;
+		int id = ((Object)go).GetInstanceID();
+		characterIcons[id] = new MapIconInfo
+		{
+			Go = go,
+			Item = null,
+			Weapon = null,
+			Label = label ?? character.ToString(),
+			Description = description ?? "",
+			Sprite = sprite
+		};
+	}
+
+	public static void ClearCharacterIcons()
+	{
+		characterIcons.Clear();
+		currentCharacterHoverId = -1;
+		pendingCharacterHoverId = -1;
+		HideCharacterPopup();
+	}
+
 	public static void ClearStageRelicIcons()
 	{
 		stageRelicIcons.Clear();
@@ -6934,6 +6980,175 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		{
 			Object.Destroy((Object)(object)stageRelicPopup);
 			stageRelicPopup = null;
+		}
+	}
+
+	// ── Character Selection icons ────────────────────────────────────────
+
+	private static void UpdateCharacterControllerDwell()
+	{
+		PruneDeadCharacterIcons();
+		EventSystem es = EventSystem.current;
+		if ((Object)(object)es == (Object)null || characterIcons.Count == 0)
+			return;
+		GameObject sel = es.currentSelectedGameObject;
+		if ((Object)(object)sel == (Object)null)
+		{
+			pendingCharacterHoverId = -1;
+			return;
+		}
+		if (!TryResolveCharacterIcon(sel, out int id, out MapIconInfo info))
+		{
+			pendingCharacterHoverId = -1;
+			return;
+		}
+		if (id != pendingCharacterHoverId)
+		{
+			pendingCharacterHoverId = id;
+			characterHoverStartTime = Time.unscaledTime;
+			return;
+		}
+		if (Time.unscaledTime - characterHoverStartTime >= Plugin.ControllerDwellDelay)
+		{
+			if (currentCharacterHoverId != id)
+			{
+				currentCharacterHoverId = id;
+				ShowCharacterPopup(info);
+			}
+		}
+	}
+
+	private static void UpdateCharacterHover()
+	{
+		PruneDeadCharacterIcons();
+		if (characterIcons.Count == 0) return;
+
+		Vector2 mouse = Input.mousePosition;
+		MapIconInfo hitInfo = default;
+		int hitId = -1;
+		bool hit = false;
+
+		foreach (var kv in characterIcons)
+		{
+			GameObject go = kv.Value.Go;
+			if ((Object)(object)go == (Object)null || !go.activeInHierarchy) continue;
+			RectTransform rt = go.GetComponent<RectTransform>();
+			if ((Object)(object)rt == (Object)null) continue;
+			Camera cam = null;
+			try
+			{
+				Canvas c = go.GetComponentInParent<Canvas>();
+				if ((Object)(object)c != (Object)null && c.renderMode != RenderMode.ScreenSpaceOverlay)
+					cam = c.worldCamera;
+			}
+			catch { }
+			if (RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, cam))
+			{
+				hit = true;
+				hitId = kv.Key;
+				hitInfo = kv.Value;
+				break;
+			}
+		}
+
+		if (hit)
+		{
+			if (hitId != pendingCharacterHoverId)
+			{
+				pendingCharacterHoverId = hitId;
+				characterHoverStartTime = Time.unscaledTime;
+				if (currentCharacterHoverId != -1 && currentCharacterHoverId != hitId)
+				{
+					currentCharacterHoverId = -1;
+					HideCharacterPopup();
+				}
+			}
+			else if (Time.unscaledTime - characterHoverStartTime >= Plugin.TooltipHoverDelay)
+			{
+				if (currentCharacterHoverId != hitId)
+				{
+					currentCharacterHoverId = hitId;
+					ShowCharacterPopup(hitInfo);
+				}
+			}
+		}
+		else
+		{
+			pendingCharacterHoverId = -1;
+			if (currentCharacterHoverId != -1)
+			{
+				currentCharacterHoverId = -1;
+				HideCharacterPopup();
+			}
+		}
+	}
+
+	private static void PruneDeadCharacterIcons()
+	{
+		List<int> dead = null;
+		foreach (var kv in characterIcons)
+		{
+			if ((Object)(object)kv.Value.Go == (Object)null)
+			{
+				dead ??= new List<int>();
+				dead.Add(kv.Key);
+			}
+		}
+		if (dead != null)
+			foreach (int k in dead) characterIcons.Remove(k);
+	}
+
+	private static bool TryResolveCharacterIcon(GameObject sel, out int id, out MapIconInfo info)
+	{
+		id = ((Object)sel).GetInstanceID();
+		if (characterIcons.TryGetValue(id, out info))
+			return true;
+		Transform p = sel.transform;
+		while ((Object)(object)p != (Object)null)
+		{
+			id = ((Object)p.gameObject).GetInstanceID();
+			if (characterIcons.TryGetValue(id, out info))
+				return true;
+			p = p.parent;
+		}
+		info = default;
+		id = -1;
+		return false;
+	}
+
+	private static void ShowCharacterPopup(MapIconInfo info)
+	{
+		HideCharacterPopup();
+		Transform parent = null;
+		try
+		{
+			GameObject page = GameObject.Find("UI/Canvas - App/Safe Area/View - CharacterSelection");
+			if ((Object)(object)page == (Object)null)
+				page = GameObject.Find("UI/Canvas - App");
+			if ((Object)(object)page != (Object)null)
+				parent = page.transform;
+		}
+		catch { }
+		if ((Object)(object)parent == (Object)null && (Object)(object)info.Go != (Object)null)
+		{
+			var c = info.Go.GetComponentInParent<Canvas>();
+			if ((Object)(object)c != (Object)null)
+				parent = ((Component)c).transform;
+		}
+		if ((Object)(object)parent == (Object)null) return;
+
+		characterPopup = CreateSimpleMapPopup(parent, info.Label, info.Description, info.Sprite);
+		if ((Object)(object)characterPopup != (Object)null && (Object)(object)info.Go != (Object)null)
+			PositionPopup(characterPopup, info.Go.transform);
+		Plugin.Dbg($"Character popup label={info.Label}");
+	}
+
+	private static void HideCharacterPopup()
+	{
+		if ((Object)(object)characterPopup != (Object)null)
+		{
+			Object.Destroy((Object)(object)characterPopup);
+			characterPopup = null;
 		}
 	}
 
