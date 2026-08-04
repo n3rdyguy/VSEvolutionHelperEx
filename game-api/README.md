@@ -14,6 +14,9 @@ Decompiled from BepInEx Il2Cpp interop (`VampireSurvivors.Runtime.dll`) via `ils
 | `VampireSurvivors.Data.ItemType` | Stage pickups (COIN, GEM, …) — **not** passives |
 | `VampireSurvivors.UI.BaseUIPage.Data` | How UI reaches `DataManager` |
 | `VampireSurvivors.UI.EquipmentIconPaused` | Pause equipment icons |
+| `VampireSurvivors.Data.Characters.CharacterData` | Character/skin stats, starter weapon, description terms |
+| `VampireSurvivors.Data.Characters.CharacterItem` | Character roster row (skins/outfits) |
+| `VampireSurvivors.UI.CharacterItemUI` | Character select grid card — do **not** patch `SetData` (see CHANGELOG 1.9.1) |
 
 ## DataManager API (typed)
 
