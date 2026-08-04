@@ -2,48 +2,51 @@
 
 All notable changes to this BepInEx port are listed here.
 
-## [1.10.10] — polish (unreleased tag)
+## [1.10.10] — 2026-08-04
 
 ### Fixed
 - Grimoire evolution icons: hover the **whole icon cell** (not only near the +). Full root hit plate, child graphic mapping, padded screen-space hit tests, smarter icon-vs-row scoring.
 
-## [1.10.9] — polish (unreleased tag)
+### Included since 1.9.7 (shipped as 1.10.x)
+- Stage Guide Music|Guide polish, Features panel, adventure tooltips, character tooltip polish/loc scrub, weapon/relic spacing, StageExtraTips expansion (see entries below).
+
+## [1.10.9] — 2026-08-04
 
 ### Fixed
 - Character tooltips: detect **any** `*Lang/` I2 term (including `powerupLang/MERCHANT name` with spaces / line wraps). Cross-table lookup + humanize name fallback.
 
-## [1.10.8] — polish (unreleased tag)
+## [1.10.8] — 2026-08-04
 
 ### Fixed
 - Broader I2 scrubbing: weapons, items, powerups, arcanas, and character titles/flavor never fall back to raw loc keys. Extra character key synthesis (`LocalizeTypedDescription`) for skins with missing description data.
 
-## [1.10.7] — polish (unreleased tag)
+## [1.10.7] — 2026-08-04
 
 ### Fixed
 - Character tooltips: no more raw I2 keys like `itemLang/{MERCHANT}description`; localize via `LocalizeDisplayText` / line-by-line body scrub. Name-only popups when the description was a failed loc key are fixed.
 
-## [1.10.6] — polish (unreleased tag)
+## [1.10.6] — 2026-08-04
 
 ### Changed
 - Stage Guide: drop redundant **Progression / Hyper / mods** (already on the bottom stats panel). Lead with **Guide** notes + tips, then **Features** (merchant ban, coffin unlock, day/night, boss/event counts, etc.) and relics.
 
-## [1.10.5] — polish (unreleased tag)
+## [1.10.5] — 2026-08-04
 
 ### Fixed
 - Music|Guide tabs: small gap above the song panel; label text Midline-centered.
 
-## [1.10.4] — polish (unreleased tag)
+## [1.10.4] — 2026-08-04
 
 ### Fixed
 - In-game weapon tooltips: tighter **section gaps**, centered +/→ on evo rows, TMP-sized title/description, arcana name wrap/alignment.
 - Stage select **Music | Guide** tabs: gold-framed strip, better contrast, edges aligned to the song panel.
 
-## [1.10.3] — polish (unreleased tag)
+## [1.10.3] — 2026-08-04
 
 ### Fixed
 - Stage relic / simple tooltips: **dynamic width + TMP height** so long names (e.g. “Roast Chicken with a Clock…”) and descriptions no longer look cramped or collide.
 
-## [1.10.2] — polish (unreleased tag)
+## [1.10.2] — 2026-08-04
 
 ### Added / improved
 - Adventure tooltips: **weapon icon strip**, character list, TMP-sized panel
