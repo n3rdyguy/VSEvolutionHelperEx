@@ -1,0 +1,40 @@
+using System;
+
+namespace VampireSurvivors.Data;
+
+[Serializable]
+public enum PowerUpType
+{
+	POWER,
+	REGEN,
+	MAXHEALTH,
+	ARMOR,
+	AREA,
+	SPEED,
+	COOLDOWN,
+	DURATION,
+	AMOUNT,
+	MOVESPEED,
+	MAGNET,
+	LUCK,
+	GROWTH,
+	GREED,
+	CURSE,
+	TIME,
+	SHIELD,
+	REVIVAL,
+	LEVELUP,
+	INVUL,
+	REROLL,
+	SKIP,
+	BANISH,
+	PANDORA,
+	SEAL,
+	CHARM,
+	SEAL2,
+	DEFANG,
+	SEAL3,
+	SEAL4,
+	RECYCLE,
+	FEVER
+}

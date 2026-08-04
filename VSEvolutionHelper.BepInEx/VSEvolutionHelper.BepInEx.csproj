@@ -1,0 +1,94 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>VSEvolutionHelper</AssemblyName>
+    <RootNamespace>VSItemTooltips</RootNamespace>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GamePath>D:\SteamLibrary\steamapps\common\Vampire Survivors</GamePath>
+    <BepInExPath>$(GamePath)\BepInEx</BepInExPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- BepInEx / Harmony / Il2CppInterop -->
+    <Reference Include="BepInEx.Core">
+      <HintPath>$(BepInExPath)\core\BepInEx.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.IL2CPP">
+      <HintPath>$(BepInExPath)\core\BepInEx.Unity.IL2CPP.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.Common">
+      <HintPath>$(BepInExPath)\core\BepInEx.Unity.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExPath)\core\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(BepInExPath)\core\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Common">
+      <HintPath>$(BepInExPath)\core\Il2CppInterop.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Game interop -->
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(BepInExPath)\interop\Il2Cppmscorlib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppSystem">
+      <HintPath>$(BepInExPath)\interop\Il2CppSystem.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VampireSurvivors.Runtime">
+      <HintPath>$(BepInExPath)\interop\VampireSurvivors.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Required by VampireSurvivors.Objects.Pickups.Pickup (base ArcadeSprite) -->
+    <Reference Include="PhaserPort">
+      <HintPath>$(BepInExPath)\interop\PhaserPort.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(BepInExPath)\interop\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(BepInExPath)\interop\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(BepInExPath)\interop\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(BepInExPath)\interop\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(BepInExPath)\interop\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(BepInExPath)\interop\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(BepInExPath)\interop\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="l2localization">
+      <HintPath>$(BepInExPath)\interop\l2localization.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
+

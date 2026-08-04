@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>VSEvolutionHelper</AssemblyName>
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+  <PropertyGroup>
+    <LangVersion>15.0</LangVersion>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemGroup />
+  <ItemGroup>
+    <Reference Include="MelonLoader" />
+    <Reference Include="0Harmony" />
+    <Reference Include="UnityEngine.CoreModule" />
+    <Reference Include="Il2CppVampireSurvivors.Runtime" />
+    <Reference Include="Il2CppInterop.Runtime" />
+    <Reference Include="UnityEngine.UI" />
+    <Reference Include="Il2Cppmscorlib" />
+    <Reference Include="Unity.TextMeshPro" />
+    <Reference Include="UnityEngine.UIModule" />
+    <Reference Include="UnityEngine.InputLegacyModule" />
+  </ItemGroup>
+</Project>

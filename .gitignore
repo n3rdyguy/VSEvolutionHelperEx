@@ -1,0 +1,21 @@
+# Build outputs
+**/bin/
+**/obj/
+*.user
+*.suo
+.vs/
+
+# Local tooling / game dumps (large, machine-specific)
+.tools/
+*.dll
+!VSEvolutionHelper.BepInEx/**/*.dll
+
+# Keep plugin project source only; ignore any accidental local DLL copies at root
+VSEvolutionHelper.BepInEx.dll
+VSEvolutionHelper130.dll
+
+# IDE / OS
+.idea/
+*.swp
+Thumbs.db
+Desktop.ini
