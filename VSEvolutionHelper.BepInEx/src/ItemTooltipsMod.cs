@@ -6847,27 +6847,22 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			return;
 		}
 
-		if ((Object)(object)anchor != (Object)null)
-			PositionPopupNearScreen(collectionPopup, anchor);
-		else
-			PositionPopupNearScreen(collectionPopup, parent);
-
+		// Fixed dock outside the main Collections grid (does not follow mouse)
+		PositionCollectionPopupDocked(collectionPopup);
 		DisablePopupRaycasts(collectionPopup);
 		try { collectionPopup.SetActive(true); } catch { }
-		Plugin.Dbg($"[Collections] Show popup weapon={weaponType} item={itemType} anchor={anchor?.name}");
 	}
 
 	/// <summary>
-	/// Dead-simple placement: parent to App Safe Area, set world position from cell, last sibling.
-	/// No nested Canvas. No screen-camera math that can fail silently.
+	/// Park the Collections tooltip in free space outside the center grid (~60% middle).
+	/// Default: right margin of App Safe Area, upper-middle — stable, always visible, no mouse tracking.
 	/// </summary>
-	private static void PositionPopupNearScreen(GameObject popup, Transform anchor)
+	private static void PositionCollectionPopupDocked(GameObject popup)
 	{
-		if ((Object)(object)popup == (Object)null || (Object)(object)anchor == (Object)null)
-			return;
+		if ((Object)(object)popup == (Object)null) return;
 		try
 		{
-			// Remove any nested Canvas/raycaster from earlier builds
+			// Strip nested canvas leftovers
 			try
 			{
 				var cv = popup.GetComponent<Canvas>();
@@ -6880,90 +6875,74 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			RectTransform popupRt = popup.GetComponent<RectTransform>();
 			if ((Object)(object)popupRt == (Object)null) return;
 
-			// Host: App Safe Area (above collection scroll content)
 			Transform host = null;
 			GameObject safe = GameObject.Find("UI/Canvas - App/Safe Area");
 			if ((Object)(object)safe != (Object)null)
 				host = safe.transform;
 			if ((Object)(object)host == (Object)null)
 			{
-				var c = anchor.GetComponentInParent<Canvas>();
+				GameObject view = GameObject.Find("UI/Canvas - App/Safe Area/View - Collections");
+				if ((Object)(object)view != (Object)null)
+					host = view.transform;
+			}
+			if ((Object)(object)host == (Object)null)
+			{
+				var c = popup.GetComponentInParent<Canvas>();
 				if ((Object)(object)c != (Object)null)
 					host = ((Component)c.rootCanvas).transform;
 			}
-			if ((Object)(object)host == (Object)null)
-				host = anchor.root;
+			if ((Object)(object)host == (Object)null) return;
 
-			popup.transform.SetParent(host, worldPositionStays: false);
+			popup.transform.SetParent(host, false);
 			popup.transform.SetAsLastSibling();
 
 			popupRt.localScale = Vector3.one;
 			popupRt.localRotation = Quaternion.identity;
-			// Stretch-free, center-based anchors on Safe Area
-			popupRt.anchorMin = new Vector2(0.5f, 0.5f);
-			popupRt.anchorMax = new Vector2(0.5f, 0.5f);
-			popupRt.pivot = new Vector2(0f, 1f);
 
-			// World position of cell top-right
-			Vector3 world = anchor.position;
-			RectTransform anchorRt = anchor as RectTransform ?? anchor.GetComponent<RectTransform>();
-			if ((Object)(object)anchorRt != (Object)null)
-			{
-				Vector3[] corners = new Vector3[4];
-				anchorRt.GetWorldCorners(corners);
-				world = corners[2]; // top-right
-			}
+			// Anchor to right edge of Safe Area, top-ish — clears the center collection grid
+			// pivot top-left of tooltip so it grows left/down into the right margin
+			popupRt.anchorMin = new Vector2(1f, 0.5f);
+			popupRt.anchorMax = new Vector2(1f, 0.5f);
+			popupRt.pivot = new Vector2(1f, 0.5f);
 
-			// Place pivot in world space (works for Overlay + Camera canvases)
-			// Offset a bit to the right in world units (UI often ~1 unit = 1 pixel at scale 1)
-			Vector3 worldOffset = new Vector3(0.02f, 0.01f, 0f);
-			// Prefer pixel-ish offset via canvas scale
+			float pw = popupRt.sizeDelta.x;
+			float ph = popupRt.sizeDelta.y;
+			if (pw < 40f) pw = 400f;
+			if (ph < 40f) ph = 280f;
+
+			// Inset from right edge; vertically slightly above center
+			// Negative X = left of the right edge (into the margin / over less of the grid)
+			float insetX = 24f;
+			float liftY = 40f;
+			popupRt.anchoredPosition = new Vector2(-insetX, liftY);
+
+			// If FilterPanel exists on the right, try to sit under/near it without covering the grid
 			try
 			{
-				var canvas = host.GetComponentInParent<Canvas>();
-				float scale = 1f;
-				if ((Object)(object)canvas != (Object)null)
-					scale = canvas.scaleFactor > 0.01f ? canvas.scaleFactor : 1f;
-				// 20px right, 8px up in screen pixels → world
-				Camera cam = null;
-				if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
-					cam = canvas.worldCamera;
-				Vector2 sp = RectTransformUtility.WorldToScreenPoint(cam, world);
-				sp.x += 20f;
-				sp.y += 8f;
-				if (sp.x + 360f > Screen.width)
+				GameObject filter = GameObject.Find("UI/Canvas - App/Safe Area/View - Collections/FilterPanel");
+				if ((Object)(object)filter == (Object)null)
+					filter = GameObject.Find("UI/Canvas - App/Safe Area/View - Collections/InfoPanel");
+				if ((Object)(object)filter != (Object)null)
 				{
-					sp.x -= 40f + 360f;
-					popupRt.pivot = new Vector2(1f, 1f);
-				}
-				RectTransform hostRt = host as RectTransform ?? host.GetComponent<RectTransform>();
-				Camera localCam = (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay) ? null : cam;
-				if ((Object)(object)hostRt != (Object)null
-					&& RectTransformUtility.ScreenPointToLocalPointInRectangle(hostRt, sp, localCam, out Vector2 local))
-				{
-					popupRt.anchoredPosition = local;
-				}
-				else
-				{
-					// InverseTransform fallback
-					Vector3 lp = host.InverseTransformPoint(world);
-					popupRt.anchoredPosition = new Vector2(lp.x + 20f, lp.y + 8f);
+					// Still dock right; slight extra left inset so we don't sit under chrome
+					popupRt.anchoredPosition = new Vector2(-insetX - 8f, liftY);
 				}
 			}
-			catch
-			{
-				Vector3 lp = host.InverseTransformPoint(world);
-				popupRt.anchoredPosition = new Vector2(lp.x + 20f, lp.y + 8f);
-			}
+			catch { }
 
-			// Draw above siblings in Safe Area
-			popup.transform.SetAsLastSibling();
 			DisablePopupRaycasts(popup);
 		}
 		catch (Exception ex)
 		{
-			Plugin.Log.LogWarning("[Collections] PositionPopupNearScreen: " + ex.Message);
+			Plugin.Log.LogWarning("[Collections] PositionCollectionPopupDocked: " + ex.Message);
 		}
+	}
+
+	/// <summary>Simple dock for unlock-only tips (same right-side park as full tooltips).</summary>
+	private static void PositionPopupNearScreen(GameObject popup, Transform anchor)
+	{
+		// Ignore anchor — always dock outside the collections grid
+		PositionCollectionPopupDocked(popup);
 	}
 
 	private static void HideCollectionPopup()
