@@ -6849,11 +6849,16 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			PositionPopupNearScreen(collectionPopup, anchor);
 		else
 			PositionPopupNearScreen(collectionPopup, parent);
+
+		// Ensure visible even if CreatePopup left raycast on
+		DisablePopupRaycasts(collectionPopup);
+		try { collectionPopup.SetActive(true); } catch { }
 	}
 
 	/// <summary>
-	/// Place popup next to the hovered cell on the <b>root canvas</b> with override sorting
-	/// so it draws above ScrollRect masks / panels (not under the collection grid).
+	/// Place popup next to hovered cell on root canvas, drawn on top (nested Canvas + overrideSorting).
+	/// Does NOT set renderMode on the nested canvas (that made popups invisible).
+	/// Raycasts disabled so the cell keeps hover (no instant PointerExit hide).
 	/// </summary>
 	private static void PositionPopupNearScreen(GameObject popup, Transform anchor)
 	{
@@ -6872,37 +6877,34 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			Canvas root = (Object)(object)leaf != (Object)null ? leaf.rootCanvas : leaf;
 			if ((Object)(object)root == (Object)null)
 			{
-				// Fallback: keep previous cell-parent approach
 				popup.transform.SetParent(anchor, false);
 				popupRt.anchorMin = popupRt.anchorMax = new Vector2(1f, 1f);
 				popupRt.pivot = new Vector2(0f, 1f);
 				popupRt.anchoredPosition = new Vector2(10f, 4f);
+				DisablePopupRaycasts(popup);
 				return;
 			}
 
-			// Outside ScrollRect/mask hierarchy → not clipped; last sibling + high sort → on top
-			popup.transform.SetParent(((Component)root).transform, false);
+			// Prefer App "Safe Area" as parent (same space as Collections) if present
+			Transform parentXf = ((Component)root).transform;
+			try
+			{
+				var safe = GameObject.Find("UI/Canvas - App/Safe Area");
+				if ((Object)(object)safe != (Object)null && safe.activeInHierarchy)
+					parentXf = safe.transform;
+			}
+			catch { }
+
+			popup.transform.SetParent(parentXf, false);
 			popup.transform.SetAsLastSibling();
 
-			// Dedicated canvas so we always render above siblings
+			// Nested canvas: ONLY overrideSorting — never set renderMode (breaks nested UI)
 			Canvas overlay = popup.GetComponent<Canvas>();
 			if ((Object)(object)overlay == (Object)null)
 				overlay = popup.AddComponent<Canvas>();
 			overlay.overrideSorting = true;
-			overlay.sortingOrder = 5000;
-			try
-			{
-				// Match render mode of root so coordinates stay valid
-				overlay.renderMode = root.renderMode;
-				if (root.renderMode != RenderMode.ScreenSpaceOverlay)
-					overlay.worldCamera = root.worldCamera;
-			}
-			catch { }
-			// Nested clicks on formula icons still need a raycaster
-			if ((Object)(object)popup.GetComponent<GraphicRaycaster>() == (Object)null)
-			{
-				try { popup.AddComponent<GraphicRaycaster>(); } catch { }
-			}
+			overlay.sortingOrder = 9000;
+			// Do not add GraphicRaycaster for menu tooltips — steals hover from the cell
 
 			popupRt.localScale = Vector3.one;
 			popupRt.localRotation = Quaternion.identity;
@@ -6914,27 +6916,22 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			if (root.renderMode != RenderMode.ScreenSpaceOverlay)
 				cam = root.worldCamera != null ? root.worldCamera : Camera.main;
 
-			// Screen center of the cell
 			Vector2 screen;
 			if ((Object)(object)anchorRt != (Object)null)
 			{
 				Vector3[] corners = new Vector3[4];
 				anchorRt.GetWorldCorners(corners);
-				Vector3 mid = (corners[0] + corners[2]) * 0.5f;
-				// Prefer top-right of cell as attach point
-				Vector3 attach = corners[2]; // top-right
-				screen = RectTransformUtility.WorldToScreenPoint(cam, attach);
+				// top-right of cell
+				screen = RectTransformUtility.WorldToScreenPoint(cam, corners[2]);
 			}
 			else
 			{
 				screen = RectTransformUtility.WorldToScreenPoint(cam, anchor.position);
 			}
 
-			// Nudge right of the icon
-			screen.x += 12f;
-			screen.y += 4f;
+			screen.x += 14f;
+			screen.y += 6f;
 
-			// Flip left if near right edge
 			float popupW = popupRt.sizeDelta.x > 40f ? popupRt.sizeDelta.x : 360f;
 			bool flipLeft = screen.x + popupW + 16f > Screen.width;
 			if (flipLeft)
@@ -6943,33 +6940,40 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				{
 					Vector3[] corners = new Vector3[4];
 					anchorRt.GetWorldCorners(corners);
-					screen = RectTransformUtility.WorldToScreenPoint(cam, corners[1]); // top-left
+					screen = RectTransformUtility.WorldToScreenPoint(cam, corners[1]);
 				}
-				screen.x -= 12f;
+				screen.x -= 14f;
 				popupRt.pivot = new Vector2(1f, 1f);
 			}
 
-			RectTransform rootRt = ((Component)root).GetComponent<RectTransform>();
-			if ((Object)(object)rootRt == (Object)null) return;
+			RectTransform parentRt = parentXf as RectTransform;
+			if ((Object)(object)parentRt == (Object)null)
+				parentRt = ((Component)parentXf).GetComponent<RectTransform>();
+			if ((Object)(object)parentRt == (Object)null) return;
 
-			if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rootRt, screen, cam, out Vector2 local))
+			// Use same camera rules as the canvas for local conversion
+			Camera localCam = cam;
+			if (root.renderMode == RenderMode.ScreenSpaceOverlay)
+				localCam = null;
+
+			if (RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRt, screen, localCam, out Vector2 local))
 			{
-				// Soft clamp inside canvas
-				Rect r = rootRt.rect;
+				Rect r = parentRt.rect;
 				float ph = popupRt.sizeDelta.y > 40f ? popupRt.sizeDelta.y : 220f;
-				if (!flipLeft)
-				{
-					local.x = Mathf.Min(local.x, r.xMax - popupW - 8f);
-					local.x = Mathf.Max(local.x, r.xMin + 8f);
-				}
-				else
-				{
-					local.x = Mathf.Max(local.x, r.xMin + popupW + 8f);
-					local.x = Mathf.Min(local.x, r.xMax - 8f);
-				}
-				local.y = Mathf.Clamp(local.y, r.yMin + ph + 8f, r.yMax - 8f);
+				local.x = Mathf.Clamp(local.x, r.xMin + 8f, r.xMax - 8f);
+				local.y = Mathf.Clamp(local.y, r.yMin + 8f, r.yMax - 8f);
+				// Keep pivot corner on-screen roughly
+				if (!flipLeft && local.x + popupW > r.xMax)
+					local.x = r.xMax - popupW - 8f;
+				if (flipLeft && local.x - popupW < r.xMin)
+					local.x = r.xMin + popupW + 8f;
+				if (local.y - ph < r.yMin)
+					local.y = r.yMin + ph + 8f;
 				popupRt.anchoredPosition = local;
 			}
+
+			// Critical: don't steal pointer from the cell (would hide tooltip immediately)
+			DisablePopupRaycasts(popup);
 		}
 		catch (Exception ex)
 		{
@@ -7177,18 +7181,30 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			{
 				try
 				{
-					// Don't hide if pointer moved onto the popup itself
-					if ((Object)(object)collectionPopup != (Object)null
-						&& IsPointerOverObject(collectionPopup))
-						return;
-					currentCollectionHoverId = -1;
-					pendingCollectionHoverId = -1;
-					HideCollectionPopup();
-					if ((Object)(object)collectionUnlockPopup != (Object)null)
+					// Delay hide one frame so layout/sibling changes don't cancel show
+					int leavingId = ((Object)captured).GetInstanceID();
+					ItemTooltipsMod.DelayFrames(1, () =>
 					{
-						Object.Destroy((Object)(object)collectionUnlockPopup);
-						collectionUnlockPopup = null;
-					}
+						try
+						{
+							// Still hovering same cell? keep
+							if (currentCollectionHoverId == leavingId
+								&& IsPointerOverObject(captured))
+								return;
+							if (currentCollectionHoverId != leavingId
+								&& currentCollectionHoverId != -1)
+								return; // already moved to another cell
+							currentCollectionHoverId = -1;
+							pendingCollectionHoverId = -1;
+							HideCollectionPopup();
+							if ((Object)(object)collectionUnlockPopup != (Object)null)
+							{
+								Object.Destroy((Object)(object)collectionUnlockPopup);
+								collectionUnlockPopup = null;
+							}
+						}
+						catch { }
+					});
 				}
 				catch { }
 			}));
