@@ -3932,33 +3932,74 @@ public class ItemTooltipsMod
 		((Shadow)val4).effectDistance = new Vector2(2f, 2f);
 		float num = 0f - Padding;
 		float num2 = 420f;
-		string text = weaponType.HasValue ? GameData.GetWeaponName(weaponType.Value) : (itemType.HasValue ? itemType.Value.ToString() : "Unknown");
+		string text = "Unknown";
 		string text2 = "";
 		Sprite val5 = null;
-		if (text.Contains("/"))
-		{
-			Object.Destroy((Object)(object)val);
-			return null;
-		}
 		if (weaponType.HasValue)
 		{
-			WeaponData weaponData = GetWeaponData(weaponType.Value);
-			if (weaponData != null)
+			text = GameData.GetWeaponName(weaponType.Value);
+			text2 = GameData.GetWeaponDescription(weaponType.Value);
+			val5 = GameData.GetSprite(weaponType.Value) ?? GetSpriteForWeapon(weaponType.Value);
+			// Fallback through legacy path if empty
+			if (string.IsNullOrEmpty(text) || GameData.LooksLikeLocKey(text))
 			{
-				text = GetLocalizedWeaponName(weaponData, weaponType.Value);
-				text2 = GetLocalizedWeaponDescription(weaponData, weaponType.Value);
-				val5 = GetSpriteForWeapon(weaponType.Value);
+				WeaponData weaponData = GetWeaponData(weaponType.Value);
+				if (weaponData != null)
+				{
+					string n = GetLocalizedWeaponName(weaponData, weaponType.Value);
+					if (!string.IsNullOrEmpty(n) && !GameData.LooksLikeLocKey(n))
+						text = n;
+					if (string.IsNullOrEmpty(text2))
+						text2 = GetLocalizedWeaponDescription(weaponData, weaponType.Value);
+				}
 			}
+			if (string.IsNullOrEmpty(text) || GameData.LooksLikeLocKey(text))
+				text = GameData.HumanizeEnum(weaponType.Value.ToString());
 		}
 		else if (itemType.HasValue)
 		{
-			object powerUpData = GetPowerUpData(itemType.Value);
-			if (powerUpData != null)
+			text = GameData.GetItemName(itemType.Value);
+			text2 = GameData.GetItemDescription(itemType.Value);
+			val5 = GameData.GetItemSprite(itemType.Value) ?? GetSpriteForItem(itemType.Value);
+			if (string.IsNullOrEmpty(text) || GameData.LooksLikeLocKey(text))
 			{
-				text = GetLocalizedPowerUpName(powerUpData, itemType.Value);
-				text2 = GetLocalizedPowerUpDescription(powerUpData, itemType.Value);
-				val5 = GetSpriteForItem(itemType.Value);
+				object powerUpData = GetPowerUpData(itemType.Value);
+				if (powerUpData != null)
+				{
+					string n = GetLocalizedPowerUpName(powerUpData, itemType.Value);
+					if (!string.IsNullOrEmpty(n) && !GameData.LooksLikeLocKey(n))
+						text = n;
+					if (string.IsNullOrEmpty(text2) || GameData.LooksLikeLocKey(text2))
+					{
+						string d = GetLocalizedPowerUpDescription(powerUpData, itemType.Value);
+						if (!string.IsNullOrEmpty(d) && !GameData.LooksLikeLocKey(d))
+							text2 = d;
+					}
+				}
 			}
+			if (string.IsNullOrEmpty(text) || GameData.LooksLikeLocKey(text))
+				text = GameData.HumanizeEnum(itemType.Value.ToString());
+			// Prefer unlock tip when description is empty/loc-key
+			if (string.IsNullOrEmpty(text2) || GameData.LooksLikeLocKey(text2))
+			{
+				string unlock = GameData.GetItemUnlockHint(itemType.Value);
+				if (!string.IsNullOrEmpty(unlock))
+					text2 = "Unlock: " + unlock;
+				else
+					text2 = "";
+			}
+		}
+		// Never paint raw I2 paths as title
+		text = GameData.LocalizeDisplayText(text) ?? text;
+		if (GameData.LooksLikeLocKey(text))
+			text = weaponType.HasValue
+				? GameData.HumanizeEnum(weaponType.Value.ToString())
+				: (itemType.HasValue ? GameData.HumanizeEnum(itemType.Value.ToString()) : "Unknown");
+		if (!string.IsNullOrEmpty(text2))
+		{
+			text2 = GameData.LocalizeDisplayText(text2) ?? text2;
+			if (GameData.LooksLikeLocKey(text2))
+				text2 = "";
 		}
 		TMP_FontAsset font = GetFont();
 		if ((Object)(object)font != (Object)null)
@@ -6811,8 +6852,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	}
 
 	/// <summary>
-	/// Place popup next to an App-canvas UI element using screen-space conversion
-	/// (works for Overlay and Camera canvases; avoids bottom-left FilterPanel hack).
+	/// Pin popup to the hovered collection cell (child of the cell). Avoids App-canvas
+	/// camera/overlay conversion that stuck tooltips at screen center.
 	/// </summary>
 	private static void PositionPopupNearScreen(GameObject popup, Transform anchor)
 	{
@@ -6823,73 +6864,49 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			RectTransform popupRt = popup.GetComponent<RectTransform>();
 			if ((Object)(object)popupRt == (Object)null) return;
 
-			Canvas canvas = anchor.GetComponentInParent<Canvas>();
-			if ((Object)(object)canvas == (Object)null)
-				canvas = popup.GetComponentInParent<Canvas>();
-
-			// Keep popup under the canvas root so coordinates match
-			if ((Object)(object)canvas != (Object)null
-				&& (Object)(object)popup.transform.parent != (Object)(object)((Component)canvas).transform)
-			{
-				popup.transform.SetParent(((Component)canvas).transform, false);
-			}
-
-			popupRt.anchorMin = new Vector2(0.5f, 0.5f);
-			popupRt.anchorMax = new Vector2(0.5f, 0.5f);
-			popupRt.pivot = new Vector2(0f, 1f);
-
-			Camera cam = null;
-			if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
-				cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
-
-			// Screen position of anchor center
-			Vector2 screen;
 			RectTransform anchorRt = anchor as RectTransform;
 			if ((Object)(object)anchorRt == (Object)null)
 				anchorRt = anchor.GetComponent<RectTransform>();
-			if ((Object)(object)anchorRt != (Object)null)
+
+			// Parent directly under the cell so we share its local space (most reliable for grids)
+			popup.transform.SetParent(anchor, false);
+			popup.transform.SetAsLastSibling();
+
+			// Top-right of the cell → tooltip grows right/down from there
+			popupRt.anchorMin = new Vector2(1f, 1f);
+			popupRt.anchorMax = new Vector2(1f, 1f);
+			popupRt.pivot = new Vector2(0f, 1f);
+			popupRt.localScale = Vector3.one;
+			popupRt.localRotation = Quaternion.identity;
+			popupRt.anchoredPosition = new Vector2(10f, 4f);
+
+			// If the cell is near the right edge, open to the left instead
+			try
 			{
-				Vector3[] corners = new Vector3[4];
-				anchorRt.GetWorldCorners(corners);
-				Vector3 mid = (corners[0] + corners[2]) * 0.5f;
-				screen = RectTransformUtility.WorldToScreenPoint(cam, mid);
+				Canvas canvas = anchor.GetComponentInParent<Canvas>();
+				Camera cam = null;
+				if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+					cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+
+				if ((Object)(object)anchorRt != (Object)null)
+				{
+					Vector3[] corners = new Vector3[4];
+					anchorRt.GetWorldCorners(corners);
+					// corners: 0=bl, 1=tl, 2=tr, 3=br
+					Vector2 tr = RectTransformUtility.WorldToScreenPoint(cam, corners[2]);
+					float popupW = popupRt.sizeDelta.x;
+					if (popupW < 40f) popupW = 360f;
+					if (tr.x + popupW + 24f > Screen.width)
+					{
+						// Flip: top-left of cell, grow leftward
+						popupRt.anchorMin = new Vector2(0f, 1f);
+						popupRt.anchorMax = new Vector2(0f, 1f);
+						popupRt.pivot = new Vector2(1f, 1f);
+						popupRt.anchoredPosition = new Vector2(-10f, 4f);
+					}
+				}
 			}
-			else
-			{
-				screen = RectTransformUtility.WorldToScreenPoint(cam, anchor.position);
-			}
-
-			// Slight offset: right and a bit up from icon
-			screen.x += 24f;
-			screen.y += 8f;
-
-			RectTransform parentRt = popupRt.parent as RectTransform;
-			if ((Object)(object)parentRt == (Object)null)
-				parentRt = ((Component)popupRt.parent).GetComponent<RectTransform>();
-			if ((Object)(object)parentRt == (Object)null) return;
-
-			if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRt, screen, cam, out Vector2 local))
-				return;
-
-			// Clamp inside parent so it stays on-screen
-			float pw = popupRt.sizeDelta.x;
-			float ph = popupRt.sizeDelta.y;
-			if (pw < 8f) pw = 320f;
-			if (ph < 8f) ph = 200f;
-			Rect pr = parentRt.rect;
-			// local is relative to parent pivot; for center-pivot canvas this is from center
-			float minX = pr.xMin + 8f;
-			float maxX = pr.xMax - pw - 8f;
-			float minY = pr.yMin + ph + 8f;
-			float maxY = pr.yMax - 8f;
-			local.x = Mathf.Clamp(local.x, minX, maxX);
-			local.y = Mathf.Clamp(local.y, minY, maxY);
-
-			// If still would go off right, flip to left of icon
-			if (local.x + pw > pr.xMax - 4f)
-				local.x = Mathf.Max(pr.xMin + 8f, local.x - pw - 48f);
-
-			popupRt.anchoredPosition = local;
+			catch { }
 		}
 		catch (Exception ex)
 		{
