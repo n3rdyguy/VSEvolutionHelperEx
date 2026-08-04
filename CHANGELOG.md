@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.7] — polish (unreleased tag)
+
+### Fixed
+- Character tooltips: no more raw I2 keys like `itemLang/{MERCHANT}description`; localize via `LocalizeDisplayText` / line-by-line body scrub. Name-only popups when the description was a failed loc key are fixed.
+
 ## [1.10.6] — polish (unreleased tag)
 
 ### Changed

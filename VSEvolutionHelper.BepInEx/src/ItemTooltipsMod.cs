@@ -7488,10 +7488,25 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			Plugin.Log.LogWarning("[Character] tooltip data: " + ex.Message);
 		}
 
+		// Scrub any pre-baked loc keys in fallback fields (line-by-line so one bad key
+		// does not wipe starting-weapon / stats text in the plain-text body)
+		string fallbackTitle = GameData.LocalizeDisplayText(info.Label) ?? info.Label ?? "Character";
+		string fallbackDesc = GameData.LocalizeMultilineDisplayText(info.Description);
+
 		if (data != null)
+		{
+			// Belt-and-suspenders: never paint raw I2 keys as flavor
+			if (GameData.LooksLikeLocKey(data.Flavor))
+				data.Flavor = GameData.LocalizeDisplayText(data.Flavor);
+			if (GameData.LooksLikeLocKey(data.Title))
+				data.Title = GameData.LocalizeDisplayText(data.Title) ?? data.Title;
 			characterPopup = CreateCharacterDetailPopup(parent, data);
+		}
 		else
-			characterPopup = CreateSimpleMapPopup(parent, info.Label, info.Description ?? "(no details)", info.Sprite);
+		{
+			characterPopup = CreateSimpleMapPopup(parent, fallbackTitle,
+				fallbackDesc ?? "(no details)", info.Sprite);
+		}
 
 		if ((Object)(object)characterPopup != (Object)null)
 		{
@@ -8190,7 +8205,13 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		const float minW = 280f;
 		const float maxW = 400f;
 		const float icon = 40f; // slightly smaller than IconSize so title can breathe
-		string titleText = string.IsNullOrEmpty(title) ? "Unknown" : title;
+		// Never show raw I2 term paths in tooltips
+		string titleText = GameData.LocalizeDisplayText(title) ?? (GameData.LooksLikeLocKey(title) ? "Unknown" : title);
+		if (string.IsNullOrEmpty(titleText)) titleText = "Unknown";
+		string descText = GameData.LocalizeMultilineDisplayText(description);
+		if (string.IsNullOrEmpty(descText) && !string.IsNullOrEmpty(description) && !GameData.LooksLikeLocKey(description))
+			descText = description;
+		description = descText;
 
 		// Prefer a width that fits the title on ~2 lines max, not a fixed 320 that wraps too tight
 		float width = minW;

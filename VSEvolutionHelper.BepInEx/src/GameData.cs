@@ -598,36 +598,194 @@ public static class GameData
         {
             return null;
         }
-        // Already human text
-        if (!term.Contains("/") && term.Contains(" "))
+        // Already human text (spaces, no term-path markers)
+        if (!LooksLikeLocKey(term))
         {
             return term;
         }
         try
         {
-            string result = LocalizationManager.GetTranslation(
-                term,
-                FixForRTL: true,
-                maxLineLengthForRTL: 0,
-                ignoreRTLnumbers: true,
-                applyParameters: false,
-                localParametersRoot: null,
-                overrideLanguage: null,
-                allowLocalizedParameters: true);
-            if (string.IsNullOrEmpty(result) || result == term)
+            string result = TryI2(term, applyParameters: false);
+            if (IsGoodTranslation(result, term))
+                return result;
+            // Terms with {TYPE} placeholders often need parameter application
+            if (term.IndexOf('{') >= 0)
             {
-                return null;
+                result = TryI2(term, applyParameters: true);
+                if (IsGoodTranslation(result, term))
+                    return result;
             }
-            // I2 sometimes returns the term path still
-            if (result.Contains("/") && result.IndexOf(' ') < 0)
-            {
-                return null;
-            }
-            return result;
+            return null;
         }
         catch (Exception ex)
         {
             Log.LogWarning("[GameData.I2] " + ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Resolve player-facing text from a raw game string or I2 term.
+    /// Never returns raw keys like <c>itemLang/{MERCHANT}description</c>.
+    /// </summary>
+    public static string LocalizeDisplayText(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+        string s = raw.Trim();
+        if (!LooksLikeLocKey(s))
+            return s;
+
+        // Direct
+        string t = Translate(s);
+        if (!string.IsNullOrEmpty(t))
+            return t;
+
+        // itemLang/{MERCHANT}description  →  itemLang/MERCHANT description, etc.
+        // Common VS term shapes for characters / items
+        try
+        {
+            // Capture: prefix/{ID}suffix  e.g. itemLang/{MERCHANT}description
+            int braceL = s.IndexOf('{');
+            int braceR = s.IndexOf('}');
+            if (braceL >= 0 && braceR > braceL)
+            {
+                string prefix = s.Substring(0, braceL); // "itemLang/"
+                string id = s.Substring(braceL + 1, braceR - braceL - 1); // "MERCHANT"
+                string suffix = braceR + 1 < s.Length ? s.Substring(braceR + 1) : ""; // "description"
+                if (!string.IsNullOrEmpty(id))
+                {
+                    string[] candidates =
+                    {
+                        prefix + id + " " + suffix,
+                        prefix + id + suffix,
+                        prefix + id + "_" + suffix,
+                        prefix + id + "/" + suffix,
+                        "itemLang/" + id + " " + suffix,
+                        "itemLang/" + id + " description",
+                        "itemLang/" + id + " name",
+                        "Characters/" + id + "/" + suffix,
+                        "Characters/" + id + "/description",
+                        id + " " + suffix,
+                    };
+                    foreach (string c in candidates)
+                    {
+                        if (string.IsNullOrWhiteSpace(c)) continue;
+                        t = Translate(c.Trim());
+                        if (!string.IsNullOrEmpty(t))
+                            return t;
+                    }
+                }
+            }
+
+            // Strip braces entirely and re-space glued "NAMEdescription"
+            string stripped = s.Replace("{", "").Replace("}", "");
+            stripped = System.Text.RegularExpressions.Regex.Replace(
+                stripped,
+                @"(itemLang/\w+)(description|name|tips|desc)$",
+                "$1 $2",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!string.Equals(stripped, s, StringComparison.Ordinal))
+            {
+                t = Translate(stripped);
+                if (!string.IsNullOrEmpty(t))
+                    return t;
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] LocalizeDisplayText: " + ex.Message);
+        }
+
+        return null;
+    }
+
+    public static bool LooksLikeLocKey(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s))
+            return true;
+        // Multi-line tooltip bodies are not single I2 terms — don't treat the whole blob as a key
+        if (s.IndexOf('\n') >= 0 || s.IndexOf('\r') >= 0)
+            return false;
+        if (s.IndexOf("itemLang", StringComparison.OrdinalIgnoreCase) >= 0)
+            return true;
+        if (s.IndexOf("weaponLang", StringComparison.OrdinalIgnoreCase) >= 0)
+            return true;
+        if (s.IndexOf("stageLang", StringComparison.OrdinalIgnoreCase) >= 0)
+            return true;
+        if (s.IndexOf("charLang", StringComparison.OrdinalIgnoreCase) >= 0)
+            return true;
+        if (s.IndexOf('{') >= 0 && s.IndexOf('}') >= 0)
+            return true;
+        // path-like term with no spaces
+        if (s.IndexOf('/') >= 0 && s.IndexOf(' ') < 0)
+            return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Localize each line of a multi-line body independently so a bad first-line key
+    /// does not wipe the rest of the tooltip text.
+    /// </summary>
+    public static string LocalizeMultilineDisplayText(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+        if (raw.IndexOf('\n') < 0 && raw.IndexOf('\r') < 0)
+            return LocalizeDisplayText(raw);
+
+        var lines = raw.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i];
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                // keep blank separators
+                if (sb.Length > 0) sb.AppendLine();
+                continue;
+            }
+            if (LooksLikeLocKey(line))
+            {
+                string t = LocalizeDisplayText(line.Trim());
+                if (string.IsNullOrEmpty(t))
+                    continue; // drop untranslated keys
+                sb.AppendLine(t);
+            }
+            else
+            {
+                sb.AppendLine(line);
+            }
+        }
+        string result = sb.ToString().TrimEnd();
+        return string.IsNullOrEmpty(result) ? null : result;
+    }
+
+    private static bool IsGoodTranslation(string result, string term)
+    {
+        if (string.IsNullOrEmpty(result) || result == term)
+            return false;
+        if (LooksLikeLocKey(result))
+            return false;
+        return true;
+    }
+
+    private static string TryI2(string term, bool applyParameters)
+    {
+        try
+        {
+            return LocalizationManager.GetTranslation(
+                term,
+                FixForRTL: true,
+                maxLineLengthForRTL: 0,
+                ignoreRTLnumbers: true,
+                applyParameters: applyParameters,
+                localParametersRoot: null,
+                overrideLanguage: null,
+                allowLocalizedParameters: true);
+        }
+        catch
+        {
             return null;
         }
     }

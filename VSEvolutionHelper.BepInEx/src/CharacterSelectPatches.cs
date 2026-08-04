@@ -363,26 +363,54 @@ public static class CharacterSelectPatches
 
 	private static string BuildFlavor(CharacterData cdata, CharacterType ctype, Skin skin)
 	{
-		string flavor = null;
+		// Prefer explicit loc key → LocalizeDisplayText (never show raw itemLang/… keys)
+		try
+		{
+			if (cdata != null)
+			{
+				string key = cdata.GetDescriptionLocKey(ctype);
+				string t = GameData.LocalizeDisplayText(key);
+				if (!string.IsNullOrEmpty(t)) return t;
+			}
+		}
+		catch { }
+
+		string[] candidates = new string[4];
+		int n = 0;
 		try
 		{
 			if (cdata != null && skin != null)
-				flavor = cdata.GetDescription(ctype, skin);
+				candidates[n++] = cdata.GetDescription(ctype, skin);
 		}
 		catch { }
-		if (string.IsNullOrWhiteSpace(flavor))
+		try
 		{
-			try { if (cdata != null) flavor = cdata.GetDescription(ctype); } catch { }
+			if (cdata != null)
+				candidates[n++] = cdata.GetDescription(ctype);
 		}
-		if (string.IsNullOrWhiteSpace(flavor))
+		catch { }
+		try
 		{
-			try { flavor = cdata != null ? cdata.description : null; } catch { }
+			if (cdata != null)
+				candidates[n++] = cdata.description;
 		}
-		if (string.IsNullOrWhiteSpace(flavor) && skin != null)
+		catch { }
+		try
 		{
-			try { flavor = skin._description_k__BackingField; } catch { }
+			if (skin != null)
+				candidates[n++] = skin._description_k__BackingField;
 		}
-		return string.IsNullOrWhiteSpace(flavor) ? null : flavor.Trim();
+		catch { }
+
+		for (int i = 0; i < n; i++)
+		{
+			string t = GameData.LocalizeDisplayText(candidates[i]);
+			if (!string.IsNullOrEmpty(t))
+				return t;
+		}
+
+		// Last resort: humanize character type as a short blurb is better than a loc key
+		return null;
 	}
 
 	private static Skin ResolveCurrentSkin(CharacterItem item, CharacterData cdata, CharacterItemUI ui)
@@ -456,26 +484,8 @@ public static class CharacterSelectPatches
 		var sb = new StringBuilder();
 		try
 		{
-			// Flavor
-			string flavor = null;
-			try
-			{
-				if (cdata != null && skin != null)
-					flavor = cdata.GetDescription(ctype, skin);
-			}
-			catch { }
-			if (string.IsNullOrWhiteSpace(flavor))
-			{
-				try { if (cdata != null) flavor = cdata.GetDescription(ctype); } catch { }
-			}
-			if (string.IsNullOrWhiteSpace(flavor))
-			{
-				try { flavor = cdata != null ? cdata.description : null; } catch { }
-			}
-			if (string.IsNullOrWhiteSpace(flavor) && skin != null)
-			{
-				try { flavor = skin._description_k__BackingField; } catch { }
-			}
+			// Flavor (localized; never raw itemLang keys)
+			string flavor = BuildFlavor(cdata, ctype, skin);
 			if (!string.IsNullOrWhiteSpace(flavor))
 				sb.AppendLine(flavor.Trim());
 
