@@ -1,6 +1,6 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.9.6** — Interactive evolution, arcana, grimoire, map, stage-select, and character-select tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.9.7** — Interactive evolution, arcana, grimoire, map, stage-select, and character-select tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
@@ -72,7 +72,7 @@ More background: [BepInEx docs](https://docs.bepinex.dev/) · [bleeding-edge / B
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.9.6]
+Loading [VS Evolution Helper 1.9.7]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete

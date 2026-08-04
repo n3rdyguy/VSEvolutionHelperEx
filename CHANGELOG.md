@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.9.7] — 2026-08-04
+
+### Changed
+- Character tooltip placement restored to the **original near-card position**; still **click-through** so you can select the character under it. Keeps weapon/evo icons from 1.9.6.
+
 ## [1.9.6] — 2026-08-04
 
 ### Fixed

@@ -7144,86 +7144,13 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 		if ((Object)(object)characterPopup != (Object)null)
 		{
+			// Click-through so the card under the tooltip remains selectable
 			DisablePopupRaycasts(characterPopup);
+			// Original placement (anchored near the character), not "to the right of screen"
 			if ((Object)(object)info.Go != (Object)null)
-				PositionCharacterPopupToRight(characterPopup, info.Go.transform);
+				PositionPopup(characterPopup, info.Go.transform);
 		}
 		Plugin.Dbg($"Character popup title={(data != null ? data.Title : info.Label)}");
-	}
-
-	/// <summary>
-	/// Place tooltip to the right of the character card using screen-space conversion
-	/// (works for overlay and camera canvases). Flips left if not enough room.
-	/// </summary>
-	private static void PositionCharacterPopupToRight(GameObject popup, Transform anchor)
-	{
-		try
-		{
-			RectTransform popupRt = popup.GetComponent<RectTransform>();
-			if ((Object)(object)popupRt == (Object)null || (Object)(object)anchor == (Object)null)
-				return;
-			RectTransform parentRt = popup.transform.parent as RectTransform;
-			if ((Object)(object)parentRt == (Object)null)
-				parentRt = popup.transform.parent.GetComponent<RectTransform>();
-			if ((Object)(object)parentRt == (Object)null) return;
-
-			RectTransform anchorRt = anchor as RectTransform;
-			if ((Object)(object)anchorRt == (Object)null)
-				anchorRt = anchor.GetComponent<RectTransform>();
-			if ((Object)(object)anchorRt == (Object)null) return;
-
-			Canvas canvas = parentRt.GetComponentInParent<Canvas>();
-			Camera cam = null;
-			if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
-				cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
-
-			// Force layout so sizeDelta is valid
-			Canvas.ForceUpdateCanvases();
-			LayoutRebuilder.ForceRebuildLayoutImmediate(popupRt);
-
-			float pw = Mathf.Max(120f, popupRt.sizeDelta.x);
-			float ph = Mathf.Max(60f, popupRt.sizeDelta.y);
-			const float gap = 12f;
-
-			// World corners: 0=BL, 1=TL, 2=TR, 3=BR
-			Vector3[] corners = new Vector3[4];
-			anchorRt.GetWorldCorners(corners);
-
-			// Prefer right of card (screen pixels)
-			Vector2 screenPt = RectTransformUtility.WorldToScreenPoint(cam, corners[2]);
-			screenPt.x += gap;
-			bool placeLeft = screenPt.x + pw > Screen.width - 10f;
-			if (placeLeft)
-			{
-				screenPt = RectTransformUtility.WorldToScreenPoint(cam, corners[1]);
-				screenPt.x -= gap + pw;
-			}
-			// Top-align with card top; clamp vertically
-			if (screenPt.y > Screen.height - 10f)
-				screenPt.y = Screen.height - 10f;
-			if (screenPt.y - ph < 10f)
-				screenPt.y = ph + 10f;
-			if (screenPt.x < 10f)
-				screenPt.x = 10f;
-			if (screenPt.x + pw > Screen.width - 10f)
-				screenPt.x = Screen.width - 10f - pw;
-
-			if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRt, screenPt, cam, out Vector2 local))
-			{
-				// Fallback without camera
-				RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRt, screenPt, null, out local);
-			}
-
-			popupRt.anchorMin = new Vector2(0.5f, 0.5f);
-			popupRt.anchorMax = new Vector2(0.5f, 0.5f);
-			popupRt.pivot = new Vector2(0f, 1f);
-			popupRt.anchoredPosition = local;
-		}
-		catch (Exception ex)
-		{
-			Plugin.Log.LogWarning("[Character] PositionCharacterPopupToRight: " + ex.Message);
-			try { PositionPopup(popup, anchor); } catch { }
-		}
 	}
 
 	/// <summary>Character select popup with portrait, starter weapon icon, and evo icons.</summary>
