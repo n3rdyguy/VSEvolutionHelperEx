@@ -7293,8 +7293,12 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 
 		stageRelicPopup = CreateSimpleMapPopup(parent, label, desc, spr);
-		if ((Object)(object)stageRelicPopup != (Object)null && (Object)(object)info.Go != (Object)null)
-			PositionPopup(stageRelicPopup, info.Go.transform);
+		if ((Object)(object)stageRelicPopup != (Object)null)
+		{
+			DisablePopupRaycasts(stageRelicPopup);
+			if ((Object)(object)info.Go != (Object)null)
+				PositionPopup(stageRelicPopup, info.Go.transform);
+		}
 		Plugin.Dbg($"StageRelic popup item={info.Item} label={label}");
 	}
 
@@ -8126,6 +8130,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		return FindPopupParent(anchor);
 	}
 
+	/// <summary>
+	/// Simple icon + title + description popup (stage relics, map icons, adventure fallback).
+	/// Width grows for long titles; title/desc heights come from TMP preferred size so wrapping
+	/// does not collide (fixes cramped "Relics in stage" tooltips).
+	/// </summary>
 	private static GameObject CreateSimpleMapPopup(Transform parent, string title, string description, Sprite sprite)
 	{
 		GameObject val = new GameObject("MapTooltipPopup");
@@ -8136,15 +8145,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		val2.pivot = new Vector2(0f, 1f);
 		Image bg = val.AddComponent<Image>();
 		((Graphic)bg).color = PopupBgColor;
-		// Default false so menu tooltips (character select) never block clicks;
-		// map/stage can re-enable if they need hover-on-tooltip later.
 		((Graphic)bg).raycastTarget = false;
 		Outline outline = val.AddComponent<Outline>();
 		((Shadow)outline).effectColor = new Color(0.9f, 0.75f, 0.3f, 1f);
 		((Shadow)outline).effectDistance = new Vector2(2f, 2f);
 
-		float y = 0f - Padding;
-		float width = 320f;
 		TMP_FontAsset font = GetFont();
 		if ((Object)(object)font == (Object)null)
 		{
@@ -8152,7 +8157,29 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			return null;
 		}
 
-		// Title row
+		const float minW = 280f;
+		const float maxW = 400f;
+		const float icon = 40f; // slightly smaller than IconSize so title can breathe
+		string titleText = string.IsNullOrEmpty(title) ? "Unknown" : title;
+
+		// Prefer a width that fits the title on ~2 lines max, not a fixed 320 that wraps too tight
+		float width = minW;
+		try
+		{
+			float oneLine = MeasureTmpPreferredWidth(font, titleText, 17f, true) + icon + Spacing + Padding * 2f + 8f;
+			// If one line is reasonable, use it; else cap and let wrap
+			if (oneLine <= maxW)
+				width = Mathf.Max(minW, oneLine);
+			else
+				width = maxW;
+		}
+		catch { width = 340f; }
+
+		float contentW = width - Padding * 2f;
+		float y = -Padding;
+		float titleTextW = contentW - icon - Spacing;
+
+		// Title row: icon + wrapping title (height from TMP, not fixed IconSize)
 		GameObject titleRow = new GameObject("TitleRow");
 		titleRow.transform.SetParent(val.transform, false);
 		RectTransform tr = titleRow.AddComponent<RectTransform>();
@@ -8160,60 +8187,91 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		tr.anchorMax = new Vector2(0f, 1f);
 		tr.pivot = new Vector2(0f, 1f);
 		tr.anchoredPosition = new Vector2(Padding, y);
-		tr.sizeDelta = new Vector2(width - Padding * 2f, IconSize);
 
 		if ((Object)(object)sprite != (Object)null)
 		{
 			GameObject ic = new GameObject("Icon");
 			ic.transform.SetParent(titleRow.transform, false);
 			RectTransform ir = ic.AddComponent<RectTransform>();
-			ir.anchorMin = new Vector2(0f, 0.5f);
-			ir.anchorMax = new Vector2(0f, 0.5f);
-			ir.pivot = new Vector2(0f, 0.5f);
-			ir.anchoredPosition = Vector2.zero;
-			ir.sizeDelta = new Vector2(IconSize, IconSize);
+			ir.anchorMin = new Vector2(0f, 1f);
+			ir.anchorMax = new Vector2(0f, 1f);
+			ir.pivot = new Vector2(0f, 1f);
+			ir.anchoredPosition = new Vector2(0f, 0f);
+			ir.sizeDelta = new Vector2(icon, icon);
 			Image ii = ic.AddComponent<Image>();
 			ii.sprite = sprite;
 			ii.preserveAspect = true;
 			((Graphic)ii).raycastTarget = false;
 		}
 
+		// Title as top-left box next to icon (not stretch-fill) so multi-line works
 		GameObject titleGo = new GameObject("Title");
 		titleGo.transform.SetParent(titleRow.transform, false);
 		RectTransform titleRt = titleGo.AddComponent<RectTransform>();
-		titleRt.anchorMin = Vector2.zero;
-		titleRt.anchorMax = Vector2.one;
-		titleRt.offsetMin = new Vector2(IconSize + Spacing, 0f);
-		titleRt.offsetMax = Vector2.zero;
+		titleRt.anchorMin = new Vector2(0f, 1f);
+		titleRt.anchorMax = new Vector2(0f, 1f);
+		titleRt.pivot = new Vector2(0f, 1f);
+		titleRt.anchoredPosition = new Vector2(icon + Spacing, 0f);
+		titleRt.sizeDelta = new Vector2(titleTextW, icon);
 		TextMeshProUGUI titleTmp = titleGo.AddComponent<TextMeshProUGUI>();
 		((TMP_Text)titleTmp).font = font;
-		((TMP_Text)titleTmp).text = string.IsNullOrEmpty(title) ? "Unknown" : title;
-		((TMP_Text)titleTmp).fontSize = 18f;
+		((TMP_Text)titleTmp).text = titleText;
+		((TMP_Text)titleTmp).fontSize = 17f;
 		((TMP_Text)titleTmp).fontStyle = (FontStyles)1;
 		((Graphic)titleTmp).color = Color.white;
-		((TMP_Text)titleTmp).alignment = (TextAlignmentOptions)513;
-		y -= IconSize + Spacing;
+		((TMP_Text)titleTmp).alignment = (TextAlignmentOptions)257; // top-left
+		((TMP_Text)titleTmp).enableWordWrapping = true;
+		((TMP_Text)titleTmp).overflowMode = TextOverflowModes.Overflow;
+		((Graphic)titleTmp).raycastTarget = false;
+
+		float titleH = FitTmpHeight(titleTmp, titleTextW, 22f, 96f);
+		float rowH = Mathf.Max(icon, titleH);
+		// Vertically center icon if title taller than icon
+		if ((Object)(object)sprite != (Object)null && rowH > icon)
+		{
+			try
+			{
+				var ir = titleRow.transform.Find("Icon") as RectTransform;
+				if ((Object)(object)ir != (Object)null)
+					ir.anchoredPosition = new Vector2(0f, -(rowH - icon) * 0.5f);
+			}
+			catch { }
+		}
+		tr.sizeDelta = new Vector2(contentW, rowH);
+		y -= rowH + Spacing + 2f; // extra gap before description
 
 		if (!string.IsNullOrEmpty(description))
 		{
-			GameObject descGo = CreateTextElement(val.transform, "Desc", description, font, 13f, new Color(0.85f, 0.85f, 0.9f, 1f), (FontStyles)0);
-			RectTransform dr = descGo.GetComponent<RectTransform>();
+			GameObject descGo = new GameObject("Desc");
+			descGo.transform.SetParent(val.transform, false);
+			RectTransform dr = descGo.AddComponent<RectTransform>();
 			dr.anchorMin = new Vector2(0f, 1f);
 			dr.anchorMax = new Vector2(0f, 1f);
 			dr.pivot = new Vector2(0f, 1f);
 			dr.anchoredPosition = new Vector2(Padding, y);
-			float dw = width - Padding * 2f;
-			dr.sizeDelta = new Vector2(dw, 0f);
-			TextMeshProUGUI dt = descGo.GetComponent<TextMeshProUGUI>();
+			dr.sizeDelta = new Vector2(contentW, 24f);
+			TextMeshProUGUI dt = descGo.AddComponent<TextMeshProUGUI>();
+			((TMP_Text)dt).font = font;
+			((TMP_Text)dt).text = description;
+			((TMP_Text)dt).fontSize = 13f;
+			((TMP_Text)dt).fontStyle = (FontStyles)0;
+			((Graphic)dt).color = new Color(0.85f, 0.85f, 0.9f, 1f);
+			((TMP_Text)dt).alignment = (TextAlignmentOptions)257; // top-left
 			((TMP_Text)dt).enableWordWrapping = true;
-			((TMP_Text)dt).ForceMeshUpdate(false, false);
-			float h = Mathf.Max(24f, ((TMP_Text)dt).preferredHeight);
-			dr.sizeDelta = new Vector2(dw, h);
+			((TMP_Text)dt).overflowMode = TextOverflowModes.Overflow;
+			((Graphic)dt).raycastTarget = false;
+			float h = FitTmpHeight(dt, contentW, 20f, 180f);
 			y -= h + Spacing;
 		}
 
 		y -= Padding;
-		val2.sizeDelta = new Vector2(width, 0f - y);
+		val2.sizeDelta = new Vector2(width, Mathf.Abs(y));
+		try
+		{
+			Canvas.ForceUpdateCanvases();
+			LayoutRebuilder.ForceRebuildLayoutImmediate(val2);
+		}
+		catch { }
 		return val;
 	}
 

@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.3] — polish (unreleased tag)
+
+### Fixed
+- Stage relic / simple tooltips: **dynamic width + TMP height** so long names (e.g. “Roast Chicken with a Clock…”) and descriptions no longer look cramped or collide.
+
 ## [1.10.2] — polish (unreleased tag)
 
 ### Added / improved
