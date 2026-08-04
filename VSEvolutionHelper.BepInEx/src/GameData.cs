@@ -517,16 +517,20 @@ public static class GameData
         try
         {
             string term = data.GetLocalizedDescriptionTerm(type);
-            string t = Translate(term);
+            string t = LocalizeDisplayText(term);
             if (!string.IsNullOrEmpty(t))
-            {
                 return t;
-            }
         }
         catch
         {
         }
-        return data.description ?? data.tips ?? "";
+        string raw = null;
+        try { raw = data.description; } catch { }
+        if (string.IsNullOrEmpty(raw))
+        {
+            try { raw = data.tips; } catch { }
+        }
+        return LocalizeDisplayText(raw) ?? "";
     }
 
     public static string GetPowerUpName(PowerUpType type)
@@ -548,20 +552,22 @@ public static class GameData
         {
             try
             {
-                string term = data.GetLocalizedNameTerm(type);
-                string t = Translate(term);
-                if (!string.IsNullOrEmpty(t) && !t.Contains("/"))
-                {
+                string t = LocalizeDisplayText(data.GetLocalizedNameTerm(type));
+                if (!string.IsNullOrEmpty(t))
                     return t;
-                }
             }
             catch
             {
             }
 
-            if (!string.IsNullOrEmpty(data.name) && !data.name.Contains("/"))
+            try
             {
-                return data.name;
+                string t = LocalizeDisplayText(data.name);
+                if (!string.IsNullOrEmpty(t))
+                    return t;
+            }
+            catch
+            {
             }
         }
         return HumanizeEnum(type.ToString());
@@ -573,20 +579,21 @@ public static class GameData
         {
             try
             {
-                string t = data.GetLocalizedName(type);
-                if (!string.IsNullOrEmpty(t) && !t.Contains("/"))
-                {
-                    // May already be localized or still a term
-                    string t2 = Translate(t);
-                    return !string.IsNullOrEmpty(t2) ? t2 : t;
-                }
+                string t = LocalizeDisplayText(data.GetLocalizedName(type));
+                if (!string.IsNullOrEmpty(t))
+                    return t;
             }
             catch
             {
             }
-            if (!string.IsNullOrEmpty(data.name) && !data.name.Contains("/"))
+            try
             {
-                return data.name;
+                string t = LocalizeDisplayText(data.name);
+                if (!string.IsNullOrEmpty(t))
+                    return t;
+            }
+            catch
+            {
             }
         }
         return HumanizeEnum(type.ToString());
@@ -642,7 +649,7 @@ public static class GameData
             return t;
 
         // itemLang/{MERCHANT}description  →  itemLang/MERCHANT description, etc.
-        // Common VS term shapes for characters / items
+        // Common VS term shapes for characters / items / weapons
         try
         {
             // Capture: prefix/{ID}suffix  e.g. itemLang/{MERCHANT}description
@@ -655,26 +662,9 @@ public static class GameData
                 string suffix = braceR + 1 < s.Length ? s.Substring(braceR + 1) : ""; // "description"
                 if (!string.IsNullOrEmpty(id))
                 {
-                    string[] candidates =
-                    {
-                        prefix + id + " " + suffix,
-                        prefix + id + suffix,
-                        prefix + id + "_" + suffix,
-                        prefix + id + "/" + suffix,
-                        "itemLang/" + id + " " + suffix,
-                        "itemLang/" + id + " description",
-                        "itemLang/" + id + " name",
-                        "Characters/" + id + "/" + suffix,
-                        "Characters/" + id + "/description",
-                        id + " " + suffix,
-                    };
-                    foreach (string c in candidates)
-                    {
-                        if (string.IsNullOrWhiteSpace(c)) continue;
-                        t = Translate(c.Trim());
-                        if (!string.IsNullOrEmpty(t))
-                            return t;
-                    }
+                    t = TryLocKeyVariants(prefix, id, suffix);
+                    if (!string.IsNullOrEmpty(t))
+                        return t;
                 }
             }
 
@@ -682,7 +672,7 @@ public static class GameData
             string stripped = s.Replace("{", "").Replace("}", "");
             stripped = System.Text.RegularExpressions.Regex.Replace(
                 stripped,
-                @"(itemLang/\w+)(description|name|tips|desc)$",
+                @"((?:itemLang|weaponLang|stageLang|charLang|powerupLang)/\w+)(description|name|tips|desc)$",
                 "$1 $2",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (!string.Equals(stripped, s, StringComparison.Ordinal))
@@ -697,6 +687,59 @@ public static class GameData
             Plugin.Dbg("[GameData] LocalizeDisplayText: " + ex.Message);
         }
 
+        return null;
+    }
+
+    /// <summary>
+    /// Build and translate common VS I2 term shapes for a character/item/weapon id.
+    /// Used when the game hands us a templated key or when we synthesize from CharacterType.
+    /// </summary>
+    public static string LocalizeTypedDescription(string id, string kind = "description")
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return null;
+        id = id.Trim();
+        // Try brace form first (matches what GetDescription sometimes returns)
+        string t = LocalizeDisplayText("itemLang/{" + id + "}" + kind);
+        if (!string.IsNullOrEmpty(t)) return t;
+        t = TryLocKeyVariants("itemLang/", id, kind);
+        if (!string.IsNullOrEmpty(t)) return t;
+        t = TryLocKeyVariants("charLang/", id, kind);
+        if (!string.IsNullOrEmpty(t)) return t;
+        t = TryLocKeyVariants("weaponLang/", id, kind);
+        return t;
+    }
+
+    private static string TryLocKeyVariants(string prefix, string id, string suffix)
+    {
+        if (string.IsNullOrEmpty(id)) return null;
+        suffix = suffix ?? "";
+        string[] candidates =
+        {
+            prefix + id + " " + suffix,
+            prefix + id + suffix,
+            prefix + id + "_" + suffix,
+            prefix + id + "/" + suffix,
+            prefix + "{" + id + "}" + suffix,
+            "itemLang/" + id + " " + suffix,
+            "itemLang/" + id + " description",
+            "itemLang/" + id + " name",
+            "itemLang/" + id + " tips",
+            "charLang/" + id + " " + suffix,
+            "weaponLang/" + id + " " + suffix,
+            "powerupLang/" + id + " " + suffix,
+            "Characters/" + id + "/" + suffix,
+            "Characters/" + id + "/description",
+            "Characters/" + id + "/name",
+            id + " " + suffix,
+        };
+        foreach (string c in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(c)) continue;
+            string t = Translate(c.Trim());
+            if (!string.IsNullOrEmpty(t))
+                return t;
+        }
         return null;
     }
 
@@ -1292,19 +1335,18 @@ public static class GameData
         {
             try
             {
-                string t = data.GetLocalizedName(type);
-                if (!string.IsNullOrEmpty(t) && !t.Contains("/"))
-                {
-                    string t2 = Translate(t);
-                    return !string.IsNullOrEmpty(t2) ? t2 : t;
-                }
+                string t = LocalizeDisplayText(data.GetLocalizedName(type));
+                if (!string.IsNullOrEmpty(t))
+                    return t;
             }
             catch { }
-            if (!string.IsNullOrEmpty(data.name) && !data.name.Contains("/"))
+            try
             {
-                string t = Translate(data.name);
-                return !string.IsNullOrEmpty(t) ? t : data.name;
+                string t = LocalizeDisplayText(data.name);
+                if (!string.IsNullOrEmpty(t))
+                    return t;
             }
+            catch { }
         }
         return HumanizeEnum(type.ToString());
     }
@@ -1315,31 +1357,32 @@ public static class GameData
         {
             try
             {
-                string t = data.GetLocalizedDescription(type);
+                string t = LocalizeDisplayText(data.GetLocalizedDescription(type));
                 if (!string.IsNullOrEmpty(t))
-                {
-                    string t2 = Translate(t);
-                    return !string.IsNullOrEmpty(t2) ? t2 : t;
-                }
+                    return t;
             }
             catch { }
             try
             {
-                string tips = data.GetLocalizedTips(type);
-                if (!string.IsNullOrEmpty(tips))
-                {
-                    string t2 = Translate(tips);
-                    return !string.IsNullOrEmpty(t2) ? t2 : tips;
-                }
+                string t = LocalizeDisplayText(data.GetLocalizedTips(type));
+                if (!string.IsNullOrEmpty(t))
+                    return t;
             }
             catch { }
-            if (!string.IsNullOrEmpty(data.description))
+            try
             {
-                string t = Translate(data.description);
-                return !string.IsNullOrEmpty(t) ? t : data.description;
+                string t = LocalizeDisplayText(data.description);
+                if (!string.IsNullOrEmpty(t))
+                    return t;
             }
-            if (!string.IsNullOrEmpty(data.tips))
-                return data.tips;
+            catch { }
+            try
+            {
+                string t = LocalizeDisplayText(data.tips);
+                if (!string.IsNullOrEmpty(t))
+                    return t;
+            }
+            catch { }
         }
         return "";
     }
@@ -1621,20 +1664,21 @@ public static class GameData
         {
             try
             {
-                string term = data.GetLocalizedNameTerm(type);
-                string t = Translate(term);
-                if (!string.IsNullOrEmpty(t) && !t.Contains("/"))
-                {
+                string t = LocalizeDisplayText(data.GetLocalizedNameTerm(type));
+                if (!string.IsNullOrEmpty(t))
                     return t;
-                }
             }
             catch
             {
             }
-            if (!string.IsNullOrEmpty(data.name) && !data.name.Contains("/"))
+            try
             {
-                string t = Translate(data.name);
-                return !string.IsNullOrEmpty(t) ? t : data.name;
+                string t = LocalizeDisplayText(data.name);
+                if (!string.IsNullOrEmpty(t))
+                    return t;
+            }
+            catch
+            {
             }
         }
         // T21_BLOODY -> Bloody, D01_SAPPHIRE_MIST -> Sapphire Mist
@@ -1658,20 +1702,21 @@ public static class GameData
         {
             try
             {
-                string term = data.GetLocalizedDescriptionTerm(type);
-                string t = Translate(term);
+                string t = LocalizeDisplayText(data.GetLocalizedDescriptionTerm(type));
                 if (!string.IsNullOrEmpty(t))
-                {
                     return t;
-                }
             }
             catch
             {
             }
-            if (!string.IsNullOrEmpty(data.description))
+            try
             {
-                string t = Translate(data.description);
-                return !string.IsNullOrEmpty(t) ? t : data.description;
+                string t = LocalizeDisplayText(data.description);
+                if (!string.IsNullOrEmpty(t))
+                    return t;
+            }
+            catch
+            {
             }
         }
         return "";

@@ -7599,10 +7599,13 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		catch { }
 		y -= titleH + gap;
 
-		// Flavor
-		if (!string.IsNullOrEmpty(data.Flavor))
+		// Flavor (final scrub — never paint raw I2 keys)
+		string flavor = data.Flavor;
+		if (GameData.LooksLikeLocKey(flavor))
+			flavor = GameData.LocalizeDisplayText(flavor);
+		if (!string.IsNullOrEmpty(flavor))
 		{
-			var flavorTmp = AddUiText(root.transform, "Flavor", data.Flavor, font, 13f, soft, false,
+			var flavorTmp = AddUiText(root.transform, "Flavor", flavor, font, 13f, soft, false,
 				Padding, y, contentW, 40f, (TextAlignmentOptions)257);
 			float fh = FitTmpHeight(flavorTmp, contentW, 18f, 200f);
 			y -= fh + gap + 2f;
@@ -8619,12 +8622,17 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 	private static string GetLocalizedPowerUpDescription(object data, ItemType type)
 	{
-		//IL_0049: Unknown result type (might be due to invalid IL or missing references)
-		//IL_004f: Expected I4, but got Unknown
-		if (data == null)
+		// Prefer typed item path (already scrubbed of I2 keys)
+		try
 		{
-			return "";
+			string viaItems = GameData.GetItemDescription(type);
+			if (!string.IsNullOrEmpty(viaItems))
+				return viaItems;
 		}
+		catch { }
+
+		if (data == null)
+			return "";
 		try
 		{
 			MethodInfo method = data.GetType().GetMethod("GetLocalizedDescription", BindingFlags.Instance | BindingFlags.Public);
@@ -8633,21 +8641,16 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				Type parameterType = method.GetParameters()[0].ParameterType;
 				object obj = Enum.ToObject(parameterType, (int)type);
 				string text = method.Invoke(data, new object[1] { obj }) as string;
-				if (!string.IsNullOrEmpty(text) && !text.Contains("/"))
-				{
-					return text;
-				}
+				string loc = GameData.LocalizeDisplayText(text);
+				if (!string.IsNullOrEmpty(loc))
+					return loc;
 			}
 		}
 		catch
 		{
 		}
 		string propertyValue = GetPropertyValue<string>(data, "description");
-		if (!string.IsNullOrEmpty(propertyValue) && !propertyValue.Contains("/"))
-		{
-			return propertyValue;
-		}
-		return "";
+		return GameData.LocalizeDisplayText(propertyValue) ?? "";
 	}
 
 	private unsafe static string GetLocalizedPowerUpName(object data, ItemType type)

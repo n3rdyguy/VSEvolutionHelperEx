@@ -375,7 +375,7 @@ public static class CharacterSelectPatches
 		}
 		catch { }
 
-		string[] candidates = new string[4];
+		string[] candidates = new string[6];
 		int n = 0;
 		try
 		{
@@ -401,6 +401,16 @@ public static class CharacterSelectPatches
 				candidates[n++] = skin._description_k__BackingField;
 		}
 		catch { }
+		try
+		{
+			if (skin != null)
+			{
+				string sn = skin.name ?? skin._name_k__BackingField;
+				if (!string.IsNullOrWhiteSpace(sn))
+					candidates[n++] = sn; // rare: name field holds a term
+			}
+		}
+		catch { }
 
 		for (int i = 0; i < n; i++)
 		{
@@ -409,7 +419,32 @@ public static class CharacterSelectPatches
 				return t;
 		}
 
-		// Last resort: humanize character type as a short blurb is better than a loc key
+		// Synthesize from CharacterType / skin type (covers skins with missing GetDescription)
+		try
+		{
+			string t = GameData.LocalizeTypedDescription(ctype.ToString(), "description");
+			if (!string.IsNullOrEmpty(t)) return t;
+		}
+		catch { }
+		try
+		{
+			if (skin != null)
+			{
+				string st = null;
+				try { st = skin.skinType.ToString(); } catch { }
+				if (string.IsNullOrEmpty(st))
+					try { st = skin.name ?? skin._name_k__BackingField; } catch { }
+				if (!string.IsNullOrWhiteSpace(st)
+					&& !string.Equals(st, "DEFAULT", StringComparison.OrdinalIgnoreCase)
+					&& !string.Equals(st, ctype.ToString(), StringComparison.OrdinalIgnoreCase))
+				{
+					string t = GameData.LocalizeTypedDescription(st.Trim(), "description");
+					if (!string.IsNullOrEmpty(t)) return t;
+				}
+			}
+		}
+		catch { }
+
 		return null;
 	}
 
@@ -447,13 +482,29 @@ public static class CharacterSelectPatches
 
 	private static string BuildTitle(CharacterItemUI ui, CharacterData cdata, CharacterType ctype, Skin skin)
 	{
-		string baseName = SafeDisplayName(ui, null) ?? ctype.ToString();
+		string baseName = SafeDisplayName(ui, null);
+		baseName = GameData.LocalizeDisplayText(baseName) ?? baseName;
+		if (string.IsNullOrWhiteSpace(baseName) || GameData.LooksLikeLocKey(baseName))
+			baseName = GameData.LocalizeTypedDescription(ctype.ToString(), "name")
+				?? GameData.HumanizeEnum(ctype.ToString());
 		try
 		{
 			if (cdata != null && skin != null)
 			{
 				string full = cdata.GetFullName(ctype, skin, false, false);
-				if (!string.IsNullOrWhiteSpace(full))
+				full = GameData.LocalizeDisplayText(full) ?? full;
+				if (!string.IsNullOrWhiteSpace(full) && !GameData.LooksLikeLocKey(full))
+					return full.Trim();
+			}
+		}
+		catch { }
+		try
+		{
+			if (cdata != null)
+			{
+				string full = cdata.GetFullName(ctype, false, false);
+				full = GameData.LocalizeDisplayText(full) ?? full;
+				if (!string.IsNullOrWhiteSpace(full) && !GameData.LooksLikeLocKey(full))
 					return full.Trim();
 			}
 		}
@@ -466,6 +517,8 @@ public static class CharacterSelectPatches
 				skinName = skin.name;
 				if (string.IsNullOrWhiteSpace(skinName))
 					skinName = skin._name_k__BackingField;
+				skinName = GameData.LocalizeDisplayText(skinName) ?? skinName;
+				if (GameData.LooksLikeLocKey(skinName)) skinName = null;
 			}
 		}
 		catch { }

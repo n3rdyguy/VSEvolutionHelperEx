@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.8] — polish (unreleased tag)
+
+### Fixed
+- Broader I2 scrubbing: weapons, items, powerups, arcanas, and character titles/flavor never fall back to raw loc keys. Extra character key synthesis (`LocalizeTypedDescription`) for skins with missing description data.
+
 ## [1.10.7] — polish (unreleased tag)
 
 ### Fixed
