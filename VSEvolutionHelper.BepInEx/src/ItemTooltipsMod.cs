@@ -4865,7 +4865,7 @@ public class ItemTooltipsMod
 		headerRt.pivot = new Vector2(0f, 1f);
 		headerRt.anchoredPosition = new Vector2(Padding, yOffset);
 		headerRt.sizeDelta = new Vector2(maxWidth - Padding * 2f, 24f);
-		yOffset -= 30f; // header + gap before icons
+		yOffset = AdvancePastHeader(header, maxWidth - Padding * 2f, yOffset, 6f, 24f);
 
 		float iconSize = 38f;
 		float iconGap = 8f;
@@ -5702,7 +5702,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		component.pivot = new Vector2(0f, 1f);
 		component.anchoredPosition = new Vector2(Padding, yOffset);
 		component.sizeDelta = new Vector2(maxWidth - Padding * 2f, 20f);
-		yOffset -= 22f;
+		yOffset = AdvancePastHeader(val9, maxWidth - Padding * 2f, yOffset, 2f, 20f);
 		float num9 = 36f;
 		int num10 = 0;
 		foreach (EvolutionFormula item8 in list)
@@ -5958,7 +5958,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		component.pivot = new Vector2(0f, 1f);
 		component.anchoredPosition = new Vector2(Padding, yOffset);
 		component.sizeDelta = new Vector2(maxWidth - Padding * 2f, 20f);
-		yOffset -= 22f;
+		yOffset = AdvancePastHeader(val4, maxWidth - Padding * 2f, yOffset, 2f, 20f);
 		float num3 = 36f;
 		int num4 = 0;
 		foreach (EvolutionFormula item3 in list)
@@ -6051,7 +6051,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		component.pivot = new Vector2(0f, 1f);
 		component.anchoredPosition = new Vector2(Padding, yOffset);
 		component.sizeDelta = new Vector2(maxWidth - Padding * 2f, 24f);
-		yOffset -= 32f; // header + gap before first card
+		yOffset = AdvancePastHeader(val, maxWidth - Padding * 2f, yOffset, 8f, 24f);
 		float card = 48f;
 		float padding = Padding;
 		float nameX = padding + card + 12f;
@@ -6272,7 +6272,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				component.pivot = new Vector2(0f, 1f);
 				component.anchoredPosition = new Vector2(Padding, num);
 				component.sizeDelta = new Vector2(num2 - Padding * 2f, 20f);
-				num -= 22f;
+				num = AdvancePastHeader(val18, num2 - Padding * 2f, num, 2f, 20f);
 				float num6 = 38f;
 				float num7 = 6f;
 				float num8 = num2 - Padding * 2f;
@@ -8505,6 +8505,47 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	}
 
 	/// <summary>Set TMP box width, force mesh, return preferred height (clamped).</summary>
+	/// <summary>
+	/// Advance past a section header by its **rendered** height instead of a fixed step.
+	///
+	/// Headers were given a fixed rect and the caller stepped a fixed 22–32px. Labels like
+	/// "Evolutions (2): (click icons for details)" wrap to two lines in a narrow tooltip, and
+	/// TMP draws the overflow outside its rect — so the wrapped line landed on top of the icon
+	/// row below. Sizing to the real width also stops stretched-anchor headers from measuring
+	/// far wider than the tooltip.
+	/// </summary>
+	private static float AdvancePastHeader(GameObject header, float width, float yOffset, float gapBelow, float minH)
+	{
+		float h = minH;
+		if ((Object)(object)header == (Object)null)
+		{
+			return yOffset - h - gapBelow;
+		}
+
+		// Pin to the top-left corner so sizeDelta.x IS the width. Some headers were left with
+		// stretched anchors (anchorMax.x = 1), where the real width is parentWidth +
+		// sizeDelta.x — and the parent has no width yet at build time, so they measured far too
+		// wide and ran off the edge instead of wrapping. Anchors are reset here rather than at
+		// each call site so every header measures against the same geometry.
+		RectTransform rt = header.GetComponent<RectTransform>();
+		if ((Object)(object)rt != (Object)null)
+		{
+			rt.anchorMin = new Vector2(0f, 1f);
+			rt.anchorMax = new Vector2(0f, 1f);
+			rt.pivot = new Vector2(0f, 1f);
+			// Re-apply after the anchor change: anchoredPosition means something different
+			// under stretched anchors, so the caller's placement would otherwise shift.
+			rt.anchoredPosition = new Vector2(Padding, yOffset);
+		}
+
+		TextMeshProUGUI tmp = header.GetComponent<TextMeshProUGUI>();
+		if ((Object)(object)tmp != (Object)null)
+		{
+			h = FitTmpHeight(tmp, width, minH, 72f);
+		}
+		return yOffset - h - gapBelow;
+	}
+
 	private static float FitTmpHeight(TextMeshProUGUI tmp, float width, float minH, float maxH)
 	{
 		if ((Object)(object)tmp == (Object)null) return minH;
