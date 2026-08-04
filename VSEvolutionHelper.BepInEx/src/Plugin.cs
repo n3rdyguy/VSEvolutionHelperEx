@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string PluginGuid = "com.nihil.vsevolutionhelper";
     public const string PluginName = "VS Evolution Helper";
-    public const string PluginVersion = "1.10.12";
+    public const string PluginVersion = "1.10.13";
 
     internal static new ManualLogSource Log;
     internal static Plugin Instance;

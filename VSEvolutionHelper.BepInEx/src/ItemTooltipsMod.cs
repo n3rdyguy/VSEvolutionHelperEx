@@ -763,7 +763,9 @@ public class ItemTooltipsMod
 			// Level Up / pause / merchant just opened — never keep a stale or auto tooltip
 			HideAllPopups();
 			ResetHoverDwellState();
-			collectionIcons.Clear();
+			// Keep App Collections registrations (main menu); only clear in-run clutter
+			// collectionIcons are App-UI cells — clearing them on pause made Collections feel "dead"
+			// after any in-run pause. Re-scan on next Collections open if needed.
 			HideCollectionPopup();
 			ClearTrackedIcons();
 			if ((Object)(object)pauseView != (Object)null && pauseView.activeInHierarchy)
@@ -844,8 +846,6 @@ public class ItemTooltipsMod
 		}
 		// Collections / Secrets (main menu): keep grid icons registered
 		CollectionSelectPatches.Tick();
-		if (collectionUnlockIcons.Count > 0)
-			UpdateCollectionUnlockHover();
 		// Adventures select tooltips
 		if (Plugin.AdventureTooltipsEnabled)
 		{
@@ -857,17 +857,16 @@ public class ItemTooltipsMod
 		{
 			ClearAdventureIcons();
 		}
-		if (!flag && collectionIcons.Count > 0)
+		// Collections / Grimoire (App menu) — NOT gated on IsGamePaused (main menu is never "paused")
+		if (collectionIcons.Count > 0)
 		{
 			if (usingController)
-			{
 				UpdateControllerCollectionDwell();
-			}
 			else
-			{
-				UpdateCollectionHover();
-			}
+				UpdateCollectionHover(); // backup if EventTrigger misses
 		}
+		if (collectionUnlockIcons.Count > 0)
+			UpdateCollectionUnlockHover();
 		if (usingController)
 		{
 			HandleBackButton();
@@ -6861,6 +6860,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		if (!IsUnderGameUI(go.transform))
 		{
 			collectionIcons[instanceId] = (go, type, null, null);
+			// App UI (Collections / Grimoire): EventTriggers — rect-scan alone is unreliable on App canvas
+			AttachCollectionMenuHover(go, type, null, null);
 			return;
 		}
 		uiToWeaponType[instanceId] = type;
@@ -6924,6 +6925,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		if (!IsUnderGameUI(go.transform))
 		{
 			collectionIcons[instanceId] = (go, null, type, null);
+			AttachCollectionMenuHover(go, null, type, null);
 			return;
 		}
 		uiToItemType[instanceId] = type;
@@ -6941,6 +6943,105 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 	/// <summary>How many App-UI collection icons are currently registered (for scan warm-up).</summary>
 	public static int CollectionIconCount => collectionIcons.Count;
+
+	/// <summary>
+	/// Pointer enter/exit on Collections / Grimoire / menu cells (App canvas).
+	/// Does not require IsGamePaused() — main menu is never "paused".
+	/// </summary>
+	private static void AttachCollectionMenuHover(GameObject go, WeaponType? weapon, ItemType? item, object arcana)
+	{
+		if ((Object)(object)go == (Object)null) return;
+		try
+		{
+			// Ensure something receives raycasts
+			var graphic = go.GetComponent<Graphic>();
+			if ((Object)(object)graphic == (Object)null)
+			{
+				var img = go.AddComponent<Image>();
+				img.color = new Color(1f, 1f, 1f, 0.01f);
+				graphic = img;
+			}
+			graphic.raycastTarget = true;
+
+			EventTrigger et = go.GetComponent<EventTrigger>();
+			if ((Object)(object)et == (Object)null)
+				et = go.AddComponent<EventTrigger>();
+
+			// Avoid stacking duplicate entries every rescan
+			if (et.triggers != null)
+				et.triggers.Clear();
+
+			WeaponType? w = weapon;
+			ItemType? it = item;
+			object ar = arcana;
+			GameObject captured = go;
+
+			var enter = new EventTrigger.Entry();
+			enter.eventID = EventTriggerType.PointerEnter;
+			enter.callback.AddListener((UnityEngine.Events.UnityAction<BaseEventData>)(Action<BaseEventData>)(delegate
+			{
+				try
+				{
+					currentCollectionHoverId = ((Object)captured).GetInstanceID();
+					// Optional unlock-only override (locked relics)
+					if (collectionUnlockIcons.TryGetValue(currentCollectionHoverId, out MapIconInfo unlock)
+						&& !string.IsNullOrEmpty(unlock.Description)
+						&& unlock.Description.StartsWith("Unlock:", StringComparison.Ordinal))
+					{
+						// Show simple unlock tip
+						if ((Object)(object)collectionUnlockPopup != (Object)null)
+							Object.Destroy((Object)(object)collectionUnlockPopup);
+						Transform parent = FindPopupParent(captured.transform);
+						if ((Object)(object)parent != (Object)null)
+						{
+							collectionUnlockPopup = CreateSimpleMapPopup(parent, unlock.Label, unlock.Description, unlock.Sprite);
+							if ((Object)(object)collectionUnlockPopup != (Object)null)
+							{
+								DisablePopupRaycasts(collectionUnlockPopup);
+								PositionPopup(collectionUnlockPopup, captured.transform);
+							}
+						}
+						return;
+					}
+					ShowCollectionPopup(w, it, ar);
+					if ((Object)(object)collectionPopup != (Object)null)
+						PositionPopup(collectionPopup, captured.transform);
+				}
+				catch (Exception ex)
+				{
+					Plugin.Log.LogWarning("[Collections] hover enter: " + ex.Message);
+				}
+			}));
+			et.triggers.Add(enter);
+
+			var exit = new EventTrigger.Entry();
+			exit.eventID = EventTriggerType.PointerExit;
+			exit.callback.AddListener((UnityEngine.Events.UnityAction<BaseEventData>)(Action<BaseEventData>)(delegate
+			{
+				try
+				{
+					// Don't hide if pointer moved onto the popup itself
+					if ((Object)(object)collectionPopup != (Object)null
+						&& IsPointerOverObject(collectionPopup))
+						return;
+					currentCollectionHoverId = -1;
+					pendingCollectionHoverId = -1;
+					HideCollectionPopup();
+					if ((Object)(object)collectionUnlockPopup != (Object)null)
+					{
+						Object.Destroy((Object)(object)collectionUnlockPopup);
+						collectionUnlockPopup = null;
+					}
+				}
+				catch { }
+			}));
+			et.triggers.Add(exit);
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("[Collections] AttachCollectionMenuHover: " + ex.Message);
+		}
+	}
 
 	private static readonly Dictionary<int, MapIconInfo> collectionUnlockIcons = new Dictionary<int, MapIconInfo>();
 	private static int currentCollectionUnlockHoverId = -1;
@@ -6980,9 +7081,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 	public static void RegisterArcanaUI(int instanceId, GameObject go, object arcanaType)
 	{
+		if ((Object)(object)go == (Object)null) return;
 		if (!IsUnderGameUI(go.transform))
 		{
 			collectionIcons[instanceId] = (go, null, null, arcanaType);
+			AttachCollectionMenuHover(go, null, null, arcanaType);
 		}
 	}
 
