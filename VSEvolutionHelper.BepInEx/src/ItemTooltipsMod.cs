@@ -191,6 +191,14 @@ public class ItemTooltipsMod
 	private static GameObject characterPopup = null;
 	public static int CharacterIconCount => characterIcons.Count;
 
+	/// <summary>Adventures select card hover tooltips.</summary>
+	private static Dictionary<int, MapIconInfo> adventureIcons = new Dictionary<int, MapIconInfo>();
+	private static int currentAdventureHoverId = -1;
+	private static int pendingAdventureHoverId = -1;
+	private static float adventureHoverStartTime = 0f;
+	private static GameObject adventurePopup = null;
+	public static int AdventureIconCount => adventureIcons.Count;
+
 	private static int currentCollectionHoverId = -1;
 
 	private static GameObject collectionPopup = null;
@@ -378,6 +386,9 @@ public class ItemTooltipsMod
 			try {
 				CharacterSelectPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("CharacterSelect patches: " + ex.Message); }
+			try {
+				AdventureSelectPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("AdventureSelect patches: " + ex.Message); }
 			Plugin.Log.LogInfo("Patches applied successfully");
 		}
 		catch (Exception arg)
@@ -827,6 +838,17 @@ public class ItemTooltipsMod
 		else if (characterIcons.Count > 0)
 		{
 			ClearCharacterIcons();
+		}
+		// Adventures select tooltips
+		if (Plugin.AdventureTooltipsEnabled)
+		{
+			AdventureSelectPatches.Tick();
+			if (adventureIcons.Count > 0)
+				UpdateAdventureHover();
+		}
+		else if (adventureIcons.Count > 0)
+		{
+			ClearAdventureIcons();
 		}
 		if (!flag && collectionIcons.Count > 0)
 		{
@@ -6764,6 +6786,129 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		currentCharacterHoverId = -1;
 		pendingCharacterHoverId = -1;
 		HideCharacterPopup();
+	}
+
+	public static void RegisterAdventureIcon(GameObject go, string label, string description, Sprite sprite)
+	{
+		if (!Plugin.AdventureTooltipsEnabled) return;
+		if ((Object)(object)go == (Object)null) return;
+		int id = ((Object)go).GetInstanceID();
+		adventureIcons[id] = new MapIconInfo
+		{
+			Go = go,
+			Item = null,
+			Weapon = null,
+			Label = label ?? "Adventure",
+			Description = description ?? "",
+			Sprite = sprite
+		};
+	}
+
+	public static bool HasAdventureIcon(int instanceId) => adventureIcons.ContainsKey(instanceId);
+
+	public static void ClearAdventureIcons()
+	{
+		adventureIcons.Clear();
+		currentAdventureHoverId = -1;
+		pendingAdventureHoverId = -1;
+		HideAdventurePopup();
+	}
+
+	private static void UpdateAdventureHover()
+	{
+		// prune
+		List<int> dead = null;
+		foreach (var kv in adventureIcons)
+		{
+			if ((Object)(object)kv.Value.Go == (Object)null)
+			{
+				dead ??= new List<int>();
+				dead.Add(kv.Key);
+			}
+		}
+		if (dead != null)
+			foreach (int k in dead) adventureIcons.Remove(k);
+		if (adventureIcons.Count == 0) return;
+
+		Vector2 mouse = Input.mousePosition;
+		bool hit = false;
+		int hitId = -1;
+		MapIconInfo hitInfo = default;
+		if (AdventureSelectPatches.TryFindHovered(mouse, out hitId, out GameObject go)
+			&& adventureIcons.TryGetValue(hitId, out hitInfo))
+		{
+			hit = true;
+			if ((Object)(object)go != (Object)null)
+				hitInfo.Go = go;
+		}
+
+		if (hit)
+		{
+			if (hitId != pendingAdventureHoverId)
+			{
+				pendingAdventureHoverId = hitId;
+				adventureHoverStartTime = Time.unscaledTime;
+				if (currentAdventureHoverId != -1 && currentAdventureHoverId != hitId)
+				{
+					currentAdventureHoverId = -1;
+					HideAdventurePopup();
+				}
+			}
+			else if (Time.unscaledTime - adventureHoverStartTime >= Plugin.TooltipHoverDelay)
+			{
+				if (currentAdventureHoverId != hitId)
+				{
+					currentAdventureHoverId = hitId;
+					ShowAdventurePopup(hitInfo);
+				}
+			}
+		}
+		else
+		{
+			pendingAdventureHoverId = -1;
+			if (currentAdventureHoverId != -1)
+			{
+				currentAdventureHoverId = -1;
+				HideAdventurePopup();
+			}
+		}
+	}
+
+	private static void ShowAdventurePopup(MapIconInfo info)
+	{
+		HideAdventurePopup();
+		Transform parent = null;
+		try
+		{
+			GameObject page = GameObject.Find("UI/Canvas - App");
+			if ((Object)(object)page != (Object)null)
+				parent = page.transform;
+		}
+		catch { }
+		if ((Object)(object)parent == (Object)null && (Object)(object)info.Go != (Object)null)
+		{
+			var c = info.Go.GetComponentInParent<Canvas>();
+			if ((Object)(object)c != (Object)null)
+				parent = ((Component)c).transform;
+		}
+		if ((Object)(object)parent == (Object)null) return;
+
+		adventurePopup = CreateSimpleMapPopup(parent, info.Label, info.Description, info.Sprite);
+		if ((Object)(object)adventurePopup != (Object)null)
+		{
+			DisablePopupRaycasts(adventurePopup);
+			if ((Object)(object)info.Go != (Object)null)
+				PositionPopup(adventurePopup, info.Go.transform);
+		}
+	}
+
+	private static void HideAdventurePopup()
+	{
+		if ((Object)(object)adventurePopup != (Object)null)
+		{
+			Object.Destroy((Object)(object)adventurePopup);
+			adventurePopup = null;
+		}
 	}
 
 	public static void ClearStageRelicIcons()

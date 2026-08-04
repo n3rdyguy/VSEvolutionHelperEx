@@ -1,8 +1,8 @@
 # VS Evolution Helper — Full Roadmap
 
 **Mod:** BepInEx IL2CPP port of NihilXD’s Evolution Helper for Vampire Survivors 1.15 / Unity 6  
-**Current version:** 1.9.0 (Phase 3 started: character tooltips + Guide mods)  
-**Repo state:** Character select tooltips; Stage Guide modifier summary; tips/adventure still open  
+**Current version:** 1.10.0 (Phase 3: character + adventure tooltips)  
+**Repo state:** Adventure hover tooltips; broader stage tips; packaging polish open  
 
 
 
@@ -221,11 +221,11 @@ BepInEx core + evo/arcana + grimoire + map + stage A/B/C baseline.
 
 **Exit:** level-up is usable without stray tooltips; pad-friendly stage select; configurable UX.
 
-### Phase 3 — Content expansions — In progress (1.9.0)
-1. Character select tooltips — **Done (1.9.0)**  
+### Phase 3 — Content expansions — Mostly done (1.10.0)
+1. Character select tooltips — **Done (1.9.x)**  
 2. Hyper/modifier summary in Guide — **Done (1.9.0)**  
-3. Adventure stage picker support if UI differs — **Next**  
-4. Broader `StageExtraTips` — open  
+3. Adventure select tooltips — **Done (1.10.0)**  
+4. Broader `StageExtraTips` — **Partial (1.10.0)**; more DLC/adventure notes anytime  
 
 **Exit:** feels like a “full” helper across pre-run and in-run.
 

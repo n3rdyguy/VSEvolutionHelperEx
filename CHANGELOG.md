@@ -2,6 +2,12 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.0] — 2026-08-04
+
+### Added
+- **Adventure select tooltips:** hover adventures for cast / weapon summary (config `Features.AdventureTooltips`).
+- More **StageExtraTips** (machine/space/test arenas + sample adventure stages).
+
 ## [1.9.7] — 2026-08-04
 
 ### Changed

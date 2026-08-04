@@ -83,6 +83,33 @@ public static class StageExtraTips
 			"Co-op focused layout — leave space for allies if multiplayer; still fully playable solo.",
 		[StageType.CARLOCART] =
 			"Carlo Cart / ride stages — movement is constrained. Time attacks and positioning matter more than free roam.",
+		[StageType.MACHINE2] =
+			"Machine stage variant — special encounter rules. Read modifiers carefully; meta progression is the real reward.",
+		[StageType.SPAZIE] =
+			"Space / Spazie layout — open field with sci-fi pressure. Mobility and vacuum help with scattered pickups.",
+		[StageType.DEVILROOM] =
+			"Devil Room style — high risk, high reward packing. Expect elite density and tight timing windows.",
+		[StageType.LEGION_TEST] =
+			"Legion test arena — scripted pressure for a featured boss/pack. Bring evolved damage, not farm builds.",
+		[StageType.BEELZEBUB_TEST] =
+			"Beelzebub test arena — boss-focused. Prioritize survivability and burst for phase transitions.",
+		[StageType.DOPPLEGANGER_TEST] =
+			"Doppelganger test — mirror/duel pressure. Clean positioning beats raw greed.",
+		[StageType.TP_CASTLE_TEST] =
+			"Castlevania castle test — condensed exploration combat. Map knowledge and AOE clear help.",
+		[StageType.LEM_CHAMBER] =
+			"Lemmings / chamber stage — constrained space. Control choke points and don’t over-extend.",
+		// Adventure stage ids (StageType ADV_* used when adventures reuse stage select)
+		[StageType.ADV_BAZAAR] =
+			"Adventure bazaar — hub/shop between adventure legs. Stock up, then continue the chain.",
+		[StageType.ADV_POE_1_Acres] =
+			"Poe adventure (Acres) — early leg of a multi-stage adventure. Treat as a chapter, not a normal farm map.",
+		[StageType.ADV_IME_1_Chapel] =
+			"Imelda adventure (Chapel) — story/challenge chain. Follow adventure goals over free roaming.",
+		[StageType.ADV_FB_001_Attack] =
+			"First Blood adventure — run-and-gun chapter. Movement and fire rate over pure tanking.",
+		[StageType.ADV_OTC_001_001_Woods] =
+			"Ode to Castlevania adventure woods — large secret-heavy chapter. Explore thoroughly for progression.",
 	};
 
 	public static bool TryGet(StageType type, out string tip)
