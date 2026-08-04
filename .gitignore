@@ -17,6 +17,9 @@ VSEvolutionHelper130.dll
 # Release staging (zip itself may be kept under dist/)
 dist/staging/
 
+# Local save dumps / private saves (do not commit)
+storage/
+
 # IDE / OS
 .idea/
 *.swp
