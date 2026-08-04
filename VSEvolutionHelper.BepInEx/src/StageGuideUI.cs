@@ -446,46 +446,18 @@ public static class StageGuideUI
 		// Prefer song panel width so wrap matches the visible column
 		float width = ResolveContentWidth();
 
-		// Title only — flavor description already shows beside the stage list
+		// Title only — flavor description + hyper/mods already show on the stage stats panel
 		string name = SafeLoc(() => _stage.GetLocalizedName(_stageType), _stage.stageName);
 		y = AddHeader(_guideScrollContent.transform, font, name, Gold, 18f, width, y);
 
-		// Progression + modifier summary
-		string hyper = "?";
-		try
+		// Curated notes first — highest value, not duplicated on the bottom panel
+		if (StageExtraTips.TryGet(_stageType, out string extra))
 		{
-			if ((Object)(object)_stageItem != (Object)null)
-				hyper = _stageItem.HasHyperUnlocked() ? "Yes" : "No";
-		}
-		catch { }
-		var progLines = new List<string> { $"Hyper unlocked: {hyper}" };
-		try
-		{
-			int minutes = _stage.minute;
-			if (minutes > 0)
-				progLines.Add($"Stage length: {minutes} min" + (_stage.randomMinutes ? " (random)" : ""));
-		}
-		catch { }
-		string modSummary = FormatStageMods("Normal", SafeStageMods(() => _stage.mods));
-		if (!string.IsNullOrEmpty(modSummary)) progLines.Add(modSummary);
-		string hyperMods = FormatStageMods("Hyper", SafeStageMods(() => _stage.hyper));
-		if (!string.IsNullOrEmpty(hyperMods)) progLines.Add(hyperMods);
-		string invMods = FormatStageMods("Inverse", SafeStageMods(() => _stage.inverse));
-		if (!string.IsNullOrEmpty(invMods)) progLines.Add(invMods);
-
-		y = AddHeader(_guideScrollContent.transform, font, "Progression", Gold, 14f, width, y + 4f);
-		y = AddBody(_guideScrollContent.transform, font, string.Join("\n", progLines), Muted, 12f, width, y, 2f);
-
-		// Relics / unlocks — omit entire section when empty (quieter for stages like LABORRATORY)
-		var relics = CollectRelics(_stage);
-		if (relics.Count > 0)
-		{
-			y = AddHeader(_guideScrollContent.transform, font, $"Unlocks / Relics ({relics.Count})", Gold, 14f, width, y + 6f);
-			foreach (ItemType it in relics)
-				y = AddRelicRow(_guideScrollContent.transform, font, it, width, y);
+			y = AddHeader(_guideScrollContent.transform, font, "Guide", new Color(0.7f, 0.85f, 1f, 1f), 14f, width, y + 6f);
+			y = AddBody(_guideScrollContent.transform, font, extra, Soft, 12f, width, y, 2f);
 		}
 
-		// Game tips — only when present
+		// Game-localized tips
 		string tips = SafeLoc(() => _stage.GetLocalizedTips(_stageType), _stage.tips);
 		if (!string.IsNullOrWhiteSpace(tips))
 		{
@@ -493,7 +465,6 @@ public static class StageGuideUI
 			y = AddBody(_guideScrollContent.transform, font, tips.Trim(), Soft, 12f, width, y, 2f);
 		}
 
-		// Hyper tips
 		string htips = SafeLoc(() => _stage.GetLocalizedHyperTips(_stageType), _stage.hyperTips);
 		if (!string.IsNullOrWhiteSpace(htips))
 		{
@@ -501,11 +472,21 @@ public static class StageGuideUI
 			y = AddBody(_guideScrollContent.transform, font, htips.Trim(), Soft, 12f, width, y, 2f);
 		}
 
-		// Extra curated tips
-		if (StageExtraTips.TryGet(_stageType, out string extra))
+		// Stage features not shown on the bottom stats panel (no Hyper/length/mods dupe)
+		var featureLines = BuildFeatureLines(_stage);
+		if (featureLines.Count > 0)
 		{
-			y = AddHeader(_guideScrollContent.transform, font, "Extra notes", new Color(0.7f, 0.85f, 1f, 1f), 14f, width, y + 8f);
-			y = AddBody(_guideScrollContent.transform, font, extra, Soft, 12f, width, y, 2f);
+			y = AddHeader(_guideScrollContent.transform, font, "Features", Gold, 14f, width, y + 8f);
+			y = AddBody(_guideScrollContent.transform, font, string.Join("\n", featureLines), Muted, 12f, width, y, 2f);
+		}
+
+		// Relics / unlocks — omit when empty
+		var relics = CollectRelics(_stage);
+		if (relics.Count > 0)
+		{
+			y = AddHeader(_guideScrollContent.transform, font, $"Relics ({relics.Count})", Gold, 14f, width, y + 6f);
+			foreach (ItemType it in relics)
+				y = AddRelicRow(_guideScrollContent.transform, font, it, width, y);
 		}
 
 		// Content height + panel size; scroll if content still taller than viewport
@@ -581,50 +562,130 @@ public static class StageGuideUI
 		return list;
 	}
 
-	private static StageModifiers SafeStageMods(Func<StageModifiers> getter)
+	/// <summary>
+	/// Quirks / unlocks that the bottom stats panel does not already show
+	/// (no Hyper, stage length, or HP/Gold mod multipliers).
+	/// </summary>
+	private static List<string> BuildFeatureLines(StageData stage)
 	{
-		try { return getter(); } catch { return null; }
-	}
+		var lines = new List<string>();
+		if (stage == null) return lines;
 
-	/// <summary>One-line summary of notable StageModifiers (skips empty / default).</summary>
-	private static string FormatStageMods(string label, StageModifiers mods)
-	{
-		if (mods == null) return null;
-		var parts = new List<string>();
-		void add(string name, Il2CppSystem.Nullable<float> n)
-		{
-			try
-			{
-				if (n != null && n.HasValue)
-				{
-					float v = n.Value;
-					if (Mathf.Abs(v) < 0.001f) return;
-					parts.Add($"{name}×{v:0.##}");
-				}
-			}
-			catch { }
-		}
+		// Rules / bans
 		try
 		{
-			add("HP", mods.EnemyHealthMultiplier);
-			add("Gold", mods.GoldMultiplier);
-			add("EnemySpd", mods.EnemySpeed);
-			add("PlayerSpd", mods.PlayerPxSpeed);
-			add("XP", mods.XpBonus);
-			add("Luck", mods.LuckBonus);
-			add("Proj", mods.ProjectileSpeed);
-			add("Clock", mods.ClockSpeed);
-			try
-			{
-				var tl = mods.TimeLimit;
-				if (tl != null && tl.HasValue && tl.Value > 0f)
-					parts.Add($"TimeLimit {tl.Value:0.#}m");
-			}
-			catch { }
+			if (stage.isMerchantBanned)
+				lines.Add("• Merchant is banned on this stage");
 		}
-		catch { return null; }
-		if (parts.Count == 0) return null;
-		return $"{label}: {string.Join(", ", parts)}";
+		catch { }
+		try
+		{
+			if (stage.isSpeedupBanned)
+				lines.Add("• Clock speed-up is banned");
+		}
+		catch { }
+		try
+		{
+			if (stage.isSuvarotsBlocked)
+				lines.Add("• Survarots blocked");
+		}
+		catch { }
+		try
+		{
+			if (stage.isRacingStage)
+				lines.Add("• Racing stage (special rules)");
+		}
+		catch { }
+		try
+		{
+			if (stage.dayNight)
+				lines.Add("• Day / night cycle");
+		}
+		catch { }
+
+		// Coffin unlock character
+		try
+		{
+			var cff = stage.cff;
+			if (cff != null && cff.HasValue)
+			{
+				string charName = ResolveCharacterName(cff.Value);
+				if (!string.IsNullOrEmpty(charName))
+					lines.Add($"• Coffin unlock: {charName}");
+			}
+		}
+		catch { }
+
+		// Arcana treasure present
+		try
+		{
+			if (stage.arcanaTreasure != null)
+				lines.Add("• Arcana treasure chest available");
+		}
+		catch { }
+
+		// Timed treasure present
+		try
+		{
+			if (stage.treasure != null)
+				lines.Add("• Timed treasure chests spawn");
+		}
+		catch { }
+
+		// Boss / event counts (planning, not on bottom panel)
+		try
+		{
+			var bosses = stage.bosses;
+			if (bosses != null && bosses.Count > 0)
+			{
+				int n = 0;
+				for (int i = 0; i < bosses.Count; i++)
+				{
+					try
+					{
+						var b = bosses[i];
+						if (b != null && b.HasValue) n++;
+					}
+					catch { }
+				}
+				if (n > 0)
+					lines.Add(n == 1 ? "• 1 boss encounter" : $"• {n} boss encounters");
+			}
+		}
+		catch { }
+
+		try
+		{
+			var events = stage.events;
+			if (events != null && events.Count > 0)
+				lines.Add(events.Count == 1 ? "• 1 staged event" : $"• {events.Count} staged events");
+		}
+		catch { }
+
+		try
+		{
+			var pizza = stage.pizzaEvents;
+			if (pizza != null && pizza.Count > 0)
+				lines.Add(pizza.Count == 1 ? "• Pizza Oven event" : $"• {pizza.Count} Pizza Oven events");
+		}
+		catch { }
+
+		return lines;
+	}
+
+	private static string ResolveCharacterName(CharacterType type)
+	{
+		try
+		{
+			// Prefer humanized enum (ANTONIO -> Antonio); loc tables are heavy here
+			string raw = type.ToString();
+			if (string.IsNullOrEmpty(raw) || raw == "0") return null;
+			return GameData.HumanizeEnum(raw);
+		}
+		catch
+		{
+			return null;
+		}
 	}
 
 	private static float ResolveContentWidth()

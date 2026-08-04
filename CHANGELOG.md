@@ -2,6 +2,16 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.6] — polish (unreleased tag)
+
+### Changed
+- Stage Guide: drop redundant **Progression / Hyper / mods** (already on the bottom stats panel). Lead with **Guide** notes + tips, then **Features** (merchant ban, coffin unlock, day/night, boss/event counts, etc.) and relics.
+
+## [1.10.5] — polish (unreleased tag)
+
+### Fixed
+- Music|Guide tabs: small gap above the song panel; label text Midline-centered.
+
 ## [1.10.4] — polish (unreleased tag)
 
 ### Fixed
