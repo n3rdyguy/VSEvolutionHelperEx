@@ -28,12 +28,35 @@ Please support the original authors. This port reuses their design with typed Il
 ## Requirements
 
 - Vampire Survivors (Steam) — tested on **1.15.113**, Unity **6000.0.62f1**
-- **BepInEx 6 IL2CPP** bleeding-edge (e.g. BE 785)
+- **[BepInEx 6](https://builds.bepinex.dev/projects/bepinex_be)** — **Unity.IL2CPP** bleeding-edge build (e.g. **BE 785+**). Stable BepInEx 5 / MelonLoader will not work on this Unity 6 build.
 - **Do not** run MelonLoader and BepInEx at the same time
 
-## Install (Nexus / zip)
+## Install BepInEx (first time)
 
-1. Install BepInEx 6 IL2CPP for the game (if needed).
+Official bleeding-edge builds: **[https://builds.bepinex.dev/projects/bepinex_be](https://builds.bepinex.dev/projects/bepinex_be)**
+
+1. Open that page and download a recent **Windows** package for **Unity.IL2CPP** (filename pattern like `BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.xxx+….zip` — **not** Mono, **not** unix/macos unless you need those platforms).
+2. Extract the zip **into the Vampire Survivors game folder** (the folder that contains `VampireSurvivors.exe`), so you get:
+
+   ```
+   <Vampire Survivors>/
+     VampireSurvivors.exe
+     winhttp.dll              ← BepInEx doorstop
+     doorstop_config.ini
+     .doorstop_version
+     BepInEx/
+       core/
+       …
+   ```
+
+3. Launch the game **once**. BepInEx generates `BepInEx/config/`, `BepInEx/plugins/`, and `BepInEx/LogOutput.log`. Then quit.
+4. If you previously used MelonLoader: remove or rename Melon’s `version.dll` / MelonLoader folder so only BepInEx’s `winhttp.dll` loads.
+
+More background: [BepInEx docs](https://docs.bepinex.dev/) · [bleeding-edge / BE builds explained](https://docs.bepinex.dev/master/articles/user_guide/installation/unity_il2cpp.html) (IL2CPP install notes).
+
+## Install this mod (Nexus / zip)
+
+1. Complete **Install BepInEx** above if you don’t already have it.
 2. Extract this mod so you have:
 
    ```
@@ -99,10 +122,10 @@ Edit the cfg and restart the game (or re-enter menus) for changes to apply on ne
 | Loader | Status on VS 1.15 + Unity 6 |
 |--------|------------------------------|
 | MelonLoader 0.7.3 | Crashes after support module (even with 0 mods) |
-| BepInEx 6 BE 785 | Works |
+| [BepInEx 6 BE](https://builds.bepinex.dev/projects/bepinex_be) (IL2CPP) | Works (tested BE 785) |
 
 - MelonLoader proxy (if present): keep **disabled** while using BepInEx  
-- BepInEx proxy: `winhttp.dll` + `doorstop_config.ini`
+- BepInEx proxy: `winhttp.dll` + `doorstop_config.ini` (from the BE zip)
 
 ## Docs
 
