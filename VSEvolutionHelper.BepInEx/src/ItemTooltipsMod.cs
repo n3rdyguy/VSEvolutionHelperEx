@@ -6842,22 +6842,24 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 
 		if ((Object)(object)collectionPopup == (Object)null)
+		{
+			Plugin.Log.LogWarning("[Collections] CreatePopup returned null");
 			return;
+		}
 
-		// Always place next to the hovered icon (never fixed FilterPanel / 1450,930)
 		if ((Object)(object)anchor != (Object)null)
 			PositionPopupNearScreen(collectionPopup, anchor);
 		else
 			PositionPopupNearScreen(collectionPopup, parent);
 
-		// Ensure visible even if CreatePopup left raycast on
 		DisablePopupRaycasts(collectionPopup);
 		try { collectionPopup.SetActive(true); } catch { }
+		Plugin.Dbg($"[Collections] Show popup weapon={weaponType} item={itemType} anchor={anchor?.name}");
 	}
 
 	/// <summary>
-	/// Reverse of "under the grid": parent OUTSIDE ScrollRect (Collections view / Safe Area),
-	/// place from cell world corners, last sibling so it draws on top — no nested Canvas games.
+	/// Dead-simple placement: parent to App Safe Area, set world position from cell, last sibling.
+	/// No nested Canvas. No screen-camera math that can fail silently.
 	/// </summary>
 	private static void PositionPopupNearScreen(GameObject popup, Transform anchor)
 	{
@@ -6865,40 +6867,24 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			return;
 		try
 		{
+			// Remove any nested Canvas/raycaster from earlier builds
+			try
+			{
+				var cv = popup.GetComponent<Canvas>();
+				if ((Object)(object)cv != (Object)null) Object.Destroy(cv);
+				var gr = popup.GetComponent<GraphicRaycaster>();
+				if ((Object)(object)gr != (Object)null) Object.Destroy(gr);
+			}
+			catch { }
+
 			RectTransform popupRt = popup.GetComponent<RectTransform>();
 			if ((Object)(object)popupRt == (Object)null) return;
 
-			RectTransform anchorRt = anchor as RectTransform;
-			if ((Object)(object)anchorRt == (Object)null)
-				anchorRt = anchor.GetComponent<RectTransform>();
-
-			// Host ABOVE the grid mask: Collections view root, else Safe Area, else canvas
+			// Host: App Safe Area (above collection scroll content)
 			Transform host = null;
-			try
-			{
-				// Walk up to View - Collections (sibling of ScrollView, not inside Viewport)
-				Transform t = anchor;
-				while ((Object)(object)t != (Object)null)
-				{
-					string n = ((Object)t).name ?? "";
-					if (n.IndexOf("View - Collection", StringComparison.OrdinalIgnoreCase) >= 0
-						|| n.Equals("Safe Area", StringComparison.OrdinalIgnoreCase))
-					{
-						host = t;
-						break;
-					}
-					t = t.parent;
-				}
-			}
-			catch { }
-			if ((Object)(object)host == (Object)null)
-			{
-				var go = GameObject.Find("UI/Canvas - App/Safe Area/View - Collections");
-				if ((Object)(object)go == (Object)null)
-					go = GameObject.Find("UI/Canvas - App/Safe Area");
-				if ((Object)(object)go != (Object)null)
-					host = go.transform;
-			}
+			GameObject safe = GameObject.Find("UI/Canvas - App/Safe Area");
+			if ((Object)(object)safe != (Object)null)
+				host = safe.transform;
 			if ((Object)(object)host == (Object)null)
 			{
 				var c = anchor.GetComponentInParent<Canvas>();
@@ -6906,113 +6892,72 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 					host = ((Component)c.rootCanvas).transform;
 			}
 			if ((Object)(object)host == (Object)null)
-				host = anchor.parent != null ? anchor.parent : anchor;
+				host = anchor.root;
 
-			// Strip any leftover overlay Canvas from 1.10.16 that can blank the popup
-			try
-			{
-				var leftover = popup.GetComponent<Canvas>();
-				if ((Object)(object)leftover != (Object)null
-					&& (Object)(object)popup.GetComponentInParent<Canvas>() != (Object)(object)leftover)
-				{
-					// only remove if it's our nested overlay, not the root
-				}
-				// Always remove nested Canvas/GraphicRaycaster we may have added
-				var nested = popup.GetComponents<Canvas>();
-				// GetComponents on same GO
-				var cv = popup.GetComponent<Canvas>();
-				if ((Object)(object)cv != (Object)null)
-				{
-					// If this GO has its own Canvas AND a parent canvas, remove the nested one
-					var parentCv = popup.transform.parent != null
-						? popup.transform.parent.GetComponentInParent<Canvas>()
-						: null;
-					// remove after reparent
-				}
-			}
-			catch { }
-
-			popup.transform.SetParent(host, false);
+			popup.transform.SetParent(host, worldPositionStays: false);
 			popup.transform.SetAsLastSibling();
-
-			// Remove nested Canvas (polarity reverse: no overlay canvas)
-			try
-			{
-				var cv = popup.GetComponent<Canvas>();
-				if ((Object)(object)cv != (Object)null)
-					Object.Destroy(cv);
-				var gr = popup.GetComponent<GraphicRaycaster>();
-				if ((Object)(object)gr != (Object)null)
-					Object.Destroy(gr);
-			}
-			catch { }
 
 			popupRt.localScale = Vector3.one;
 			popupRt.localRotation = Quaternion.identity;
+			// Stretch-free, center-based anchors on Safe Area
 			popupRt.anchorMin = new Vector2(0.5f, 0.5f);
 			popupRt.anchorMax = new Vector2(0.5f, 0.5f);
 			popupRt.pivot = new Vector2(0f, 1f);
 
-			Canvas canvas = host.GetComponentInParent<Canvas>();
-			Camera cam = null;
-			if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
-				cam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
-			// Overlay: cam must be null for ScreenPointToLocalPointInRectangle
-			Camera localCam = ((Object)(object)canvas != (Object)null && canvas.renderMode == RenderMode.ScreenSpaceOverlay)
-				? null
-				: cam;
-
-			// World attach = top-right of cell
-			Vector3 worldAttach = anchor.position;
+			// World position of cell top-right
+			Vector3 world = anchor.position;
+			RectTransform anchorRt = anchor as RectTransform ?? anchor.GetComponent<RectTransform>();
 			if ((Object)(object)anchorRt != (Object)null)
 			{
 				Vector3[] corners = new Vector3[4];
 				anchorRt.GetWorldCorners(corners);
-				worldAttach = corners[2]; // TR
+				world = corners[2]; // top-right
 			}
 
-			Vector2 screen = RectTransformUtility.WorldToScreenPoint(localCam, worldAttach);
-			// For overlay WorldToScreenPoint(null, ...) is wrong — use cam null only in LocalPoint
-			if ((Object)(object)canvas != (Object)null && canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+			// Place pivot in world space (works for Overlay + Camera canvases)
+			// Offset a bit to the right in world units (UI often ~1 unit = 1 pixel at scale 1)
+			Vector3 worldOffset = new Vector3(0.02f, 0.01f, 0f);
+			// Prefer pixel-ish offset via canvas scale
+			try
 			{
-				// World corners are already in screen-ish space for overlay; convert carefully
-				screen = RectTransformUtility.WorldToScreenPoint(null, worldAttach);
-				// Unity docs: for overlay, pass null to both
+				var canvas = host.GetComponentInParent<Canvas>();
+				float scale = 1f;
+				if ((Object)(object)canvas != (Object)null)
+					scale = canvas.scaleFactor > 0.01f ? canvas.scaleFactor : 1f;
+				// 20px right, 8px up in screen pixels → world
+				Camera cam = null;
+				if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+					cam = canvas.worldCamera;
+				Vector2 sp = RectTransformUtility.WorldToScreenPoint(cam, world);
+				sp.x += 20f;
+				sp.y += 8f;
+				if (sp.x + 360f > Screen.width)
+				{
+					sp.x -= 40f + 360f;
+					popupRt.pivot = new Vector2(1f, 1f);
+				}
+				RectTransform hostRt = host as RectTransform ?? host.GetComponent<RectTransform>();
+				Camera localCam = (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay) ? null : cam;
+				if ((Object)(object)hostRt != (Object)null
+					&& RectTransformUtility.ScreenPointToLocalPointInRectangle(hostRt, sp, localCam, out Vector2 local))
+				{
+					popupRt.anchoredPosition = local;
+				}
+				else
+				{
+					// InverseTransform fallback
+					Vector3 lp = host.InverseTransformPoint(world);
+					popupRt.anchoredPosition = new Vector2(lp.x + 20f, lp.y + 8f);
+				}
 			}
-
-			screen.x += 12f;
-			screen.y += 4f;
-
-			float popupW = popupRt.sizeDelta.x > 40f ? popupRt.sizeDelta.x : 360f;
-			bool flipLeft = screen.x + popupW + 20f > Screen.width;
-			if (flipLeft && (Object)(object)anchorRt != (Object)null)
+			catch
 			{
-				Vector3[] corners = new Vector3[4];
-				anchorRt.GetWorldCorners(corners);
-				worldAttach = corners[1]; // TL
-				screen = RectTransformUtility.WorldToScreenPoint(
-					canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : cam,
-					worldAttach);
-				screen.x -= 12f;
-				popupRt.pivot = new Vector2(1f, 1f);
+				Vector3 lp = host.InverseTransformPoint(world);
+				popupRt.anchoredPosition = new Vector2(lp.x + 20f, lp.y + 8f);
 			}
 
-			RectTransform hostRt = host as RectTransform;
-			if ((Object)(object)hostRt == (Object)null)
-				hostRt = host.GetComponent<RectTransform>();
-			if ((Object)(object)hostRt == (Object)null) return;
-
-			if (RectTransformUtility.ScreenPointToLocalPointInRectangle(hostRt, screen, localCam, out Vector2 local))
-			{
-				popupRt.anchoredPosition = local;
-			}
-			else
-			{
-				// Last resort: same local space as InverseTransform of world point
-				Vector3 lp = host.InverseTransformPoint(worldAttach);
-				popupRt.anchoredPosition = new Vector2(lp.x + 12f, lp.y + 4f);
-			}
-
+			// Draw above siblings in Safe Area
+			popup.transform.SetAsLastSibling();
 			DisablePopupRaycasts(popup);
 		}
 		catch (Exception ex)
@@ -7186,25 +7131,30 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				try
 				{
 					currentCollectionHoverId = ((Object)captured).GetInstanceID();
-					// Optional unlock-only override (locked relics)
+					Plugin.Log.LogInfo($"[Collections] Hover enter {captured.name} w={w} i={it}");
+					// Locked unlock tip path
 					if (collectionUnlockIcons.TryGetValue(currentCollectionHoverId, out MapIconInfo unlock)
 						&& !string.IsNullOrEmpty(unlock.Description)
 						&& unlock.Description.StartsWith("Unlock:", StringComparison.Ordinal))
 					{
-						// Show simple unlock tip
 						if ((Object)(object)collectionUnlockPopup != (Object)null)
 							Object.Destroy((Object)(object)collectionUnlockPopup);
-						Transform parent = FindPopupParent(captured.transform);
-						if ((Object)(object)parent != (Object)null)
+						// Full evo popup for unlocked; simple tip for locked-only entries
+						if (!w.HasValue && !it.HasValue)
 						{
-							collectionUnlockPopup = CreateSimpleMapPopup(parent, unlock.Label, unlock.Description, unlock.Sprite);
-							if ((Object)(object)collectionUnlockPopup != (Object)null)
+							Transform parent = GameObject.Find("UI/Canvas - App/Safe Area")?.transform
+								?? FindPopupParent(captured.transform);
+							if ((Object)(object)parent != (Object)null)
 							{
-								DisablePopupRaycasts(collectionUnlockPopup);
-								PositionPopupNearScreen(collectionUnlockPopup, captured.transform);
+								collectionUnlockPopup = CreateSimpleMapPopup(parent, unlock.Label, unlock.Description, unlock.Sprite);
+								if ((Object)(object)collectionUnlockPopup != (Object)null)
+								{
+									DisablePopupRaycasts(collectionUnlockPopup);
+									PositionPopupNearScreen(collectionUnlockPopup, captured.transform);
+								}
 							}
+							return;
 						}
-						return;
 					}
 					ShowCollectionPopup(w, it, ar, captured.transform);
 				}
@@ -7221,30 +7171,18 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			{
 				try
 				{
-					// Delay hide one frame so layout/sibling changes don't cancel show
+					// Only hide if we left *this* cell (not a re-enter race)
 					int leavingId = ((Object)captured).GetInstanceID();
-					ItemTooltipsMod.DelayFrames(1, () =>
+					if (currentCollectionHoverId != leavingId && currentCollectionHoverId != -1)
+						return;
+					currentCollectionHoverId = -1;
+					pendingCollectionHoverId = -1;
+					HideCollectionPopup();
+					if ((Object)(object)collectionUnlockPopup != (Object)null)
 					{
-						try
-						{
-							// Still hovering same cell? keep
-							if (currentCollectionHoverId == leavingId
-								&& IsPointerOverObject(captured))
-								return;
-							if (currentCollectionHoverId != leavingId
-								&& currentCollectionHoverId != -1)
-								return; // already moved to another cell
-							currentCollectionHoverId = -1;
-							pendingCollectionHoverId = -1;
-							HideCollectionPopup();
-							if ((Object)(object)collectionUnlockPopup != (Object)null)
-							{
-								Object.Destroy((Object)(object)collectionUnlockPopup);
-								collectionUnlockPopup = null;
-							}
-						}
-						catch { }
-					});
+						Object.Destroy((Object)(object)collectionUnlockPopup);
+						collectionUnlockPopup = null;
+					}
 				}
 				catch { }
 			}));
