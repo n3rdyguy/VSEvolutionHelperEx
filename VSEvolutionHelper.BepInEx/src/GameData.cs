@@ -633,46 +633,82 @@ public static class GameData
 
     /// <summary>
     /// Resolve player-facing text from a raw game string or I2 term.
-    /// Never returns raw keys like <c>itemLang/{MERCHANT}description</c>.
+    /// Never returns raw keys like <c>itemLang/{MERCHANT}description</c>
+    /// or <c>powerupLang/MERCHANT name</c>.
     /// </summary>
     public static string LocalizeDisplayText(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
             return null;
         string s = raw.Trim();
+        // Collapse internal newlines in single-field terms (UI sometimes wraps keys)
+        if (s.IndexOf('\n') >= 0 || s.IndexOf('\r') >= 0)
+        {
+            // Only collapse if every line still looks like part of a key (no prose)
+            string flat = s.Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ');
+            flat = System.Text.RegularExpressions.Regex.Replace(flat, @"\s+", " ").Trim();
+            if (LooksLikeLocKey(flat))
+                s = flat;
+            else if (!LooksLikeLocKey(s))
+                return s;
+        }
         if (!LooksLikeLocKey(s))
             return s;
 
-        // Direct
+        // Direct I2 lookup
         string t = Translate(s);
         if (!string.IsNullOrEmpty(t))
             return t;
 
-        // itemLang/{MERCHANT}description  →  itemLang/MERCHANT description, etc.
-        // Common VS term shapes for characters / items / weapons
         try
         {
+            // powerupLang/MERCHANT name  |  itemLang/{MERCHANT}description  |  powerupLang/MERCHANT name
+            if (TryParseLangTerm(s, out string prefix, out string id, out string suffix))
+            {
+                t = TryLocKeyVariants(prefix, id, suffix);
+                if (!string.IsNullOrEmpty(t))
+                    return t;
+                // Cross-table: characters often live under powerupLang in VS data
+                foreach (string alt in new[] { "powerupLang/", "itemLang/", "charLang/", "weaponLang/" })
+                {
+                    if (string.Equals(alt, prefix, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    t = TryLocKeyVariants(alt, id, suffix);
+                    if (!string.IsNullOrEmpty(t))
+                        return t;
+                }
+                // Name keys with no translation → humanize the id (better than raw term)
+                if (string.Equals(suffix, "name", StringComparison.OrdinalIgnoreCase)
+                    || string.IsNullOrEmpty(suffix))
+                    return HumanizeEnum(id);
+                // Description missing — omit rather than show key
+                return null;
+            }
+
             // Capture: prefix/{ID}suffix  e.g. itemLang/{MERCHANT}description
             int braceL = s.IndexOf('{');
             int braceR = s.IndexOf('}');
             if (braceL >= 0 && braceR > braceL)
             {
-                string prefix = s.Substring(0, braceL); // "itemLang/"
-                string id = s.Substring(braceL + 1, braceR - braceL - 1); // "MERCHANT"
-                string suffix = braceR + 1 < s.Length ? s.Substring(braceR + 1) : ""; // "description"
-                if (!string.IsNullOrEmpty(id))
+                string pfx = s.Substring(0, braceL); // "itemLang/"
+                string bid = s.Substring(braceL + 1, braceR - braceL - 1); // "MERCHANT"
+                string sfx = braceR + 1 < s.Length ? s.Substring(braceR + 1).Trim() : "";
+                if (!string.IsNullOrEmpty(bid))
                 {
-                    t = TryLocKeyVariants(prefix, id, suffix);
+                    t = TryLocKeyVariants(pfx, bid, sfx);
                     if (!string.IsNullOrEmpty(t))
                         return t;
+                    if (string.Equals(sfx, "name", StringComparison.OrdinalIgnoreCase)
+                        || string.IsNullOrEmpty(sfx))
+                        return HumanizeEnum(bid);
                 }
             }
 
-            // Strip braces entirely and re-space glued "NAMEdescription"
+            // Strip braces and re-space glued "NAMEdescription"
             string stripped = s.Replace("{", "").Replace("}", "");
             stripped = System.Text.RegularExpressions.Regex.Replace(
                 stripped,
-                @"((?:itemLang|weaponLang|stageLang|charLang|powerupLang)/\w+)(description|name|tips|desc)$",
+                @"(\w+Lang/\w+)(description|name|tips|desc)$",
                 "$1 $2",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (!string.Equals(stripped, s, StringComparison.Ordinal))
@@ -691,6 +727,40 @@ public static class GameData
     }
 
     /// <summary>
+    /// Parse <c>powerupLang/MERCHANT name</c>, <c>itemLang/{ANTONIO}description</c>, etc.
+    /// </summary>
+    private static bool TryParseLangTerm(string s, out string prefix, out string id, out string suffix)
+    {
+        prefix = null;
+        id = null;
+        suffix = null;
+        if (string.IsNullOrEmpty(s)) return false;
+        // (xxxLang/)({?)(ID)(}?)(space?)(kind?)
+        var m = System.Text.RegularExpressions.Regex.Match(
+            s.Trim(),
+            @"^(?<prefix>\w+Lang/)(?:\{)?(?<id>[A-Za-z0-9_]+)(?:\})?(?:\s+(?<suffix>\w+)|(?<suffix>description|name|tips|desc))?$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!m.Success) return false;
+        prefix = m.Groups["prefix"].Value;
+        id = m.Groups["id"].Value;
+        suffix = m.Groups["suffix"].Success ? m.Groups["suffix"].Value : "";
+        // glued form: powerupLang/MERCHANTdescription
+        if (string.IsNullOrEmpty(suffix) && id.Length > 4)
+        {
+            foreach (string kind in new[] { "description", "name", "tips", "desc" })
+            {
+                if (id.EndsWith(kind, StringComparison.OrdinalIgnoreCase) && id.Length > kind.Length)
+                {
+                    suffix = kind;
+                    id = id.Substring(0, id.Length - kind.Length);
+                    break;
+                }
+            }
+        }
+        return !string.IsNullOrEmpty(id);
+    }
+
+    /// <summary>
     /// Build and translate common VS I2 term shapes for a character/item/weapon id.
     /// Used when the game hands us a templated key or when we synthesize from CharacterType.
     /// </summary>
@@ -702,12 +772,19 @@ public static class GameData
         // Try brace form first (matches what GetDescription sometimes returns)
         string t = LocalizeDisplayText("itemLang/{" + id + "}" + kind);
         if (!string.IsNullOrEmpty(t)) return t;
+        t = LocalizeDisplayText("powerupLang/" + id + " " + kind);
+        if (!string.IsNullOrEmpty(t)) return t;
+        t = TryLocKeyVariants("powerupLang/", id, kind);
+        if (!string.IsNullOrEmpty(t)) return t;
         t = TryLocKeyVariants("itemLang/", id, kind);
         if (!string.IsNullOrEmpty(t)) return t;
         t = TryLocKeyVariants("charLang/", id, kind);
         if (!string.IsNullOrEmpty(t)) return t;
         t = TryLocKeyVariants("weaponLang/", id, kind);
-        return t;
+        if (!string.IsNullOrEmpty(t)) return t;
+        if (string.Equals(kind, "name", StringComparison.OrdinalIgnoreCase))
+            return HumanizeEnum(id);
+        return null;
     }
 
     private static string TryLocKeyVariants(string prefix, string id, string suffix)
@@ -721,13 +798,16 @@ public static class GameData
             prefix + id + "_" + suffix,
             prefix + id + "/" + suffix,
             prefix + "{" + id + "}" + suffix,
+            prefix + "{" + id + "} " + suffix,
+            "powerupLang/" + id + " " + suffix,
+            "powerupLang/" + id + " description",
+            "powerupLang/" + id + " name",
             "itemLang/" + id + " " + suffix,
             "itemLang/" + id + " description",
             "itemLang/" + id + " name",
             "itemLang/" + id + " tips",
             "charLang/" + id + " " + suffix,
             "weaponLang/" + id + " " + suffix,
-            "powerupLang/" + id + " " + suffix,
             "Characters/" + id + "/" + suffix,
             "Characters/" + id + "/description",
             "Characters/" + id + "/name",
@@ -747,16 +827,13 @@ public static class GameData
     {
         if (string.IsNullOrWhiteSpace(s))
             return true;
-        // Multi-line tooltip bodies are not single I2 terms — don't treat the whole blob as a key
-        if (s.IndexOf('\n') >= 0 || s.IndexOf('\r') >= 0)
+        // Multi-line with real prose — not a single term (handled by LocalizeMultiline)
+        if ((s.IndexOf('\n') >= 0 || s.IndexOf('\r') >= 0)
+            && s.IndexOf("Lang/", StringComparison.OrdinalIgnoreCase) < 0
+            && s.IndexOf('{') < 0)
             return false;
-        if (s.IndexOf("itemLang", StringComparison.OrdinalIgnoreCase) >= 0)
-            return true;
-        if (s.IndexOf("weaponLang", StringComparison.OrdinalIgnoreCase) >= 0)
-            return true;
-        if (s.IndexOf("stageLang", StringComparison.OrdinalIgnoreCase) >= 0)
-            return true;
-        if (s.IndexOf("charLang", StringComparison.OrdinalIgnoreCase) >= 0)
+        // Any I2 category: powerupLang/, itemLang/, weaponLang/, stageLang/, …
+        if (s.IndexOf("Lang/", StringComparison.OrdinalIgnoreCase) >= 0)
             return true;
         if (s.IndexOf('{') >= 0 && s.IndexOf('}') >= 0)
             return true;

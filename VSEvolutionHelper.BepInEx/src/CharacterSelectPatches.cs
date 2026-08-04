@@ -775,18 +775,28 @@ public static class CharacterSelectPatches
 
 	private static string SafeDisplayName(CharacterItemUI ui, CharacterItem item)
 	{
+		string Scrub(string n)
+		{
+			if (string.IsNullOrWhiteSpace(n)) return null;
+			n = n.Trim();
+			// UI TMP often wraps "powerupLang/MERCHANT name" across lines
+			string loc = GameData.LocalizeDisplayText(n);
+			if (!string.IsNullOrEmpty(loc)) return loc;
+			if (GameData.LooksLikeLocKey(n)) return null;
+			return n;
+		}
 		try
 		{
-			string n = ui.CharacterName;
-			if (!string.IsNullOrWhiteSpace(n)) return n.Trim();
+			string n = Scrub(ui.CharacterName);
+			if (!string.IsNullOrWhiteSpace(n)) return n;
 		}
 		catch { }
 		try
 		{
 			if ((Object)(object)ui._CharacterName != (Object)null)
 			{
-				string t = ((TMPro.TMP_Text)ui._CharacterName).text;
-				if (!string.IsNullOrWhiteSpace(t)) return t.Trim();
+				string t = Scrub(((TMPro.TMP_Text)ui._CharacterName).text);
+				if (!string.IsNullOrWhiteSpace(t)) return t;
 			}
 		}
 		catch { }
@@ -798,8 +808,15 @@ public static class CharacterSelectPatches
 				if (d != null)
 				{
 					string combined = $"{d.prefix} {d.charName} {d.surname}".Trim();
+					combined = Scrub(combined);
 					if (!string.IsNullOrWhiteSpace(combined)) return combined;
 				}
+			}
+			catch { }
+			try
+			{
+				string t = GameData.LocalizeTypedDescription(SafeType(item).ToString(), "name");
+				if (!string.IsNullOrEmpty(t)) return t;
 			}
 			catch { }
 		}

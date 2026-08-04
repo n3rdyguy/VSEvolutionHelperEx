@@ -2,6 +2,11 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.9] — polish (unreleased tag)
+
+### Fixed
+- Character tooltips: detect **any** `*Lang/` I2 term (including `powerupLang/MERCHANT name` with spaces / line wraps). Cross-table lookup + humanize name fallback.
+
 ## [1.10.8] — polish (unreleased tag)
 
 ### Fixed
