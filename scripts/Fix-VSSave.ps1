@@ -1,23 +1,20 @@
 <#
 .SYNOPSIS
-  Fix Vampire Survivors save files (JSON repair + checksum).
+  Fix Vampire Survivors save files (JSON repair + checksum + optional modern merge).
 
 .DESCRIPTION
-  - Removes accidental double commas (,,) that invalidate JSON
-  - Parses and re-validates as JSON
-  - Regenerates "checksum" the way the current game expects:
-      SHA-256(UTF-8) of the compact JSON with "checksum":"" then write the hash back
-  - Optional: install into Steam cloud remote slot folder
-  - Optional: refresh remotecache.vdf for that app
+  1) Repairs common JSON corruption (double commas, trailing commas, BOM)
+  2) Regenerates checksum (SHA-256 of compact JSON with "checksum":"")
+  3) Optional -ModernTemplate: overlay progress from -Path onto a known-good
+     current-version save so older full-unlock dumps get modern schema fields
+  4) Optional -InstallSteamSlot: write into Steam userdata remote + remotecache
 
 .EXAMPLE
-  .\Fix-VSSave.ps1 -Path .\SaveData3
+  .\Fix-VSSave.ps1 -Path .\storage\SaveData3 -Force
 
 .EXAMPLE
-  .\Fix-VSSave.ps1 -Path .\SaveData -InstallSteamSlot 3 -SteamId <YourSteamId>
-
-.EXAMPLE
-  .\Fix-VSSave.ps1 -Path .\SaveData3 -OutPath .\SaveData3.fixed -WhatIf
+  # Fix an old full-unlock dump using your current slot as schema template
+  .\Fix-VSSave.ps1 -Path .\storage\SaveData -ModernTemplate "C:\Program Files (x86)\Steam\userdata\<YourSteamId>\1794680\remote\SaveData" -InstallSteamSlot 3 -SteamId <YourSteamId> -Force
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -26,14 +23,16 @@ param(
 
   [string] $OutPath,
 
-  # 1 = SaveData, 2 = SaveData2, ... (Steam remote file name)
+  # Known-good save from THIS game version (schema template). Progress is taken from -Path.
+  [string] $ModernTemplate,
+
+  [string] $SaveName,
+
   [ValidateRange(1, 10)]
   [int] $InstallSteamSlot = 0,
 
-  # Steam user id folder under userdata (auto-detect if only one)
   [string] $SteamId,
 
-  # Vampire Survivors Steam AppID
   [int] $AppId = 1794680,
 
   [string[]] $SteamUserdataRoots = @(
@@ -61,79 +60,123 @@ function Get-Sha256Hex([string] $Text) {
 }
 
 function Repair-SaveJsonText([string] $Raw) {
-  if ([string]::IsNullOrWhiteSpace($Raw)) {
-    throw "File is empty."
-  }
-
-  # BOM
-  if ($Raw.Length -gt 0 -and [int][char]$Raw[0] -eq 0xFEFF) {
-    $Raw = $Raw.Substring(1)
-  }
-
+  if ([string]::IsNullOrWhiteSpace($Raw)) { throw "File is empty." }
+  if ($Raw.Length -gt 0 -and [int][char]$Raw[0] -eq 0xFEFF) { $Raw = $Raw.Substring(1) }
   $Raw = $Raw.Trim()
-
-  # Common corruptions
-  $Raw = $Raw -replace ',,+', ','          # double/multi commas
-  $Raw = $Raw -replace ',\s*}', '}'      # trailing commas before }
-  $Raw = $Raw -replace ',\s*]', ']'      # trailing commas before ]
-
-  # Must be an object
+  $Raw = $Raw -replace ',,+', ','
+  $Raw = $Raw -replace ',\s*}', '}'
+  $Raw = $Raw -replace ',\s*]', ']'
+  # Unity JSON often rejects NaN/Infinity
+  $Raw = $Raw -replace ':\s*NaN\b', ':0'
+  $Raw = $Raw -replace ':\s*-Infinity\b', ':0'
+  $Raw = $Raw -replace ':\s*Infinity\b', ':0'
   if (-not $Raw.StartsWith('{')) {
-    throw "Does not look like a VS save (expected JSON object starting with '{')."
+    throw "Does not look like a VS save (expected JSON object)."
   }
-
-  # Validate parse
-  try {
-    $null = $Raw | ConvertFrom-Json -ErrorAction Stop
-  }
-  catch {
-    throw "JSON still invalid after basic repairs: $($_.Exception.Message)"
-  }
-
+  try { $null = $Raw | ConvertFrom-Json -ErrorAction Stop }
+  catch { throw "JSON still invalid after repairs: $($_.Exception.Message)" }
   return $Raw
 }
 
 function Update-SaveChecksum([string] $Raw) {
-  # Ensure checksum property exists
   if ($Raw -notmatch '"checksum"\s*:') {
-    if (-not $Raw.EndsWith('}')) {
-      throw "Cannot insert checksum: unexpected file ending."
-    }
+    if (-not $Raw.EndsWith('}')) { throw "Cannot insert checksum." }
     $inner = $Raw.Substring(0, $Raw.Length - 1).TrimEnd().TrimEnd(',')
     $Raw = $inner + ',"checksum":""}'
   }
-
-  # Empty the checksum value in-place (keep compact layout / key order)
-  $withEmpty = [regex]::Replace(
-    $Raw,
-    '"checksum"\s*:\s*"[a-fA-F0-9]*"',
-    '"checksum":""'
-  )
-
+  $withEmpty = [regex]::Replace($Raw, '"checksum"\s*:\s*"[a-fA-F0-9]*"', '"checksum":""')
   $hash = Get-Sha256Hex $withEmpty
-  $withHash = [regex]::Replace(
-    $withEmpty,
-    '"checksum":""',
-    "`"checksum`":`"$hash`""
-  )
-
-  # Verify
+  $withHash = [regex]::Replace($withEmpty, '"checksum":""', "`"checksum`":`"$hash`"")
   $checkEmpty = [regex]::Replace($withHash, '"checksum"\s*:\s*"[a-fA-F0-9]{64}"', '"checksum":""')
-  $verify = Get-Sha256Hex $checkEmpty
-  if ($verify -ne $hash) {
-    throw "Internal checksum verification failed."
-  }
-
+  if ((Get-Sha256Hex $checkEmpty) -ne $hash) { throw "Internal checksum verification failed." }
   return $withHash
 }
 
 function Test-SaveChecksum([string] $Raw) {
-  if ($Raw -notmatch '"checksum"\s*:\s*"([a-fA-F0-9]{64})"') {
-    return $false
-  }
+  if ($Raw -notmatch '"checksum"\s*:\s*"([a-fA-F0-9]{64})"') { return $false }
   $expected = $Matches[1]
   $withEmpty = [regex]::Replace($Raw, '"checksum"\s*:\s*"[a-fA-F0-9]{64}"', '"checksum":""')
   return (Get-Sha256Hex $withEmpty) -eq $expected
+}
+
+function Merge-IntoModernTemplate {
+  param([string]$ProgressJson, [string]$TemplateJson, [string]$Name)
+  # Prefer Node for type-faithful merge
+  $node = Get-Command node -ErrorAction SilentlyContinue
+  if ($node) {
+    $tmpProg = Join-Path $env:TEMP ("vs_prog_{0}.json" -f [guid]::NewGuid().ToString('N'))
+    $tmpTmpl = Join-Path $env:TEMP ("vs_tmpl_{0}.json" -f [guid]::NewGuid().ToString('N'))
+    $tmpOut  = Join-Path $env:TEMP ("vs_out_{0}.json" -f [guid]::NewGuid().ToString('N'))
+    $tmpJs   = Join-Path $env:TEMP ("vs_merge_{0}.js" -f [guid]::NewGuid().ToString('N'))
+    try {
+      [System.IO.File]::WriteAllText($tmpProg, $ProgressJson)
+      [System.IO.File]::WriteAllText($tmpTmpl, $TemplateJson)
+      $js = @'
+const fs = require("fs");
+const crypto = require("crypto");
+const prog = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const modern = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+const saveName = process.argv[4] || prog.saveName || "Unlocked";
+const out = JSON.parse(JSON.stringify(modern));
+const keepModern = new Set([
+  "SoundsEnabled","MusicEnabled","SoundsVolume","MusicVolume","Fullscreen","Language",
+  "FlashingVFXEnabled","JoystickVisible","SelectedJoystickType","DamageNumbersEnabled",
+  "StreamSafeEnabled","ScreenShakeEnabled","ControllerVibrationEnabled","AssignControllerToPlayer1",
+  "ShowPlayerIndicators","PermanentCoopOutlines","TintUISelection","PlayerColours",
+  "BorderType","PixelFont","ReducePhysics","ClassicMusic","VisuallyInvertStages",
+  "HideProgress","HideCompletedAchievements","ShowPickups","ShowSmallMapIcons",
+  "GlimmerCarouselEnabled","hideXPBar","HideAdsButtons","DisableMovingBackground","DisableBlood",
+  "DisplayDefangedEnemies","StageLighting","SequentialChestMode","SelectedRandomEvents",
+  "SelectedRandomLevels","SelectedBGMPlayback","PlayBGMOnlyDuringRun","AlwaysQuickTreasureAnim",
+  "CollectionFilterMode","HideUnavailableAdventures","CharacterSelectSortMode","CharacterSelectSortOrder",
+  "FavouriteCharacters","HiddenCharacterSelectGroups","SelectedSurvarots","UnlockedSurvarotSets",
+  "ActiveSurvarotSets","Platform","SaveOriginalPlatform","SaveTouchedPlatforms","AcceptedEULA",
+  "SaveSyncPlatformAchievements","saveDate"
+]);
+for (const [k,v] of Object.entries(prog)) {
+  if (k === "checksum") continue;
+  if (keepModern.has(k)) continue;
+  out[k] = v;
+}
+out.saveName = saveName;
+if (prog.saveIcon) out.saveIcon = prog.saveIcon;
+out.Platform = "Steam";
+out.SaveOriginalPlatform = out.SaveOriginalPlatform || "STEAM";
+let s = JSON.stringify(out);
+if (!/"checksum"\s*:/.test(s)) s = s.replace(/\}$/, ',"checksum":""}');
+s = s.replace(/"checksum"\s*:\s*"[a-fA-F0-9]*"/, '"checksum":""');
+const hash = crypto.createHash("sha256").update(s,"utf8").digest("hex");
+s = s.replace(/"checksum":""/, `"checksum":"${hash}"`);
+fs.writeFileSync(process.argv[5], s);
+console.log(JSON.stringify({
+  name: JSON.parse(s).saveName,
+  chars: (JSON.parse(s).UnlockedCharacters||[]).length,
+  stages: (JSON.parse(s).UnlockedStages||[]).length,
+  coins: JSON.parse(s).Coins,
+  len: s.length
+}));
+'@
+      [System.IO.File]::WriteAllText($tmpJs, $js)
+      $null = & node $tmpJs $tmpProg $tmpTmpl $Name $tmpOut
+      return [System.IO.File]::ReadAllText($tmpOut)
+    }
+    finally {
+      Remove-Item $tmpProg, $tmpTmpl, $tmpOut, $tmpJs -Force -ErrorAction SilentlyContinue
+    }
+  }
+
+  # Fallback: PowerShell object merge (less type-faithful)
+  $prog = $ProgressJson | ConvertFrom-Json
+  $modern = $TemplateJson | ConvertFrom-Json
+  $base = $modern | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+  foreach ($p in $prog.PSObject.Properties) {
+    if ($p.Name -eq 'checksum') { continue }
+    if ($p.Name -in @('saveDate','Platform','SaveOriginalPlatform','SaveTouchedPlatforms','SoundsEnabled','MusicEnabled')) { continue }
+    $base | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value -Force
+  }
+  if ($Name) { $base.saveName = $Name }
+  $compact = $base | ConvertTo-Json -Depth 100 -Compress
+  return (Update-SaveChecksum $compact)
 }
 
 function Resolve-SteamUserdata([string] $SteamId, [string[]] $Roots) {
@@ -141,32 +184,26 @@ function Resolve-SteamUserdata([string] $SteamId, [string[]] $Roots) {
   foreach ($r in $Roots) {
     if (Test-Path $r) { $existing += (Resolve-Path $r).Path }
   }
-  if ($existing.Count -eq 0) {
-    throw "No Steam userdata folder found. Pass -SteamId and ensure Steam is installed."
-  }
+  if ($existing.Count -eq 0) { throw "No Steam userdata folder found." }
 
   if ($SteamId) {
     foreach ($r in $existing) {
       $p = Join-Path $r $SteamId
       if (Test-Path $p) { return (Resolve-Path $p).Path }
     }
-    throw "SteamId folder not found: $SteamId under $($existing -join ', ')"
+    throw "SteamId folder not found: $SteamId"
   }
 
-  # Auto: pick userdata/*/AppId if unique
   $hits = @()
   foreach ($r in $existing) {
     Get-ChildItem $r -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-      $app = Join-Path $_.FullName "$AppId\remote"
-      if (Test-Path $app) { $hits += $_.FullName }
+      if (Test-Path (Join-Path $_.FullName "$AppId\remote")) { $hits += $_.FullName }
     }
   }
   $hits = $hits | Select-Object -Unique
   if ($hits.Count -eq 1) { return $hits[0] }
-  if ($hits.Count -eq 0) {
-    throw "Could not auto-detect Steam user with app $AppId. Pass -SteamId."
-  }
-  throw "Multiple Steam users have app $AppId. Pass -SteamId one of: $($hits | ForEach-Object { Split-Path $_ -Leaf })"
+  if ($hits.Count -eq 0) { throw "Could not auto-detect Steam user. Pass -SteamId." }
+  throw "Multiple Steam users. Pass -SteamId one of: $($hits | ForEach-Object { Split-Path $_ -Leaf })"
 }
 
 function Update-RemoteCache([string] $RemoteDir, [string] $CachePath) {
@@ -176,11 +213,8 @@ function Update-RemoteCache([string] $RemoteDir, [string] $CachePath) {
   [void]$sb.AppendLine('{')
   [void]$sb.AppendLine('"ChangeNumber""1"')
   [void]$sb.AppendLine('"ostype""0"')
-
   $files = Get-ChildItem $RemoteDir -File -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -match '^SaveData\d*$' } |
-    Sort-Object Name
-
+    Where-Object { $_.Name -match '^SaveData\d*$' } | Sort-Object Name
   foreach ($f in $files) {
     $size = $f.Length
     $sha1 = (Get-FileHash $f.FullName -Algorithm SHA1).Hash.ToLowerInvariant()
@@ -198,7 +232,6 @@ function Update-RemoteCache([string] $RemoteDir, [string] $CachePath) {
     [void]$sb.AppendLine('}')
   }
   [void]$sb.AppendLine('}')
-
   $utf8 = New-Object System.Text.UTF8Encoding $false
   if ($PSCmdlet.ShouldProcess($CachePath, "Write remotecache.vdf")) {
     [System.IO.File]::WriteAllText($CachePath, $sb.ToString(), $utf8)
@@ -207,41 +240,40 @@ function Update-RemoteCache([string] $RemoteDir, [string] $CachePath) {
 
 # ── main ──────────────────────────────────────────────────────────────
 $Path = $PSCmdlet.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
-if (-not (Test-Path -LiteralPath $Path)) {
-  throw "File not found: $Path"
-}
+if (-not (Test-Path -LiteralPath $Path)) { throw "File not found: $Path" }
 
 Write-Host "Reading $Path"
 $original = [System.IO.File]::ReadAllText($Path)
 $wasValidChecksum = $false
-try { $wasValidChecksum = Test-SaveChecksum $original } catch { $wasValidChecksum = $false }
+try { $wasValidChecksum = Test-SaveChecksum $original } catch { }
 
 $repaired = Repair-SaveJsonText $original
-if (-not $NoChecksum) {
+
+if ($ModernTemplate) {
+  $ModernTemplate = $PSCmdlet.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ModernTemplate)
+  if (-not (Test-Path -LiteralPath $ModernTemplate)) { throw "ModernTemplate not found: $ModernTemplate" }
+  Write-Host "Merging progress into modern template: $ModernTemplate"
+  $tmpl = [System.IO.File]::ReadAllText($ModernTemplate)
+  $tmpl = Repair-SaveJsonText $tmpl
+  $name = if ($SaveName) { $SaveName } else { ($repaired | ConvertFrom-Json).saveName }
+  if (-not $name) { $name = "Unlocked" }
+  $repaired = Merge-IntoModernTemplate -ProgressJson $repaired -TemplateJson $tmpl -Name $name
+}
+elseif (-not $NoChecksum) {
   $repaired = Update-SaveChecksum $repaired
 }
 
-# Summarize
 $obj = $repaired | ConvertFrom-Json
-$name = $obj.saveName
-$chars = @($obj.UnlockedCharacters).Count
-$stages = @($obj.UnlockedStages).Count
-$coins = $obj.Coins
 $okCs = Test-SaveChecksum $repaired
-
-Write-Host "saveName=$name coins=$coins unlockedChars=$chars stages=$stages"
+Write-Host "saveName=$($obj.saveName) coins=$($obj.Coins) unlockedChars=$(@($obj.UnlockedCharacters).Count) stages=$(@($obj.UnlockedStages).Count)"
 Write-Host "checksumValid=$okCs (wasValidBefore=$wasValidChecksum)"
 
-if (-not $OutPath) {
-  $OutPath = $Path
-}
-else {
-  $OutPath = $PSCmdlet.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutPath)
-}
+if (-not $OutPath) { $OutPath = $Path }
+else { $OutPath = $PSCmdlet.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutPath) }
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 if ($PSCmdlet.ShouldProcess($OutPath, "Write fixed save")) {
-  if ((Test-Path -LiteralPath $OutPath) -and -not $Force -and ($OutPath -eq $Path)) {
+  if ((Test-Path -LiteralPath $OutPath) -and ($OutPath -eq $Path)) {
     $bak = "$Path.bak_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
     Copy-Item -LiteralPath $Path -Destination $bak -Force
     Write-Host "Backup: $bak"
@@ -253,9 +285,7 @@ if ($PSCmdlet.ShouldProcess($OutPath, "Write fixed save")) {
 if ($InstallSteamSlot -gt 0) {
   $userRoot = Resolve-SteamUserdata -SteamId $SteamId -Roots $SteamUserdataRoots
   $remote = Join-Path $userRoot "$AppId\remote"
-  if (-not (Test-Path $remote)) {
-    New-Item -ItemType Directory -Path $remote -Force | Out-Null
-  }
+  if (-not (Test-Path $remote)) { New-Item -ItemType Directory -Path $remote -Force | Out-Null }
   $slotName = if ($InstallSteamSlot -eq 1) { 'SaveData' } else { "SaveData$InstallSteamSlot" }
   $dest = Join-Path $remote $slotName
   if ($PSCmdlet.ShouldProcess($dest, "Install fixed save as $slotName")) {
@@ -268,8 +298,8 @@ if ($InstallSteamSlot -gt 0) {
     Update-RemoteCache -RemoteDir $remote -CachePath $cache
     Write-Host "Updated $cache"
     Write-Host ""
-    Write-Host "Quit Steam completely, then launch Vampire Survivors."
-    Write-Host "If Steam asks about cloud conflict, choose local files."
+    Write-Host "Fully quit Steam, then launch Vampire Survivors."
+    Write-Host "If Steam asks about cloud conflict, choose LOCAL files."
   }
 }
 
