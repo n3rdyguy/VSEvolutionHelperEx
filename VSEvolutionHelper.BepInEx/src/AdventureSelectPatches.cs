@@ -119,30 +119,111 @@ public static class AdventureSelectPatches
 		}
 	}
 
+	public class TooltipData
+	{
+		public string Title;
+		public string StageSet;
+		public Sprite Icon;
+		public List<(string Name, Sprite Sprite)> Weapons = new List<(string, Sprite)>();
+		public List<string> Characters = new List<string>();
+		public int ProgressGoalCount;
+		public string BodyFallback;
+	}
+
 	private static bool RegisterOne(AdventureItemUI ui)
 	{
-		AdventureData data = null;
-		AdventureType type = default;
-		try { data = ui.GetAdventureData(); } catch { try { data = ui._data; } catch { } }
-		try { type = ui.GetAdventureType(); } catch { try { type = ui._type; } catch { } }
-		if (data == null) return false;
-
-		string title = ResolveTitle(ui, data, type);
-		string body = BuildBody(data, type);
-		Sprite spr = null;
-		try
-		{
-			if ((Object)(object)ui._Icon != (Object)null)
-				spr = ui._Icon.sprite;
-		}
-		catch { }
+		if (!TryBuildData(ui, out TooltipData td) || td == null) return false;
 
 		GameObject card = ((Component)ui).gameObject;
 		EnsureRaycast(card);
 		int id = ((Object)card).GetInstanceID();
 		HitToUi[id] = ui;
-		ItemTooltipsMod.RegisterAdventureIcon(card, title, body, spr);
+		ItemTooltipsMod.RegisterAdventureIcon(card, td.Title, td.BodyFallback, td.Icon);
 		return true;
+	}
+
+	public static bool TryGetTooltipData(GameObject hitGo, out TooltipData data)
+	{
+		data = null;
+		if ((Object)(object)hitGo == (Object)null) return false;
+		int id = ((Object)hitGo).GetInstanceID();
+		if (!HitToUi.TryGetValue(id, out AdventureItemUI ui) || (Object)(object)ui == (Object)null)
+		{
+			try { ui = hitGo.GetComponentInParent<AdventureItemUI>(); } catch { }
+		}
+		if ((Object)(object)ui == (Object)null) return false;
+		return TryBuildData(ui, out data);
+	}
+
+	private static bool TryBuildData(AdventureItemUI ui, out TooltipData td)
+	{
+		td = null;
+		try
+		{
+			AdventureData data = null;
+			AdventureType type = default;
+			try { data = ui.GetAdventureData(); } catch { try { data = ui._data; } catch { } }
+			try { type = ui.GetAdventureType(); } catch { try { type = ui._type; } catch { } }
+			if (data == null) return false;
+
+			td = new TooltipData
+			{
+				Title = ResolveTitle(ui, data, type),
+				BodyFallback = BuildBody(data, type)
+			};
+			try
+			{
+				if ((Object)(object)ui._Icon != (Object)null)
+					td.Icon = ui._Icon.sprite;
+			}
+			catch { }
+			try { td.StageSet = data.StageSetType.ToString(); } catch { }
+
+			try
+			{
+				var chars = data.CharacterTypes;
+				if (chars != null)
+				{
+					int n = Math.Min(chars.Count, 16);
+					for (int i = 0; i < n; i++)
+						td.Characters.Add(HumanizeEnum(chars[i].ToString()));
+				}
+			}
+			catch { }
+
+			try
+			{
+				var weps = data.WeaponTypes;
+				if (weps != null)
+				{
+					int n = Math.Min(weps.Count, 14);
+					for (int i = 0; i < n; i++)
+					{
+						WeaponType wt = weps[i];
+						if (!GameData.IsRealWeaponType(wt)) continue;
+						string name = GameData.GetWeaponName(wt);
+						if (string.IsNullOrEmpty(name)) name = HumanizeEnum(wt.ToString());
+						td.Weapons.Add((name, GameData.GetSprite(wt)));
+					}
+				}
+			}
+			catch { }
+
+			try
+			{
+				var prog = data.ProgressData;
+				if (prog != null) td.ProgressGoalCount = prog.Count;
+			}
+			catch { }
+
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Plugin.Dbg("[AdventureSelect] TryBuildData: " + ex.Message);
+			td = null;
+			return false;
+		}
 	}
 
 	private static void EnsureRaycast(GameObject card)

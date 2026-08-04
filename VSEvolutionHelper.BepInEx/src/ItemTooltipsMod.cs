@@ -6893,13 +6893,185 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 		if ((Object)(object)parent == (Object)null) return;
 
-		adventurePopup = CreateSimpleMapPopup(parent, info.Label, info.Description, info.Sprite);
+		AdventureSelectPatches.TooltipData data = null;
+		try { AdventureSelectPatches.TryGetTooltipData(info.Go, out data); } catch { }
+
+		if (data != null)
+			adventurePopup = CreateAdventureDetailPopup(parent, data);
+		else
+			adventurePopup = CreateSimpleMapPopup(parent, info.Label, info.Description, info.Sprite);
+
 		if ((Object)(object)adventurePopup != (Object)null)
 		{
 			DisablePopupRaycasts(adventurePopup);
 			if ((Object)(object)info.Go != (Object)null)
 				PositionPopup(adventurePopup, info.Go.transform);
 		}
+	}
+
+	/// <summary>Adventure card tooltip with weapon icon strip + character list; TMP-sized.</summary>
+	private static GameObject CreateAdventureDetailPopup(Transform parent, AdventureSelectPatches.TooltipData data)
+	{
+		if (data == null) return null;
+		GameObject root = new GameObject("AdventureTooltipPopup");
+		root.transform.SetParent(parent, false);
+		RectTransform rootRt = root.AddComponent<RectTransform>();
+		rootRt.anchorMin = new Vector2(0.5f, 0.5f);
+		rootRt.anchorMax = new Vector2(0.5f, 0.5f);
+		rootRt.pivot = new Vector2(0f, 1f);
+		Image bg = root.AddComponent<Image>();
+		((Graphic)bg).color = PopupBgColor;
+		((Graphic)bg).raycastTarget = false;
+		Outline ol = root.AddComponent<Outline>();
+		((Shadow)ol).effectColor = new Color(0.9f, 0.75f, 0.3f, 1f);
+		((Shadow)ol).effectDistance = new Vector2(2f, 2f);
+
+		TMP_FontAsset font = GetFont();
+		if ((Object)(object)font == (Object)null)
+		{
+			Object.Destroy((Object)(object)root);
+			return null;
+		}
+
+		const float minW = 300f;
+		const float maxW = 440f;
+		const float iconSz = 32f;
+		float width = minW;
+		try
+		{
+			float need = MeasureTmpPreferredWidth(font, data.Title ?? "Adventure", 17f, true) + 56f + Padding * 2f;
+			width = Mathf.Clamp(need, minW, maxW);
+		}
+		catch { }
+		// Weapon strip may need more width
+		if (data.Weapons != null && data.Weapons.Count > 0)
+		{
+			float strip = data.Weapons.Count * (iconSz + 4f) + Padding * 2f;
+			width = Mathf.Clamp(Mathf.Max(width, strip), minW, maxW);
+		}
+
+		float contentW = width - Padding * 2f;
+		float y = -Padding;
+		var gold = new Color(0.95f, 0.8f, 0.35f, 1f);
+		var soft = SoftWhite();
+
+		// Title
+		float titleH = 40f;
+		GameObject titleRow = new GameObject("Title");
+		titleRow.transform.SetParent(root.transform, false);
+		RectTransform tr = titleRow.AddComponent<RectTransform>();
+		tr.anchorMin = new Vector2(0f, 1f);
+		tr.anchorMax = new Vector2(0f, 1f);
+		tr.pivot = new Vector2(0f, 1f);
+		tr.anchoredPosition = new Vector2(Padding, y);
+		float tx = 0f;
+		if ((Object)(object)data.Icon != (Object)null)
+		{
+			AddUiIcon(titleRow.transform, data.Icon, 0f, -titleH * 0.5f, titleH - 4f);
+			tx = titleH;
+		}
+		var titleTmp = AddUiText(titleRow.transform, "Name", data.Title ?? "Adventure", font, 17f, Color.white, true,
+			tx + 4f, 0f, contentW - tx - 4f, titleH, (TextAlignmentOptions)513);
+		float th = FitTmpHeight(titleTmp, contentW - tx - 4f, 20f, 64f);
+		titleH = Mathf.Max(titleH, th + 4f);
+		tr.sizeDelta = new Vector2(contentW, titleH);
+		y -= titleH + 6f;
+
+		if (!string.IsNullOrEmpty(data.StageSet))
+		{
+			AddUiText(root.transform, "StageSet", "Stage set: " + data.StageSet, font, 12f, soft, false,
+				Padding, y, contentW, 18f, (TextAlignmentOptions)257);
+			y -= 20f;
+		}
+
+		// Weapons with icons
+		if (data.Weapons != null && data.Weapons.Count > 0)
+		{
+			AddUiText(root.transform, "WepHdr", $"Weapons ({data.Weapons.Count})", font, 12f, gold, true,
+				Padding, y, contentW, 18f, (TextAlignmentOptions)257);
+			y -= 18f + 4f;
+
+			// Icon strip
+			float stripH = iconSz + 4f;
+			GameObject strip = new GameObject("WeaponStrip");
+			strip.transform.SetParent(root.transform, false);
+			RectTransform sr = strip.AddComponent<RectTransform>();
+			sr.anchorMin = new Vector2(0f, 1f);
+			sr.anchorMax = new Vector2(0f, 1f);
+			sr.pivot = new Vector2(0f, 1f);
+			sr.anchoredPosition = new Vector2(Padding, y);
+			sr.sizeDelta = new Vector2(contentW, stripH);
+			float x = 0f;
+			int iconCount = 0;
+			foreach (var w in data.Weapons)
+			{
+				if (iconCount >= 12) break;
+				if ((Object)(object)w.Sprite != (Object)null)
+				{
+					AddUiIcon(strip.transform, w.Sprite, x, -stripH * 0.5f, iconSz);
+					x += iconSz + 4f;
+					iconCount++;
+				}
+			}
+			y -= stripH + 4f;
+
+			// Name list (compact)
+			var names = new System.Text.StringBuilder();
+			int shown = 0;
+			foreach (var w in data.Weapons)
+			{
+				if (shown >= 10) break;
+				if (shown > 0) names.Append(", ");
+				names.Append(w.Name);
+				shown++;
+			}
+			if (data.Weapons.Count > shown)
+				names.Append($" … +{data.Weapons.Count - shown}");
+			var namesTmp = AddUiText(root.transform, "WepNames", names.ToString(), font, 11f, soft, false,
+				Padding, y, contentW, 30f, (TextAlignmentOptions)257);
+			float nh = FitTmpHeight(namesTmp, contentW, 16f, 80f);
+			y -= nh + 6f;
+		}
+
+		// Characters
+		if (data.Characters != null && data.Characters.Count > 0)
+		{
+			AddUiText(root.transform, "CharHdr", $"Characters ({data.Characters.Count})", font, 12f, gold, true,
+				Padding, y, contentW, 18f, (TextAlignmentOptions)257);
+			y -= 18f + 2f;
+			var cb = new System.Text.StringBuilder();
+			int shown = 0;
+			foreach (var c in data.Characters)
+			{
+				if (shown >= 12) break;
+				if (shown > 0) cb.Append(", ");
+				cb.Append(c);
+				shown++;
+			}
+			if (data.Characters.Count > shown)
+				cb.Append($" … +{data.Characters.Count - shown}");
+			var ct = AddUiText(root.transform, "Chars", cb.ToString(), font, 12f, soft, false,
+				Padding, y, contentW, 30f, (TextAlignmentOptions)257);
+			float ch = FitTmpHeight(ct, contentW, 16f, 100f);
+			y -= ch + 6f;
+		}
+
+		if (data.ProgressGoalCount > 0)
+		{
+			AddUiText(root.transform, "Prog", $"Progress goals: {data.ProgressGoalCount}", font, 12f, soft, false,
+				Padding, y, contentW, 18f, (TextAlignmentOptions)257);
+			y -= 20f;
+		}
+
+		y -= Padding;
+		rootRt.sizeDelta = new Vector2(width, Mathf.Abs(y));
+		try
+		{
+			Canvas.ForceUpdateCanvases();
+			LayoutRebuilder.ForceRebuildLayoutImmediate(rootRt);
+		}
+		catch { }
+		return root;
 	}
 
 	private static void HideAdventurePopup()

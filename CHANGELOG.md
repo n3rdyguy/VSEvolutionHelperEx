@@ -2,6 +2,12 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.2] — polish (unreleased tag)
+
+### Added / improved
+- Adventure tooltips: **weapon icon strip**, character list, TMP-sized panel
+- Many more **StageExtraTips** (Moonspell/Poe/Imelda/OTC/FB adventure legs + bazaars)
+
 ## [1.10.1] — 2026-08-04
 
 ### Fixed

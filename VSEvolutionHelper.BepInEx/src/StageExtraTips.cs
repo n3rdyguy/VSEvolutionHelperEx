@@ -110,6 +110,92 @@ public static class StageExtraTips
 			"First Blood adventure — run-and-gun chapter. Movement and fire rate over pure tanking.",
 		[StageType.ADV_OTC_001_001_Woods] =
 			"Ode to Castlevania adventure woods — large secret-heavy chapter. Explore thoroughly for progression.",
+		// Moonspell adventure chain
+		[StageType.ADV_M001CASTLEGROUNDS] =
+			"Moonspell adventure — castle grounds. Opening chapter; learn the layout and hit map goals.",
+		[StageType.ADV_M002SHRINESVALLEY] =
+			"Moonspell adventure — shrines valley. Multi-path valley; shrines and tokens matter.",
+		[StageType.ADV_M003FORBIDDENPEAK] =
+			"Moonspell adventure — forbidden peak. Vertical pressure; bring mobility.",
+		[StageType.ADV_M004HIDDENCAVE] =
+			"Moonspell adventure — hidden cave. Tight tunnels; AOE clear helps.",
+		[StageType.ADV_M005FROZENLAKE] =
+			"Moonspell adventure — frozen lake. Open ice field; keep moving for pickups.",
+		[StageType.ADV_M006TANUKIFOREST] =
+			"Moonspell adventure — tanuki forest. Dense trees and ambushes; watch flanks.",
+		[StageType.ADV_M007MOONSPELL] =
+			"Moonspell adventure — summit chapter. Climax pressure; full evolved kits recommended.",
+		// Poe adventure chain
+		[StageType.ADV_POE_2_Forest] =
+			"Poe adventure — forest leg. Chapter structure; prioritize adventure objectives.",
+		[StageType.ADV_POE_3_Woods] =
+			"Poe adventure — woods leg. Secrets and routes; map tokens guide the path.",
+		[StageType.ADV_POE_4_Orchard] =
+			"Poe adventure — orchard. Mid-chain farm/pressure mix; keep evolutions online.",
+		[StageType.ADV_POE_5_Garden] =
+			"Poe adventure — garden. Tighter space; control lanes.",
+		[StageType.ADV_POE_6_Molise] =
+			"Poe adventure — Molise-style leg. Often calmer; use for recovery between hard chapters.",
+		// Imelda adventure chain
+		[StageType.ADV_IME_2_Library] =
+			"Imelda adventure — library. Spell corridors; projectile builds shine.",
+		[StageType.ADV_IME_3_Forest] =
+			"Imelda adventure — forest. Open packing; standard main-path tactics.",
+		[StageType.ADV_IME_4_Tower] =
+			"Imelda adventure — tower climb. Vertical bridges; don’t get trapped mid-span.",
+		[StageType.ADV_IME_5_Stair] =
+			"Imelda adventure — stair climb. Limited ground; upward clear helps.",
+		[StageType.ADV_IME_6_Magna] =
+			"Imelda adventure — magna finale. Late-chain boss pressure; defensive passives matter.",
+		// Challenge / First Blood samples
+		[StageType.ADV_CHAL_001_Meeting] =
+			"Challenge adventure — opening scenario. Read modifiers; not a free farm map.",
+		[StageType.ADV_CHAL_002_Security] =
+			"Challenge adventure — security theme. Expect scripted waves and constraints.",
+		[StageType.ADV_FB_002_Bullet] =
+			"First Blood — bullet chapter. Projectile density; keep strafing.",
+		[StageType.ADV_FB_003_NeoCity] =
+			"First Blood — Neo City. Urban lanes; horizontal clear is king.",
+		[StageType.ADV_FB_004_OperationGun] =
+			"First Blood — Operation Gun. Set-piece pressure; burst and mobility.",
+		// Foscari adventure samples
+		[StageType.ADV_FOSCARI_001] =
+			"Foscari adventure — opening swamp chapter. Follow tokens; multi-biome chain.",
+		[StageType.ADV_FOSCARI_002] =
+			"Foscari adventure — mid swamp. Elite density rises; evolved kits preferred.",
+		// Shemoon / Emerald samples
+		[StageType.ADV_SHEMOON_001] =
+			"Shemoon adventure — early chapter. Story goals over free roam farming.",
+		[StageType.ADV_EME_001] =
+			"Emerald adventure — diorama-style goals. Follow stage objectives and merchants.",
+		// Castlevania adventure path samples
+		[StageType.ADV_OTC_001_002_Entrance] =
+			"OTC adventure — entrance. Multi-route castle path; explore for progression.",
+		[StageType.ADV_OTC_001_003_Library] =
+			"OTC adventure — library. Dense elites; AOE recommended.",
+		[StageType.ADV_OTC_001_004_Clock] =
+			"OTC adventure — clock tower. Vertical timing and platforms.",
+		[StageType.ADV_OTC_001_005_Throne] =
+			"OTC adventure — throne. Boss-forward chapter; max damage setups.",
+		[StageType.ADV_OTC_001_006_Sunken] =
+			"OTC adventure — sunken ruins. Limited space; map awareness helps.",
+		[StageType.ADV_OTC_001_007_Ecclesia] =
+			"OTC adventure — ecclesia. Sacred/tight combat; watch for unique spawns.",
+		[StageType.ADV_OTC_001_008_Infinite] =
+			"OTC adventure — infinite corridor pressure. Sustain and clear over greed.",
+		[StageType.ADV_OTC_001_009_DeathFight] =
+			"OTC adventure — death fight finale. All-in boss encounter; revives and burst.",
+		// Adventure bazaars
+		[StageType.POE_ADV_BAZAAR] =
+			"Poe bazaar hub — shop between legs. Restock, then continue the chain.",
+		[StageType.IMELDA_ADV_BAZAAR] =
+			"Imelda bazaar hub — shop between legs. Stock passives before the next chapter.",
+		[StageType.OTC_ADV_BAZAAR] =
+			"Castlevania bazaar hub — shop between castle chapters.",
+		[StageType.FOSCARI_ADV_BAZAAR] =
+			"Foscari bazaar hub — shop between swamp chapters.",
+		[StageType.FIRSTBLOOD_ADV_BAZAAR] =
+			"First Blood bazaar hub — shop between run-and-gun chapters.",
 	};
 
 	public static bool TryGet(StageType type, out string tip)
