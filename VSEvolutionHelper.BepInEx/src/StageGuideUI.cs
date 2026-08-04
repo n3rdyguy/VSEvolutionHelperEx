@@ -23,7 +23,9 @@ public static class StageGuideUI
 	private static Tab _tab = Tab.Music;
 	private static GameObject _tabBar;
 	private static GameObject _guideRoot;
+	private static GameObject _guideViewport;
 	private static GameObject _guideScrollContent;
+	private static ScrollRect _guideScroll;
 	private static GameObject _songPanelGo;
 	private static RectTransform _songPanelRt;
 	private static TextMeshProUGUI _tabMusicLabel;
@@ -76,7 +78,9 @@ public static class StageGuideUI
 		catch { }
 		_tabBar = null;
 		_guideRoot = null;
+		_guideViewport = null;
 		_guideScrollContent = null;
+		_guideScroll = null;
 		_songPanelGo = null;
 		_songPanelRt = null;
 		_tabMusicLabel = null;
@@ -157,7 +161,7 @@ public static class StageGuideUI
 			AddClick(_tabGuideBg.gameObject, () => SetTab(Tab.Guide));
 		}
 
-		// Guide root — same top/width as song panel; height grows downward to fit content
+		// Guide root — same top/width as song panel; scroll when content is tall
 		if ((Object)(object)_guideRoot == (Object)null)
 		{
 			_guideRoot = new GameObject("EvoHelper_StageGuide");
@@ -171,17 +175,37 @@ public static class StageGuideUI
 			((Shadow)ol).effectColor = new Color(0.55f, 0.45f, 0.2f, 1f);
 			((Shadow)ol).effectDistance = new Vector2(1.5f, 1.5f);
 
-			// Content pinned to top; height set when rebuilt
+			// Viewport (masks overflowing content)
+			_guideViewport = new GameObject("Viewport");
+			_guideViewport.transform.SetParent(_guideRoot.transform, false);
+			RectTransform vrt = _guideViewport.AddComponent<RectTransform>();
+			vrt.anchorMin = Vector2.zero;
+			vrt.anchorMax = Vector2.one;
+			vrt.offsetMin = new Vector2(8f, 8f);
+			vrt.offsetMax = new Vector2(-8f, -8f);
+			Image vImg = _guideViewport.AddComponent<Image>();
+			vImg.color = new Color(1f, 1f, 1f, 0.02f);
+			((Graphic)vImg).raycastTarget = true;
+			_guideViewport.AddComponent<RectMask2D>();
+
+			// Content pinned to top of viewport
 			_guideScrollContent = new GameObject("Content");
-			_guideScrollContent.transform.SetParent(_guideRoot.transform, false);
+			_guideScrollContent.transform.SetParent(_guideViewport.transform, false);
 			RectTransform cr = _guideScrollContent.AddComponent<RectTransform>();
 			cr.anchorMin = new Vector2(0f, 1f);
 			cr.anchorMax = new Vector2(1f, 1f);
 			cr.pivot = new Vector2(0.5f, 1f);
-			cr.anchoredPosition = new Vector2(0f, -10f);
-			cr.offsetMin = new Vector2(12f, 0f);
-			cr.offsetMax = new Vector2(-12f, -10f);
-			cr.sizeDelta = new Vector2(0f, 600f);
+			cr.anchoredPosition = Vector2.zero;
+			cr.sizeDelta = new Vector2(0f, 400f);
+
+			_guideScroll = _guideRoot.AddComponent<ScrollRect>();
+			_guideScroll.content = cr;
+			_guideScroll.viewport = vrt;
+			_guideScroll.horizontal = false;
+			_guideScroll.vertical = true;
+			_guideScroll.movementType = ScrollRect.MovementType.Clamped;
+			_guideScroll.scrollSensitivity = 40f;
+			_guideScroll.inertia = true;
 
 			_guideRoot.SetActive(false);
 		}
@@ -251,28 +275,22 @@ public static class StageGuideUI
 		y = AddHeader(_guideScrollContent.transform, font, "Progression", Gold, 14f, width, y + 4f);
 		y = AddBody(_guideScrollContent.transform, font, $"Hyper unlocked: {hyper}", Muted, 12f, width, y, 2f);
 
-		// Relics / unlocks
+		// Relics / unlocks — omit entire section when empty (quieter for stages like LABORRATORY)
 		var relics = CollectRelics(_stage);
-		y = AddHeader(_guideScrollContent.transform, font, relics.Count > 0 ? $"Unlocks / Relics ({relics.Count})" : "Unlocks / Relics", Gold, 14f, width, y + 6f);
-		if (relics.Count == 0)
+		if (relics.Count > 0)
 		{
-			y = AddBody(_guideScrollContent.transform, font, "No stage relics listed for this map.", Muted, 12f, width, y, 2f);
-		}
-		else
-		{
+			y = AddHeader(_guideScrollContent.transform, font, $"Unlocks / Relics ({relics.Count})", Gold, 14f, width, y + 6f);
 			foreach (ItemType it in relics)
-			{
 				y = AddRelicRow(_guideScrollContent.transform, font, it, width, y);
-			}
 		}
 
-		// Game tips
+		// Game tips — only when present
 		string tips = SafeLoc(() => _stage.GetLocalizedTips(_stageType), _stage.tips);
-		y = AddHeader(_guideScrollContent.transform, font, "Tips", Gold, 14f, width, y + 8f);
 		if (!string.IsNullOrWhiteSpace(tips))
+		{
+			y = AddHeader(_guideScrollContent.transform, font, "Tips", Gold, 14f, width, y + 8f);
 			y = AddBody(_guideScrollContent.transform, font, tips.Trim(), Soft, 12f, width, y, 2f);
-		else
-			y = AddBody(_guideScrollContent.transform, font, "(No in-game tips for this stage.)", Muted, 12f, width, y, 2f);
+		}
 
 		// Hyper tips
 		string htips = SafeLoc(() => _stage.GetLocalizedHyperTips(_stageType), _stage.hyperTips);
@@ -289,15 +307,22 @@ public static class StageGuideUI
 			y = AddBody(_guideScrollContent.transform, font, extra, Soft, 12f, width, y, 2f);
 		}
 
-		// Resize content + grow the guide panel downward to fit everything
-		float contentH = Mathf.Abs(y) + 20f;
+		// Content height + panel size; scroll if content still taller than viewport
+		float contentH = Mathf.Abs(y) + 16f;
 		var contentRt = _guideScrollContent.GetComponent<RectTransform>();
+		// Width 0 with stretch anchors = full viewport width; height = content
 		contentRt.sizeDelta = new Vector2(0f, contentH);
-		FitGuidePanelHeight(contentH + 20f);
+		contentRt.anchoredPosition = Vector2.zero;
+		FitGuidePanelHeight(contentH + 24f);
+		if ((Object)(object)_guideScroll != (Object)null)
+		{
+			_guideScroll.verticalNormalizedPosition = 1f; // top
+			_guideScroll.velocity = Vector2.zero;
+		}
 	}
 
 	/// <summary>
-	/// Match song panel top/width, then extend height downward so all text fits.
+	/// Match song panel top/width; grow downward up to a max. Taller content scrolls inside.
 	/// </summary>
 	private static void FitGuidePanelHeight(float neededHeight)
 	{
@@ -311,10 +336,10 @@ public static class StageGuideUI
 		if (songH < 8f)
 			songH = Mathf.Max(8f, Mathf.Abs(gr.sizeDelta.y));
 
-		// Use more vertical space than the music list when content needs it
+		// Prefer roomier panel, but cap so small screens can still scroll
 		float targetH = Mathf.Max(songH, neededHeight);
-		// Soft cap: don't run off the bottom of a 1080p-ish safe area
-		targetH = Mathf.Min(targetH, 720f);
+		const float maxPanelH = 680f;
+		targetH = Mathf.Min(targetH, maxPanelH);
 
 		bool fixedAnchors = Mathf.Approximately(gr.anchorMin.y, gr.anchorMax.y);
 		if (fixedAnchors)
@@ -322,19 +347,16 @@ public static class StageGuideUI
 			float oldH = gr.sizeDelta.y;
 			if (oldH < 1f) oldH = songH;
 			float newH = targetH;
-			// Keep the top edge fixed while growing downward
 			float pivotY = gr.pivot.y;
 			Vector2 pos = gr.anchoredPosition;
 			Vector2 sd = gr.sizeDelta;
 			sd.y = newH;
 			gr.sizeDelta = sd;
-			// When pivot is not top (1), shifting y keeps the top edge stable
 			pos.y += (oldH - newH) * (1f - pivotY);
 			gr.anchoredPosition = pos;
 		}
 		else
 		{
-			// Stretch anchors: push bottom edge down via offsetMin.y
 			float extra = Mathf.Max(0f, targetH - songH);
 			gr.offsetMin = new Vector2(gr.offsetMin.x, gr.offsetMin.y - extra);
 		}

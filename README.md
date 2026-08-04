@@ -1,61 +1,87 @@
 # VS Evolution Helper (BepInEx port)
 
-Interactive evolution tooltips for **Vampire Survivors** (weapon/item hover tooltips on pause, level-up, merchant, collection, grimoire, and map).
+**Version 1.7.0** — Interactive evolution, arcana, grimoire, map, and stage-select tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
-Ported to BepInEx because **MelonLoader crashes** on current Unity 6 builds of the game (`0x80131506` / CoreCLR). **BepInEx works.**
+Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
 ## Credits / original creators
 
-This project is a **BepInEx + Unity 6 port** of community MelonLoader work. All credit for the original mod idea and implementation goes to:
+This is a **BepInEx + Unity 6 port** of community MelonLoader work. Credit for the original design goes to:
 
 | Role | Author | Links |
 |------|--------|--------|
 | **Original mod author** | **[NihilXD](https://www.nexusmods.com/vampiresurvivors/users/5661694)** | [Nexus: VS Evolution Helper](https://www.nexusmods.com/vampiresurvivors/mods/96) · [GitHub: NihilXD/VSEvolutionHelper](https://github.com/NihilXD/VSEvolutionHelper) |
 | Unofficial 1.14 Melon update | [ashimpure](https://www.nexusmods.com/vampiresurvivors/users/80031423) | [Nexus: Unofficial Update for 1.14](https://www.nexusmods.com/vampiresurvivors/mods/101) |
 
-Please support the original authors on Nexus / GitHub. This port reuses their design (recursive evo tooltips, arcana info, collection/grimoire helpers) with typed Il2Cpp APIs for VS 1.15.
+Please support the original authors. This port reuses their design with typed Il2Cpp APIs for VS 1.15.
+
+## Features
+
+| Area | What you get |
+|------|----------------|
+| **Pause / level-up / merchant** | Hover weapons & passives → multi-row evolution recipes, nested click tooltips |
+| **Arcana** | Related arcanas with names/sprites; click for description + affected items |
+| **Collection / Grimoire** | Tooltips on formula icons (all slots in a row, not only the middle) |
+| **Pause map** | Hover relics, pickups, and other map icons |
+| **Stage selection** | Hover **Relics in stage** icons; **Music \| Guide** tab shares the music panel area for tips, unlocks, hyper status, and curated notes |
 
 ## Requirements
 
 - Vampire Survivors (Steam) — tested on **1.15.113**, Unity **6000.0.62f1**
-- **BepInEx 6 IL2CPP** bleeding-edge (e.g. `be.785`) — already installed on your game if you followed setup
+- **BepInEx 6 IL2CPP** bleeding-edge (e.g. BE 785)
 - **Do not** run MelonLoader and BepInEx at the same time
 
-## Install (this machine)
+## Install (Nexus / zip)
 
-Plugin is installed at:
+1. Install BepInEx 6 IL2CPP for the game (if needed).
+2. Extract this mod so you have:
+
+   ```
+   <Vampire Survivors>/
+     BepInEx/
+       plugins/
+         VSEvolutionHelper/
+           VSEvolutionHelper.dll
+   ```
+
+3. Launch the game. **Close the game before replacing the DLL.**
+
+Confirm in `BepInEx/LogOutput.log`:
 
 ```
-D:\SteamLibrary\steamapps\common\Vampire Survivors\BepInEx\plugins\VSEvolutionHelper\VSEvolutionHelper.dll
-```
-
-Launch the game via Steam (or `VampireSurvivors.exe`). Confirm in `BepInEx\LogOutput.log`:
-
-```
-Loading [VS Evolution Helper 1.5.x]
+Loading [VS Evolution Helper 1.7.0]
 Patches applied successfully
-[GameData] Ready: … weapon names, … items, … arcanas (typed Il2Cpp API)
+[GameData] Ready: …
 Chainloader startup complete
 ```
 
-Game API notes (decompiled types): see `game-api/README.md`.
-
-## In-game use
-
-1. Start a run (or open menus that show weapons/items).
-2. Hover weapon/item icons on **pause**, **level-up**, **merchant**, **collection**, **grimoire**, or the **map**.
-3. Tooltips show evolution formulas / related passives, arcana where supported, and map relics/pickups.
-
-## Rebuild from source
+## Install (this machine / from source)
 
 ```powershell
-cd C:\Users\Martin\projects\mods\vampire\VSEvolutionHelper.BepInEx
+cd VSEvolutionHelper.BepInEx
 dotnet build -c Release
 Copy-Item bin\Release\VSEvolutionHelper.dll `
   "D:\SteamLibrary\steamapps\common\Vampire Survivors\BepInEx\plugins\VSEvolutionHelper\"
 ```
 
 `GamePath` in the `.csproj` points at your Steam install for interop references.
+
+## Config
+
+File (created on first run):
+
+`BepInEx/config/com.nihil.vsevolutionhelper.cfg`
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `Debug.VerboseLogging` | **false** | Extra `[DBG]` lines in the BepInEx console |
+
+## In-game use
+
+1. **In a run:** pause or open level-up / merchant — hover equipment icons.
+2. **Grimoire / collection:** hover evolution formula icons.
+3. **Map (pause):** hover pickups and relics.
+4. **Stage selection:** hover left **Relics in stage**; use **Music \| Guide** above the music list for stage tips and unlocks.
 
 ## Loader notes
 
@@ -64,13 +90,22 @@ Copy-Item bin\Release\VSEvolutionHelper.dll `
 | MelonLoader 0.7.3 | Crashes after support module (even with 0 mods) |
 | BepInEx 6 BE 785 | Works |
 
-- MelonLoader proxy (if present): `version.dll` — keep **disabled** (`version.dll.melon.off`) while using BepInEx  
+- MelonLoader proxy (if present): keep **disabled** while using BepInEx  
 - BepInEx proxy: `winhttp.dll` + `doorstop_config.ini`
+
+## Docs
+
+| Doc | Purpose |
+|-----|---------|
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+| [docs/SMOKE-TEST.md](docs/SMOKE-TEST.md) | Pre-release checklist |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Longer-term plan |
+| [game-api/README.md](game-api/README.md) | Decompiled API notes (dev) |
 
 ## License / attribution
 
 - **Original work:** [NihilXD](https://github.com/NihilXD/VSEvolutionHelper) — VS Evolution Helper / VS Item Tooltips (MelonLoader)
 - **1.14 community update:** [ashimpure on Nexus](https://www.nexusmods.com/vampiresurvivors/mods/101)
-- **This repo:** BepInEx IL2CPP port and VS 1.15 / Unity 6 fixes (typed `GameData`, multi-row evolutions, grimoire/map tooltips)
+- **This repo:** BepInEx IL2CPP port and VS 1.15 / Unity 6 fixes
 
-If you redistribute this port, please keep the credits and links to NihilXD’s original mod above.
+If you redistribute this port, keep the credits and links to NihilXD’s original mod.

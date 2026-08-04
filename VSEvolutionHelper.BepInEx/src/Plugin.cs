@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string PluginGuid = "com.nihil.vsevolutionhelper";
     public const string PluginName = "VS Evolution Helper";
-    public const string PluginVersion = "1.6.3";
+    public const string PluginVersion = "1.7.0";
 
     internal static new ManualLogSource Log;
     internal static Plugin Instance;
@@ -31,8 +31,8 @@ public class Plugin : BasePlugin
         _debugVerbose = Config.Bind(
             "Debug",
             "VerboseLogging",
-            true,
-            "Log detailed evolution / sprite / hover diagnostics to the BepInEx console.");
+            false,
+            "Log detailed evolution / sprite / hover diagnostics to the BepInEx console. Off by default for players.");
         DebugVerbose = _debugVerbose.Value;
 
         Log.LogInfo($"{PluginName} {PluginVersion} loading (BepInEx port)...");
