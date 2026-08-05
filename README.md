@@ -168,7 +168,7 @@ Restart the game (or re-enter menus) after edits so values reload.
 4. **Stage select:** hover left relics; open **Guide** for tips/features/relics; **Music** for tracks.
 5. **Characters / Adventures:** hover cards for summaries.
 
-More detail: **[docs/USER-GUIDE.md](docs/USER-GUIDE.md)**.
+Every feature and every config key is described below.
 
 ---
 
@@ -183,12 +183,10 @@ More detail: **[docs/USER-GUIDE.md](docs/USER-GUIDE.md)**.
 
 | Doc | Purpose |
 |-----|---------|
-| [docs/USER-GUIDE.md](docs/USER-GUIDE.md) | Full feature walkthrough |
-| [docs/PLAN-original-parity.md](docs/PLAN-original-parity.md) | Plan to match original mod screen/feature parity → 1.11.0 |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
-| [docs/SMOKE-TEST.md](docs/SMOKE-TEST.md) | Pre-release checklist |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | What’s done / what’s next |
 | [game-api/README.md](game-api/README.md) | Decompiled API notes (dev) |
+
+Planning notes, the smoke-test checklist and save tooling are kept outside this repo.
 
 ## License / attribution
 

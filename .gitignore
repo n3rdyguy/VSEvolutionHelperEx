@@ -25,3 +25,7 @@ storage/
 *.swp
 Thumbs.db
 Desktop.ini
+
+# Private working material — not shipped in the public repo
+scripts/
+docs/
