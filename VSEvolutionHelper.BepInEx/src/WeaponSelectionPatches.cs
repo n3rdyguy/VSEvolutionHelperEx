@@ -108,6 +108,14 @@ public static class WeaponSelectionPatches
 			}
 
 			ItemTooltipsMod.RegisterWeaponUI(((Object)target).GetInstanceID(), target, wt);
+
+			// Keyboard/pad select the cell root, and dwell only searches upward from the
+			// selection — so a hover registered on the frame child alone is unreachable
+			// without a mouse. Map the root too, without touching its button wiring.
+			GameObject root = ((Component)item).gameObject;
+			if ((Object)(object)root != (Object)(object)target)
+				ItemTooltipsMod.MapWeaponForNavigation(root, wt);
+
 			Plugin.Dbg($"WeaponSelect: registered {wt} on {((Object)target).name}");
 		}
 		catch (Exception ex)

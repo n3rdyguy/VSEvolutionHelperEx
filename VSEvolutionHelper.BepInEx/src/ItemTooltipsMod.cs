@@ -3022,6 +3022,20 @@ public class ItemTooltipsMod
 		}
 	}
 
+	/// <summary>
+	/// Map a GameObject to a weapon for keyboard/controller dwell only — no EventTrigger, so
+	/// the object's own button wiring is left untouched.
+	///
+	/// Needed where the pointer hover target is a *child* of the object the EventSystem
+	/// selects: dwell resolves the selection by walking up the parent chain, never down, so a
+	/// hover registered on a child is invisible to keyboard and pad.
+	/// </summary>
+	public static void MapWeaponForNavigation(GameObject go, WeaponType type)
+	{
+		if ((Object)(object)go == (Object)null) return;
+		uiToWeaponType[((Object)go).GetInstanceID()] = type;
+	}
+
 	private static (WeaponType? weapon, ItemType? item)? FindTrackedIconForObject(GameObject go)
 	{
 		//IL_006c: Unknown result type (might be due to invalid IL or missing references)

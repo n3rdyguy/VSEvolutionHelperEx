@@ -1,12 +1,12 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.10.25** — Evolution, arcana, grimoire, collection, map, stage, character, and adventure tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.10.26** — Evolution, arcana, grimoire, collection, map, stage, character, and adventure tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
 | | |
 |--|--|
-| **Latest release** | [v1.10.24](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.10.24) |
+| **Latest release** | [v1.10.25](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.10.25) |
 | **Game** | Vampire Survivors **1.15.x** (tested **1.15.113**), Unity **6000.0.62f1** |
 | **Loader** | [BepInEx 6 IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (BE / bleeding-edge) |
 
@@ -117,7 +117,7 @@ Official bleeding-edge builds: **[https://builds.bepinex.dev/projects/bepinex_be
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.10.25]
+Loading [VS Evolution Helper 1.10.26]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete
@@ -169,6 +169,27 @@ Restart the game (or re-enter menus) after edits so values reload.
 5. **Characters / Adventures:** hover cards for summaries.
 
 Every feature and every config key is described below.
+
+## Keyboard / controller
+
+Tooltips do not need a mouse. Move the selection and hold it — the tooltip appears after
+`Tooltips.ControllerDwellDelay` (default 0.5s).
+
+| Key | Pad | Does |
+|-----|-----|------|
+| Arrow keys / WASD | Stick / d-pad | Move selection; switches out of mouse mode |
+| **Tab** | Y | Enter **interactive mode** on a shown tooltip (focus its formula icons); with no tooltip while paused, enter **equipment nav**; press again to back out |
+| **Space** / **Enter** | A | In equipment nav with a tooltip up: enter interactive mode |
+| **Backspace** | B | Close the top popup / step back one nested level |
+| **Q** / **E** | LB / RB | Stage select: switch **Music ↔ Guide** |
+
+Works on pause equipment, level-up, Collections / Grimoire (including arcana), stage select,
+and weapon selector screens.
+
+**Moving the mouse returns to mouse mode immediately**, closing any nav mode.
+
+**Not yet keyboard-reachable:** pause **map** icons — they are hit-tested against the mouse
+pointer and have no selection to move. Use the mouse for those.
 
 ---
 

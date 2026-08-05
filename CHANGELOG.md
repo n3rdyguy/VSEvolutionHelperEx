@@ -2,6 +2,19 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.26] — 2026-08-05
+
+### Fixed
+- **Weapon selector tooltips are reachable by keyboard and controller.** They were mouse-only:
+  the tooltip was attached to the weapon's frame image, but keyboard/pad select the whole
+  cell, and the lookup only searched upward from the selection — so it never found a tooltip
+  registered on a child. The cell itself is now mapped for navigation, without touching the
+  button wiring that makes selecting the weapon work.
+
+### Added
+- Keyboard / controller reference in README and the user guide, including the one place that
+  still needs a mouse (pause map icons).
+
 ## [1.10.25] — 2026-08-05
 
 ### Fixed
