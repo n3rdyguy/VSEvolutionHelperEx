@@ -200,6 +200,12 @@ Visuals: dark strip, gold outline, active tab gold, inactive muted; small gap ab
 - `Features.StageGuide` — master kill switch  
 - `Features.StageGuideDefaultToGuide` — start on Guide instead of Music (once per stage-select session)
 
+> **Known limitation — the Guide needs music unlocked.** On a save where the stage's music is
+> not yet unlocked there is no song panel, and the Guide is built onto that panel — so the
+> `Music | Guide` tabs and the whole Guide are missing rather than merely empty. This is a
+> defect, not intended behaviour, and it is scheduled to be fixed by giving the Guide its own
+> layout. It is invisible on a fully-unlocked save. Tracked in ROADMAP §4.1.
+
 ### 7.3 Stage Guide contents
 
 | Section | When shown | Purpose |

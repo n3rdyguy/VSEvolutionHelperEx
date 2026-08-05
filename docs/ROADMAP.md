@@ -42,7 +42,7 @@ Full player-facing detail: **[USER-GUIDE.md](USER-GUIDE.md)**.
 
 | Item | Notes |
 |------|--------|
-| Grimoire: sometimes one active icon per evo row | Accepted for now; full multi-icon hit is optional later |
+| Grimoire: one active icon per evo row | **By design** — confirmed as intended, not a defect (2026-08-05) |
 | Character flavor missing for rare I2 gaps | Name humanized; description line omitted rather than raw keys |
 | StageExtraTips coverage | Main + many DLC/adventure stages; not every StageType |
 | Features vs bottom stats | Hyper/length/mods intentionally **not** duplicated in Guide |
@@ -104,6 +104,7 @@ fully-unlocked save. See `SMOKE-TEST.md`.
 | Task | Effort |
 |------|--------|
 | **Stage Guide without song panel** (above) | **M** |
+| **Keyboard-only navigation** (no pad required to reach every tooltip) | **M** |
 | Expand `StageExtraTips` for remaining DLC / adventures | S–M |
 | Map token labels for unknown sprites | M |
 | Adventure tooltips as rich as character (icon strip) | M |

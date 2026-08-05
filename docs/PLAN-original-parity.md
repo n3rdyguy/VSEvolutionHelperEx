@@ -21,7 +21,7 @@
 |------|--------|-----|
 | Level-up | Strong | Re-verify pad navigate + hover delay |
 | Pause inventory (weapons) | Strong | Confirm accessories/passives same path |
-| Collection / Grimoire | Partial | Collections tab hover/placement done (1.10.11–1.10.24); remaining: multi-icon formula hit; pad dwell on grid |
+| Collection / Grimoire | **Done** | Collections tab hover/placement done (1.10.11–1.10.24). One active icon per formula row is **intended behaviour**, not a gap (owner call, 2026-08-05). Pad dwell on grid still unverified |
 | Merchant | **Mouse confirmed** (1.10.24) | Pad/nested unverified; typed SetData patch still worth doing |
 | Weapon selectors — Penshin Fatcha + Arma Dio | **Mouse confirmed** (1.10.25) | Both views verified separately. Pad/nested unverified; `EME_SELECTOR` variant still unseen |
 | Owned gold circle | Implemented | Verify `PlayerOwnsWeapon` still correct in 1.15 |
@@ -53,7 +53,7 @@ Use `docs/SMOKE-TEST.md` plus this table.
 | Pause accessory | ✅ | — | — | — | |
 | Merchant offer | ✅ | — | — | — | |
 | Collection weapon | ✅ | — | — | — | Docked-panel rework (1.10.11–1.10.24) |
-| Grimoire formula L/M/R | ✅ | — | — | — | Multi-icon hit still partial (known) |
+| Grimoire formula L/M/R | ✅ | — | — | — | One active icon per row is by design |
 | **Arma Dio list item** | ✅ | ⬜ | ⬜ | ⬜ | Confirmed 2026-08-05 (1.10.25). Base `View - WeaponSelection` + `SetData` — verified separately from Penshin |
 | **Penshin Fatcha list item** | ✅ | ⬜ | ⬜ | ⬜ | Fixed and confirmed 2026-08-05 (1.10.25). Binds via `SetPenshinData` under `View - TP_WeaponSelection` |
 
