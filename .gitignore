@@ -15,7 +15,7 @@ VSEvolutionHelper.BepInEx.dll
 VSEvolutionHelper130.dll
 
 # Release staging (zip itself may be kept under dist/)
-dist/staging/
+dist/
 
 # Local save dumps / private saves (do not commit)
 storage/
