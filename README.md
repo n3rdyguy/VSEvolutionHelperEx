@@ -1,6 +1,6 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.10.26** — Evolution, arcana, grimoire, collection, map, stage, character, and adventure tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.10.27** — Evolution, arcana, grimoire, collection, map, stage, character, adventure, and secrets tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
@@ -45,6 +45,7 @@ Please support the original authors. This port reuses their design with typed Il
 | **Collection / Grimoire** | Tooltips on evolution formula icons and collection grid items/arcanas. Collections tooltips **dock to the right margin** (always visible, never clipped by the grid) and stay **clickable** for nested formula detail; locked cells show an **Unlock:** hint |
 | **Stage selection — relics** | Hover **Relics in stage** icons for name + description (dynamic sizing for long names) |
 | **Stage selection — Music \| Guide** | Tabs above the song panel: **Music** keeps the track list; **Guide** reuses that space for stage help |
+| **Secrets** | Hover a secret → what it unlocks (character portrait, weapons, relic, arcana, power-up, skins, stage, gold). Renamed characters show both names. Turn off `SecretSpoilers` to reveal only secrets you have already found |
 
 ### Stage Guide (right column)
 
@@ -117,7 +118,7 @@ Official bleeding-edge builds: **[https://builds.bepinex.dev/projects/bepinex_be
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.10.26]
+Loading [VS Evolution Helper 1.10.27]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete
@@ -155,6 +156,8 @@ Created on first run:
 | Features | `CharacterTooltips` | **true** | Character Selection tooltips |
 | Features | `AdventureTooltips` | **true** | Adventures select tooltips |
 | Features | `WeaponSelectionTooltips` | **true** | Weapon selector screen tooltips |
+| Features | `SecretTooltips` | **true** | Secrets page unlock tooltips |
+| Features | `SecretSpoilers` | **true** | Also reveal secrets you have **not** discovered yet |
 
 Restart the game (or re-enter menus) after edits so values reload.
 

@@ -2,6 +2,29 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.10.27] — 2026-08-06
+
+### Added
+- **Secrets page tooltips.** Hover a secret to see what it unlocks — character (with portrait),
+  weapons, relic, arcana, power-up, skins, stage, hyper, gold and custom unlock text.
+  Config `SecretTooltips`; `SecretSpoilers` (default on) also reveals secrets you have not
+  discovered yet, and can be turned off to show only the ones you have already found.
+
+### Fixed
+- **Secret rewards were reported as "Void".** Every reward field on the parsed record reads
+  back as the enum's `VOID` member for mystery secrets — in the row's own copy *and* in the
+  `AllSecrets` catalog. The raw secrets JSON those records are parsed from still carries them
+  as plain strings, so rewards are now read from there. Ids belonging to DLC that is not
+  installed still list, as a humanized label rather than vanishing.
+- **Renamed characters showed their retired name.** Names are now composed from the character
+  record's own name parts, the same way the game builds them, instead of from a single
+  localization term that was never updated after a rename. Where the two disagree, both are
+  shown — e.g. `Minnah Mannarah (Graziella)`.
+- **The selected secret did not respond to hover.** The selection highlight covers the row's
+  contents and swallowed the pointer before it reached the reward icon; the row root is now
+  registered too, so the hover still resolves. Existing `EventTrigger` entries are appended to
+  rather than cleared, leaving the row's own wiring intact.
+
 ## [1.10.26] — 2026-08-05
 
 ### Fixed

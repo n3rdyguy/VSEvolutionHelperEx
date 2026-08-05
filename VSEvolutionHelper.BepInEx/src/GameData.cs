@@ -775,6 +775,552 @@ public static class GameData
         return !string.IsNullOrEmpty(id);
     }
 
+    /// <summary>One line of a tooltip list: an optional icon plus its label.</summary>
+    public sealed class IconRow
+    {
+        public Sprite Sprite;
+        public string Label;
+        public IconRow(Sprite sprite, string label) { Sprite = sprite; Label = label; }
+    }
+
+    /// <summary>
+    /// The full record for a secret, from <c>DataManager.AllSecrets</c>.
+    ///
+    /// The SecretData handed to SecretItemUI is sparse — every reward field arrives null (or
+    /// VOID), so reading rewards off the UI's copy yields nothing. The catalog keyed by
+    /// SecretType holds the populated record. Same shape as the custom-merchant catalog.
+    /// </summary>
+    public static VampireSurvivors.Data.SecretData GetSecretData(SecretType type)
+    {
+        if (_dataManager == null) return null;
+        try
+        {
+            var all = _dataManager.AllSecrets;
+            if (all == null) return null;
+            foreach (var kv in all)
+            {
+                if (kv.Key == type) return kv.Value;
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] GetSecretData: " + ex.Message);
+        }
+        return null;
+    }
+
+    // ── Secrets: rewards live in the raw JSON, not in the parsed record ──────
+    //
+    // Every reward field on SecretData reads back as the enum's VOID member for mystery
+    // secrets, in both the row's copy and the DataManager.AllSecrets catalog — but the raw
+    // JSON DataManager parsed those records from still carries them as plain strings
+    // ("characterToUnlock": "NEO"). So the shipped data does hold the answers; only the
+    // deserialized view is blank. Reading the JSON is therefore the only reliable source.
+
+    private sealed class SecretRewardJson
+    {
+        public string Character;
+        public string Weapon;
+        public System.Collections.Generic.List<string> WeaponList;
+        public string Stage;
+        public string Hyper;
+        public string Relic;
+        public string Arcana;
+        public string PowerUp;
+        public System.Collections.Generic.List<string> Skins;
+        public int Gold;
+        public string Special;
+        public string CustomText;
+        public string CustomFrame;
+        public string CustomTexture;
+    }
+
+    private static System.Collections.Generic.Dictionary<string, SecretRewardJson> _secretRewards;
+    private static bool _secretRewardsParsed;
+
+    private static void EnsureSecretRewards()
+    {
+        // Not "tried" until DataManager exists — otherwise an early call would poison the
+        // cache with an empty result for the rest of the session.
+        if (_secretRewardsParsed || _dataManager == null) return;
+        _secretRewardsParsed = true;
+        try
+        {
+            var json = _dataManager._allSecretsJson;
+            if (json == null)
+            {
+                Plugin.Dbg("[GameData] _allSecretsJson is null");
+                return;
+            }
+            string raw = null;
+            try { raw = json.ToString(); } catch { }
+            if (string.IsNullOrEmpty(raw))
+            {
+                Plugin.Dbg("[GameData] secrets JSON not stringifiable");
+                return;
+            }
+
+            var map = new System.Collections.Generic.Dictionary<string, SecretRewardJson>(
+                StringComparer.OrdinalIgnoreCase);
+            using (var doc = System.Text.Json.JsonDocument.Parse(raw))
+            {
+                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+                {
+                    Plugin.Dbg("[GameData] secrets JSON root is " + doc.RootElement.ValueKind);
+                    return;
+                }
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    SecretRewardJson entry = ReadSecretEntry(prop.Value);
+                    if (entry != null) map[prop.Name] = entry;
+                }
+            }
+            _secretRewards = map;
+            Plugin.Dbg($"[GameData] secrets JSON parsed: {map.Count} entries");
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] secrets JSON: " + ex.Message);
+        }
+    }
+
+    private static SecretRewardJson ReadSecretEntry(System.Text.Json.JsonElement el)
+    {
+        // Some VS catalogs wrap each record in a single-element array (the per-level shape).
+        if (el.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            foreach (var first in el.EnumerateArray()) return ReadSecretEntry(first);
+            return null;
+        }
+        if (el.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+
+        return new SecretRewardJson
+        {
+            Character = JsonStr(el, "characterToUnlock"),
+            Weapon = JsonStr(el, "weaponToUnlock"),
+            WeaponList = JsonStrList(el, "weaponListToUnlock"),
+            Stage = JsonStr(el, "stageToUnlock"),
+            Hyper = JsonStr(el, "hyperToUnlock"),
+            Relic = JsonStr(el, "relicToUnlock"),
+            Arcana = JsonStr(el, "arcanaToUnlock"),
+            PowerUp = JsonStr(el, "powerUpToUnlock"),
+            Skins = JsonStrList(el, "skinsToUnlock"),
+            Gold = JsonInt(el, "goldPrize"),
+            Special = JsonStr(el, "special"),
+            CustomText = JsonStr(el, "customUnlockText"),
+            CustomFrame = JsonStr(el, "customFrame"),
+            CustomTexture = JsonStr(el, "customTexture"),
+        };
+    }
+
+    private static bool TryJsonProp(System.Text.Json.JsonElement obj, string name,
+        out System.Text.Json.JsonElement val)
+    {
+        if (obj.TryGetProperty(name, out val)) return true;
+        foreach (var p in obj.EnumerateObject())
+        {
+            if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                val = p.Value;
+                return true;
+            }
+        }
+        val = default;
+        return false;
+    }
+
+    private static string JsonStr(System.Text.Json.JsonElement obj, string name)
+    {
+        if (!TryJsonProp(obj, name, out var v)) return null;
+        if (v.ValueKind != System.Text.Json.JsonValueKind.String) return null;
+        string s = v.GetString();
+        return IsVoidValue(s) ? null : s;
+    }
+
+    private static int JsonInt(System.Text.Json.JsonElement obj, string name)
+    {
+        if (!TryJsonProp(obj, name, out var v)) return 0;
+        if (v.ValueKind == System.Text.Json.JsonValueKind.Number && v.TryGetInt32(out int i)) return i;
+        if (v.ValueKind == System.Text.Json.JsonValueKind.String
+            && int.TryParse(v.GetString(), out int j)) return j;
+        return 0;
+    }
+
+    /// <summary>
+    /// A list of ids. Skin entries are objects rather than bare strings, so an object element
+    /// contributes its most identifying string field instead of being skipped.
+    /// </summary>
+    private static System.Collections.Generic.List<string> JsonStrList(
+        System.Text.Json.JsonElement obj, string name)
+    {
+        if (!TryJsonProp(obj, name, out var v)) return null;
+        if (v.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+        var list = new System.Collections.Generic.List<string>();
+        foreach (var el in v.EnumerateArray())
+        {
+            if (el.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                string s = el.GetString();
+                if (!IsVoidValue(s)) list.Add(s);
+            }
+            else if (el.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                string s = JsonStr(el, "charType") ?? JsonStr(el, "characterType")
+                    ?? JsonStr(el, "skin") ?? JsonStr(el, "skinName") ?? JsonStr(el, "name");
+                if (s == null)
+                {
+                    foreach (var p in el.EnumerateObject())
+                    {
+                        if (p.Value.ValueKind != System.Text.Json.JsonValueKind.String) continue;
+                        string cand = p.Value.GetString();
+                        if (!IsVoidValue(cand)) { s = cand; break; }
+                    }
+                }
+                if (s != null) list.Add(s);
+            }
+        }
+        return list.Count > 0 ? list : null;
+    }
+
+    /// <summary>
+    /// Everything a secret awards, resolved from the raw JSON by secret key (the
+    /// <c>SecretType</c> name, e.g. <c>KissMe</c>). Ids that no longer parse to a live enum
+    /// member — DLC content that is not installed — still render as a humanized label.
+    /// </summary>
+    public static System.Collections.Generic.List<IconRow> GetSecretRewards(string key)
+    {
+        var rows = new System.Collections.Generic.List<IconRow>();
+        EnsureSecretRewards();
+        if (_secretRewards == null || string.IsNullOrEmpty(key)) return rows;
+        if (!_secretRewards.TryGetValue(key, out SecretRewardJson e) || e == null) return rows;
+
+        void addWeapon(string id)
+        {
+            if (IsVoidValue(id)) return;
+            if (Enum.TryParse<WeaponType>(id, true, out WeaponType w) && !IsVoidValue(w.ToString()))
+            {
+                string n = GetWeaponName(w);
+                rows.Add(new IconRow(GetSprite(w), string.IsNullOrEmpty(n) ? HumanizeId(id) : n));
+            }
+            else rows.Add(new IconRow(null, HumanizeId(id)));
+        }
+
+        if (!IsVoidValue(e.Character))
+            rows.Add(new IconRow(GetCharacterPortrait(e.Character), DescribeRewardCharacter(e.Character)));
+
+        addWeapon(e.Weapon);
+        if (e.WeaponList != null) foreach (string id in e.WeaponList) addWeapon(id);
+
+        if (!IsVoidValue(e.Relic))
+        {
+            if (Enum.TryParse<ItemType>(e.Relic, true, out ItemType it) && !IsVoidValue(it.ToString()))
+                rows.Add(new IconRow(GetItemSprite(it), GetItemName(it)));
+            else rows.Add(new IconRow(null, HumanizeId(e.Relic)));
+        }
+        if (!IsVoidValue(e.Arcana))
+        {
+            if (Enum.TryParse<ArcanaType>(e.Arcana, true, out ArcanaType at) && !IsVoidValue(at.ToString()))
+                rows.Add(new IconRow(GetArcanaSprite(at), GetArcanaName(at)));
+            else rows.Add(new IconRow(null, HumanizeId(e.Arcana)));
+        }
+        if (!IsVoidValue(e.PowerUp))
+        {
+            if (Enum.TryParse<PowerUpType>(e.PowerUp, true, out PowerUpType pt) && !IsVoidValue(pt.ToString()))
+                rows.Add(new IconRow(GetSprite(pt), GetPowerUpName(pt)));
+            else rows.Add(new IconRow(null, HumanizeId(e.PowerUp)));
+        }
+
+        if (e.Skins != null)
+            foreach (string id in e.Skins)
+                rows.Add(new IconRow(null, DescribeRewardCharacter(id) + " (skin)"));
+
+        if (!IsVoidValue(e.Stage)) rows.Add(new IconRow(null, DescribeStage(e.Stage) + " (stage)"));
+        if (!IsVoidValue(e.Hyper)) rows.Add(new IconRow(null, DescribeStage(e.Hyper) + " (Hyper)"));
+        if (e.Gold > 0) rows.Add(new IconRow(null, $"Gold: {e.Gold}"));
+
+        if (!string.IsNullOrEmpty(e.CustomText))
+        {
+            string t = LocalizeDisplayText(e.CustomText) ?? e.CustomText;
+            if (!string.IsNullOrEmpty(t) && !LooksLikeLocKey(t))
+                rows.Add(new IconRow(LoadSprite(e.CustomFrame, e.CustomTexture), t));
+        }
+        if (!string.IsNullOrEmpty(e.Special))
+        {
+            string t = LocalizeDisplayText(e.Special) ?? e.Special;
+            if (!string.IsNullOrEmpty(t) && !LooksLikeLocKey(t)) rows.Add(new IconRow(null, t));
+        }
+
+        return rows;
+    }
+
+    // ── Character records (for secret reward rows) ───────────────────────────
+    //
+    // Only the portrait frame/texture *names* are cached, not resolved sprites: SpriteManager
+    // atlases are torn down between scenes, so a cached Sprite would go stale.
+    //
+    // The name parts matter as much as the portrait. Several characters were renamed after
+    // their enum id was fixed — GRAZIELLA ships as "Minnah Mannarah" — so a single
+    // `<id> name` term returns the retired name while the game builds its own from
+    // charName/surname. Composing the same way is what makes the tooltip agree with the
+    // in-game unlock banner.
+
+    private sealed class CharInfo
+    {
+        public string Frame;
+        public string Texture;
+        public string Prefix;
+        public string CharName;
+        public string Surname;
+    }
+
+    private static System.Collections.Generic.Dictionary<string, CharInfo> _charInfo;
+    private static bool _charInfoParsed;
+
+    private static void EnsureCharacterInfo()
+    {
+        if (_charInfoParsed || _dataManager == null) return;
+        _charInfoParsed = true;
+        try
+        {
+            var json = _dataManager._allCharactersJson;
+            if (json == null) return;
+            string raw = null;
+            try { raw = json.ToString(); } catch { }
+            if (string.IsNullOrEmpty(raw)) return;
+
+            var map = new System.Collections.Generic.Dictionary<string, CharInfo>(
+                StringComparer.OrdinalIgnoreCase);
+            using (var doc = System.Text.Json.JsonDocument.Parse(raw))
+            {
+                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    // Characters are stored as an array of records (base outfit first).
+                    System.Text.Json.JsonElement rec = prop.Value;
+                    if (rec.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        bool any = false;
+                        foreach (var first in rec.EnumerateArray()) { rec = first; any = true; break; }
+                        if (!any) continue;
+                    }
+                    if (rec.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+
+                    map[prop.Name] = new CharInfo
+                    {
+                        Frame = JsonStr(rec, "portraitName") ?? JsonStr(rec, "charSelFrame")
+                            ?? JsonStr(rec, "spriteName"),
+                        Texture = JsonStr(rec, "charSelTexture") ?? JsonStr(rec, "textureName"),
+                        Prefix = JsonStr(rec, "prefix"),
+                        CharName = JsonStr(rec, "charName"),
+                        Surname = JsonStr(rec, "surname"),
+                    };
+                }
+            }
+            _charInfo = map;
+            Plugin.Dbg($"[GameData] character records parsed: {map.Count}");
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] characters JSON: " + ex.Message);
+        }
+    }
+
+    public static Sprite GetCharacterPortrait(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return null;
+        EnsureCharacterInfo();
+        if (_charInfo == null) return null;
+        if (!_charInfo.TryGetValue(id, out CharInfo info) || info == null) return null;
+        if (string.IsNullOrEmpty(info.Frame)) return null;
+        try { return LoadSprite(info.Frame, info.Texture); } catch { return null; }
+    }
+
+    private static string Piece(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        string t = LocalizeDisplayText(s) ?? s;
+        if (string.IsNullOrWhiteSpace(t) || LooksLikeLocKey(t)) return null;
+        return t.Trim();
+    }
+
+    /// <summary>
+    /// The character's name as the game itself renders it, built from the same charName /
+    /// surname parts rather than from a single localization term.
+    /// </summary>
+    private static string ComposeCharacterName(string id)
+    {
+        EnsureCharacterInfo();
+        if (_charInfo == null) return null;
+        if (!_charInfo.TryGetValue(id, out CharInfo info) || info == null) return null;
+
+        var parts = new System.Collections.Generic.List<string>();
+        string p = Piece(info.Prefix); if (p != null) parts.Add(p);
+        string c = Piece(info.CharName); if (c != null) parts.Add(c);
+        string s = Piece(info.Surname); if (s != null) parts.Add(s);
+        if (parts.Count == 0) return null;
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// A character reward label. When the composed name and the id's own localization term
+    /// disagree — a renamed character — both are shown, because either may be the name the
+    /// player recognizes depending on how long they have been playing.
+    /// </summary>
+    public static string DescribeRewardCharacter(string id)
+    {
+        string composed = ComposeCharacterName(id);
+        string termed = LocalizeTypedDescription(id, "name");
+        if (!string.IsNullOrWhiteSpace(termed) && LooksLikeLocKey(termed)) termed = null;
+
+        if (string.IsNullOrWhiteSpace(composed)) return DescribeCharacter(id);
+        if (string.IsNullOrWhiteSpace(termed)) return composed;
+
+        bool same = string.Equals(composed.Trim(), termed.Trim(), StringComparison.OrdinalIgnoreCase)
+            || composed.IndexOf(termed.Trim(), StringComparison.OrdinalIgnoreCase) >= 0;
+        return same ? composed : $"{composed} ({termed.Trim()})";
+    }
+
+    /// <summary>
+    /// Everything a secret awards, as displayable rows.
+    ///
+    /// SecretData carries each reward kind in its own nullable field, so this is a flat sweep
+    /// of all of them rather than one "reward" lookup. Rows with no resolvable sprite still
+    /// render (label only) — characters and stages often have no icon we can reach.
+    /// </summary>
+    public static System.Collections.Generic.List<IconRow> GetSecretRewards(VampireSurvivors.Data.SecretData data)
+    {
+        var rows = new System.Collections.Generic.List<IconRow>();
+        if (data == null) return rows;
+
+        void addWeapon(WeaponType w)
+        {
+            if (IsVoidValue(w.ToString())) return;
+            string n = GetWeaponName(w);
+            if (!string.IsNullOrEmpty(n)) rows.Add(new IconRow(GetSprite(w), n));
+        }
+
+        try { if (data.weaponToUnlock != null && data.weaponToUnlock.HasValue) addWeapon(data.weaponToUnlock.Value); } catch { }
+        try
+        {
+            var list = data.weaponListToUnlock;
+            if (list != null) for (int i = 0; i < list.Count; i++) addWeapon(list[i]);
+        }
+        catch { }
+        try
+        {
+            if (data.relicToUnlock != null && data.relicToUnlock.HasValue)
+            {
+                ItemType it = data.relicToUnlock.Value;
+                if (!IsVoidValue(it.ToString()))
+                rows.Add(new IconRow(GetItemSprite(it), GetItemName(it)));
+            }
+        }
+        catch { }
+        try
+        {
+            if (data.arcanaToUnlock != null && data.arcanaToUnlock.HasValue)
+            {
+                ArcanaType at = data.arcanaToUnlock.Value;
+                if (!IsVoidValue(at.ToString()))
+                rows.Add(new IconRow(GetArcanaSprite(at), GetArcanaName(at)));
+            }
+        }
+        catch { }
+        try
+        {
+            if (data.powerUpToUnlock != null && data.powerUpToUnlock.HasValue)
+            {
+                PowerUpType pt = data.powerUpToUnlock.Value;
+                if (!IsVoidValue(pt.ToString()))
+                rows.Add(new IconRow(GetSprite(pt), GetPowerUpName(pt)));
+            }
+        }
+        catch { }
+        try
+        {
+            if (data.characterToUnlock != null && data.characterToUnlock.HasValue)
+            {
+                string cid = data.characterToUnlock.Value.ToString();
+                if (!IsVoidValue(cid)) rows.Add(new IconRow(null, DescribeCharacter(cid)));
+            }
+        }
+        catch { }
+        try
+        {
+            var skins = data.skinsToUnlock;
+            if (skins != null)
+            {
+                for (int i = 0; i < skins.Count; i++)
+                {
+                    string label = null;
+                    try { label = DescribeCharacter(skins[i].ToString()); } catch { }
+                    if (!string.IsNullOrEmpty(label)) rows.Add(new IconRow(null, label + " (skin)"));
+                }
+            }
+        }
+        catch { }
+        try
+        {
+            if (data.stageToUnlock != null && data.stageToUnlock.HasValue)
+            {
+                string sid = data.stageToUnlock.Value.ToString();
+                if (!IsVoidValue(sid)) rows.Add(new IconRow(null, DescribeStage(sid)));
+            }
+        }
+        catch { }
+        try
+        {
+            if (data.hyperToUnlock != null && data.hyperToUnlock.HasValue)
+            {
+                string hid = data.hyperToUnlock.Value.ToString();
+                if (!IsVoidValue(hid)) rows.Add(new IconRow(null, DescribeStage(hid) + " (Hyper)"));
+            }
+        }
+        catch { }
+        try
+        {
+            if (data.goldPrize != null && data.goldPrize.HasValue && data.goldPrize.Value > 0)
+                rows.Add(new IconRow(null, $"Gold: {data.goldPrize.Value}"));
+        }
+        catch { }
+        try
+        {
+            string special = data.special;
+            if (!string.IsNullOrEmpty(special))
+            {
+                string t = LocalizeDisplayText(special) ?? special;
+                if (!string.IsNullOrEmpty(t) && !LooksLikeLocKey(t)) rows.Add(new IconRow(null, t));
+            }
+        }
+        catch { }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// The game stores "no reward of this kind" as the enum's VOID member (value 0), not as a
+    /// null nullable — so HasValue is true for fields that award nothing. Without this every
+    /// secret listed one reward called "Void".
+    /// </summary>
+    private static bool IsVoidValue(string id)
+    {
+        return string.IsNullOrEmpty(id)
+            || string.Equals(id, "VOID", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(id, "NONE", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string DescribeCharacter(string id)
+    {
+        string t = LocalizeTypedDescription(id, "name");
+        return string.IsNullOrEmpty(t) ? HumanizeId(id) : t;
+    }
+
+    private static string DescribeStage(string id)
+    {
+        string t = LocalizeDisplayText("stageLang/" + id + " name");
+        return string.IsNullOrEmpty(t) ? HumanizeId(id) : t;
+    }
+
     /// <summary>What a custom merchant (Xanthia, adventure merchants) has for sale.</summary>
     public sealed class MerchantWares
     {

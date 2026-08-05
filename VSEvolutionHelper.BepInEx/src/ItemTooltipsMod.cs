@@ -393,6 +393,9 @@ public class ItemTooltipsMod
 			try {
 				WeaponSelectionPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("WeaponSelection patches: " + ex.Message); }
+			try {
+				SecretsPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("Secrets patches: " + ex.Message); }
 			Plugin.Log.LogInfo("Patches applied successfully");
 		}
 		catch (Exception arg)
@@ -8880,7 +8883,16 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 		catch { }
 
-		mapPopup = CreateSimpleMapPopup(parent, label, desc, spr, wares);
+		List<GameData.IconRow> wareRows = null;
+		if (wares != null && wares.Any)
+		{
+			wareRows = new List<GameData.IconRow>();
+			foreach (var w in wares.Weapons)
+				wareRows.Add(new GameData.IconRow(GameData.GetSprite(w), GameData.GetWeaponName(w)));
+			foreach (var it in wares.Items)
+				wareRows.Add(new GameData.IconRow(GameData.GetItemSprite(it), GameData.GetItemName(it)));
+		}
+		mapPopup = CreateSimpleMapPopup(parent, label, desc, spr, wareRows, "Wares:");
 		if ((Object)(object)mapPopup != (Object)null && (Object)(object)info.Go != (Object)null)
 			PositionPopup(mapPopup, info.Go.transform);
 		Plugin.Dbg($"Map popup item={info.Item} label={label} wares={(wares != null ? wares.Weapons.Count + wares.Items.Count : 0)}");
@@ -8927,10 +8939,15 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// </summary>
 	private static GameObject CreateSimpleMapPopup(Transform parent, string title, string description, Sprite sprite)
 	{
-		return CreateSimpleMapPopup(parent, title, description, sprite, null);
+		return CreateSimpleMapPopup(parent, title, description, sprite, null, null);
 	}
 
-	private static GameObject CreateSimpleMapPopup(Transform parent, string title, string description, Sprite sprite, GameData.MerchantWares wares)
+	/// <summary>
+	/// Simple popup: title row, optional description, and an optional labelled icon list.
+	/// The list is generic so merchant wares and secret rewards share one tested builder.
+	/// </summary>
+	private static GameObject CreateSimpleMapPopup(Transform parent, string title, string description, Sprite sprite,
+		List<GameData.IconRow> rows, string sectionHeader)
 	{
 		GameObject val = new GameObject("MapTooltipPopup");
 		val.transform.SetParent(parent, false);
@@ -9066,42 +9083,32 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 
 		// Wares: one icon + name per row, same shape as the arcana rows on weapon tooltips.
-		if (wares != null && wares.Any)
+		if (rows != null && rows.Count > 0)
 		{
 			y -= 2f;
-			GameObject waresHeader = CreateTextElement(val.transform, "WaresHeader", "Wares:", font, 14f,
+			GameObject secHeader = CreateTextElement(val.transform, "SectionHeader", sectionHeader ?? "Wares:", font, 14f,
 				new Color(0.9f, 0.75f, 0.3f, 1f), (FontStyles)1);
-			RectTransform whRt = waresHeader.GetComponent<RectTransform>();
-			whRt.anchorMin = new Vector2(0f, 1f);
-			whRt.anchorMax = new Vector2(0f, 1f);
-			whRt.pivot = new Vector2(0f, 1f);
-			whRt.anchoredPosition = new Vector2(Padding, y);
-			whRt.sizeDelta = new Vector2(contentW, 20f);
-			y = AdvancePastHeader(waresHeader, contentW, y, 4f, 20f);
+			RectTransform shRt = secHeader.GetComponent<RectTransform>();
+			shRt.anchorMin = new Vector2(0f, 1f);
+			shRt.anchorMax = new Vector2(0f, 1f);
+			shRt.pivot = new Vector2(0f, 1f);
+			shRt.anchoredPosition = new Vector2(Padding, y);
+			shRt.sizeDelta = new Vector2(contentW, 20f);
+			y = AdvancePastHeader(secHeader, contentW, y, 4f, 20f);
 
-			const float wareIcon = 30f;
-			const int maxWares = 10;
-			float nameX = Padding + wareIcon + 8f;
-			float nameW = contentW - wareIcon - 8f;
+			const float rowIcon = 30f;
+			const int maxRows = 10;
+			float nameX = Padding + rowIcon + 8f;
+			float nameW = contentW - rowIcon - 8f;
 			int shown = 0;
-			int total = wares.Weapons.Count + wares.Items.Count;
-
-			for (int wi = 0; wi < wares.Weapons.Count && shown < maxWares; wi++, shown++)
+			for (; shown < rows.Count && shown < maxRows; shown++)
 			{
-				WeaponType w = wares.Weapons[wi];
-				y = AddWareRow(val.transform, font, GameData.GetSprite(w), GameData.GetWeaponName(w),
-					wareIcon, nameX, nameW, y, shown);
+				var r = rows[shown];
+				y = AddWareRow(val.transform, font, r.Sprite, r.Label, rowIcon, nameX, nameW, y, shown);
 			}
-			for (int ii = 0; ii < wares.Items.Count && shown < maxWares; ii++, shown++)
+			if (rows.Count > shown)
 			{
-				ItemType it = wares.Items[ii];
-				y = AddWareRow(val.transform, font, GameData.GetItemSprite(it), GameData.GetItemName(it),
-					wareIcon, nameX, nameW, y, shown);
-			}
-
-			if (total > shown)
-			{
-				GameObject more = CreateTextElement(val.transform, "WaresMore", $"+{total - shown} more", font, 12f,
+				GameObject more = CreateTextElement(val.transform, "SectionMore", $"+{rows.Count - shown} more", font, 12f,
 					new Color(0.75f, 0.75f, 0.8f, 1f), (FontStyles)0);
 				RectTransform mr = more.GetComponent<RectTransform>();
 				mr.anchorMin = new Vector2(0f, 1f);
@@ -9174,6 +9181,72 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		float rowH = Mathf.Max(iconSize, nameH);
 		rt.anchoredPosition = new Vector2(nameX, y - (rowH - nameH) * 0.5f);
 		return y - rowH - 4f;
+	}
+
+	private static GameObject secretPopup = null;
+
+	/// <summary>
+	/// Offset of the secrets popup from the centre of the Safe Area, in its 1920x1200
+	/// reference units. Positive is up and to the right; X places it in the middle of the
+	/// right half, clear of the secrets list.
+	/// </summary>
+	private const float SecretPopupOffsetX = 480f;
+	private const float SecretPopupOffsetY = 200f;
+
+	/// <summary>
+	/// Show a secret's rewards, centred in the top-right quadrant of the App Safe Area rather
+	/// than placed near the row: the Secrets list is a ScrollRect, and a popup parented inside
+	/// it gets clipped by the mask — the same trap the Collections tooltip fell into.
+	/// </summary>
+	public static void ShowSecretRewardPopup(string title, List<GameData.IconRow> rows)
+	{
+		HideSecretRewardPopup();
+		if (rows == null || rows.Count == 0) return;
+		try
+		{
+			GameObject view = GameObject.Find("UI/Canvas - App/Safe Area");
+			if ((Object)(object)view == (Object)null) return;
+
+			secretPopup = CreateSimpleMapPopup(view.transform, title, null, null, rows, "Unlocks:");
+			if ((Object)(object)secretPopup == (Object)null) return;
+
+			RectTransform rt = secretPopup.GetComponent<RectTransform>();
+			if ((Object)(object)rt == (Object)null) return;
+			secretPopup.transform.SetAsLastSibling();
+			rt.localScale = Vector3.one;
+			// Anchor to the centre and place with an explicit offset rather than an anchor
+			// fraction: changing anchorMin/anchorMax does not recompute the transform in the
+			// same frame, so a fractional anchor leaves the popup wherever it already was.
+			// The offset is in Safe Area reference units (1920x1200), so it scales with the
+			// canvas instead of being tied to a pixel resolution.
+			rt.anchorMin = new Vector2(0.5f, 0.5f);
+			rt.anchorMax = new Vector2(0.5f, 0.5f);
+			rt.pivot = new Vector2(0.5f, 0.5f);
+			rt.anchoredPosition = new Vector2(SecretPopupOffsetX, SecretPopupOffsetY);
+
+			if (Plugin.DebugVerbose)
+			{
+				RectTransform prt = view.GetComponent<RectTransform>();
+				// No world position here: RectTransform.position is not recomputed until the
+				// next layout pass, so reading it back in this frame reports the old value.
+				Plugin.Dbg($"[Secrets] popup rect={rt.rect} anchored={rt.anchoredPosition} "
+					+ $"parent='{view.name}' parentRect={((Object)(object)prt != (Object)null ? prt.rect.ToString() : "?")} "
+					+ $"screen={Screen.width}x{Screen.height}");
+			}
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("[Secrets] popup: " + ex.Message);
+		}
+	}
+
+	public static void HideSecretRewardPopup()
+	{
+		if ((Object)(object)secretPopup != (Object)null)
+		{
+			Object.Destroy((Object)(object)secretPopup);
+			secretPopup = null;
+		}
 	}
 
 	public static Type GetCachedArcanaTypeEnum()

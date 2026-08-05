@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string PluginGuid = "com.nihil.vsevolutionhelper";
     public const string PluginName = "VS Evolution Helper";
-    public const string PluginVersion = "1.10.26";
+    public const string PluginVersion = "1.10.27";
 
     internal static new ManualLogSource Log;
     internal static Plugin Instance;
@@ -30,6 +30,8 @@ public class Plugin : BasePlugin
     internal static bool CharacterTooltipsEnabled;
     internal static bool AdventureTooltipsEnabled;
     internal static bool WeaponSelectionTooltipsEnabled;
+    internal static bool SecretTooltipsEnabled;
+    internal static bool SecretSpoilers;
 
     private ConfigEntry<bool> _debugVerbose;
     private ConfigEntry<float> _tooltipHoverDelay;
@@ -42,6 +44,8 @@ public class Plugin : BasePlugin
     private ConfigEntry<bool> _characterTooltipsEnabled;
     private ConfigEntry<bool> _adventureTooltipsEnabled;
     private ConfigEntry<bool> _weaponSelectionTooltipsEnabled;
+    private ConfigEntry<bool> _secretTooltipsEnabled;
+    private ConfigEntry<bool> _secretSpoilers;
 
     public override void Load()
     {
@@ -114,6 +118,18 @@ public class Plugin : BasePlugin
             true,
             "Show weapon tooltips on weapon selector screens (Arma Dio, Penshin Fatcha).");
 
+        _secretTooltipsEnabled = Config.Bind(
+            "Features",
+            "SecretTooltips",
+            true,
+            "Show what each secret unlocks on the Secrets page.");
+
+        _secretSpoilers = Config.Bind(
+            "Features",
+            "SecretSpoilers",
+            true,
+            "Also reveal rewards for secrets you have NOT discovered yet. Set false to only show secrets you have already unlocked.");
+
         ApplyConfigValues();
 
         Log.LogInfo($"{PluginName} {PluginVersion} loading (BepInEx port)...");
@@ -140,6 +156,8 @@ public class Plugin : BasePlugin
         CharacterTooltipsEnabled = _characterTooltipsEnabled.Value;
         AdventureTooltipsEnabled = _adventureTooltipsEnabled.Value;
         WeaponSelectionTooltipsEnabled = _weaponSelectionTooltipsEnabled.Value;
+        SecretTooltipsEnabled = _secretTooltipsEnabled.Value;
+        SecretSpoilers = _secretSpoilers.Value;
     }
 
     internal static void Dbg(string message)
