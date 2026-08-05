@@ -53,6 +53,10 @@
       <Private>false</Private>
     </Reference>
     <!-- Required by VampireSurvivors.Objects.Pickups.Pickup (base ArcadeSprite) -->
+    <Reference Include="PauseSystem">
+      <HintPath>$(BepInExPath)\interop\PauseSystem.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="PhaserPort">
       <HintPath>$(BepInExPath)\interop\PhaserPort.dll</HintPath>
       <Private>false</Private>

@@ -93,7 +93,7 @@ public static class MapPatches
 			{
 				string sn = ((Object)s).name;
 				if (!GameData.TryResolveSprite(sn, out item, out weapon))
-					label = GameData.HumanizeEnum(sn);
+					label = GameData.HumanizeId(sn);
 			}
 
 			if (item.HasValue)
@@ -110,7 +110,7 @@ public static class MapPatches
 			}
 
 			if (string.IsNullOrEmpty(label) && (Object)(object)s != (Object)null)
-				label = GameData.HumanizeEnum(((Object)s).name);
+				label = GameData.HumanizeId(((Object)s).name);
 
 			ItemTooltipsMod.RegisterMapIcon(__result, item, weapon, label, desc, icon);
 

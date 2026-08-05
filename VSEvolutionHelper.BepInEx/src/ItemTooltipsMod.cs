@@ -8848,10 +8848,28 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			}
 		}
 
-		mapPopup = CreateSimpleMapPopup(parent, label, desc, spr);
+		// Custom merchants (Xanthia, adventure merchants) list what they sell. Try the sprite
+		// name first — that is what identifies the merchant; the item type is the generic
+		// MERCHANT/CUSTOM_MERCHANT for all of them.
+		GameData.MerchantWares wares = null;
+		try
+		{
+			string spriteName = (Object)(object)info.Sprite != (Object)null ? ((Object)info.Sprite).name : null;
+			string itemName = info.Item.HasValue ? info.Item.Value.ToString() : null;
+			// Only merchant icons; otherwise every pickup on the map would walk the dictionaries.
+			if (LooksLikeMerchant(spriteName) || LooksLikeMerchant(itemName) || LooksLikeMerchant(info.Label))
+			{
+				wares = GameData.GetMerchantWares(spriteName)
+					 ?? GameData.GetMerchantWares(itemName)
+					 ?? GameData.GetMerchantWares(info.Label);
+			}
+		}
+		catch { }
+
+		mapPopup = CreateSimpleMapPopup(parent, label, desc, spr, wares);
 		if ((Object)(object)mapPopup != (Object)null && (Object)(object)info.Go != (Object)null)
 			PositionPopup(mapPopup, info.Go.transform);
-		Plugin.Dbg($"Map popup item={info.Item} label={label}");
+		Plugin.Dbg($"Map popup item={info.Item} label={label} wares={(wares != null ? wares.Weapons.Count + wares.Items.Count : 0)}");
 	}
 
 	private static void HideMapPopup()
@@ -8894,6 +8912,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// does not collide (fixes cramped "Relics in stage" tooltips).
 	/// </summary>
 	private static GameObject CreateSimpleMapPopup(Transform parent, string title, string description, Sprite sprite)
+	{
+		return CreateSimpleMapPopup(parent, title, description, sprite, null);
+	}
+
+	private static GameObject CreateSimpleMapPopup(Transform parent, string title, string description, Sprite sprite, GameData.MerchantWares wares)
 	{
 		GameObject val = new GameObject("MapTooltipPopup");
 		val.transform.SetParent(parent, false);
@@ -9028,6 +9051,55 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			y -= h + Spacing;
 		}
 
+		// Wares: one icon + name per row, same shape as the arcana rows on weapon tooltips.
+		if (wares != null && wares.Any)
+		{
+			y -= 2f;
+			GameObject waresHeader = CreateTextElement(val.transform, "WaresHeader", "Wares:", font, 14f,
+				new Color(0.9f, 0.75f, 0.3f, 1f), (FontStyles)1);
+			RectTransform whRt = waresHeader.GetComponent<RectTransform>();
+			whRt.anchorMin = new Vector2(0f, 1f);
+			whRt.anchorMax = new Vector2(0f, 1f);
+			whRt.pivot = new Vector2(0f, 1f);
+			whRt.anchoredPosition = new Vector2(Padding, y);
+			whRt.sizeDelta = new Vector2(contentW, 20f);
+			y = AdvancePastHeader(waresHeader, contentW, y, 4f, 20f);
+
+			const float wareIcon = 30f;
+			const int maxWares = 10;
+			float nameX = Padding + wareIcon + 8f;
+			float nameW = contentW - wareIcon - 8f;
+			int shown = 0;
+			int total = wares.Weapons.Count + wares.Items.Count;
+
+			for (int wi = 0; wi < wares.Weapons.Count && shown < maxWares; wi++, shown++)
+			{
+				WeaponType w = wares.Weapons[wi];
+				y = AddWareRow(val.transform, font, GameData.GetSprite(w), GameData.GetWeaponName(w),
+					wareIcon, nameX, nameW, y, shown);
+			}
+			for (int ii = 0; ii < wares.Items.Count && shown < maxWares; ii++, shown++)
+			{
+				ItemType it = wares.Items[ii];
+				y = AddWareRow(val.transform, font, GameData.GetItemSprite(it), GameData.GetItemName(it),
+					wareIcon, nameX, nameW, y, shown);
+			}
+
+			if (total > shown)
+			{
+				GameObject more = CreateTextElement(val.transform, "WaresMore", $"+{total - shown} more", font, 12f,
+					new Color(0.75f, 0.75f, 0.8f, 1f), (FontStyles)0);
+				RectTransform mr = more.GetComponent<RectTransform>();
+				mr.anchorMin = new Vector2(0f, 1f);
+				mr.anchorMax = new Vector2(0f, 1f);
+				mr.pivot = new Vector2(0f, 1f);
+				mr.anchoredPosition = new Vector2(Padding, y);
+				mr.sizeDelta = new Vector2(contentW, 18f);
+				y -= 20f;
+			}
+			y -= Spacing;
+		}
+
 		y -= Padding;
 		val2.sizeDelta = new Vector2(width, Mathf.Abs(y));
 		try
@@ -9037,6 +9109,57 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 		catch { }
 		return val;
+	}
+
+	/// <summary>
+	/// Merchant-ish id. Covers "merchant", "mercXanthia", MERCHANT, CUSTOM_MERCHANT and the
+	/// Xanthia display name, so ordinary pickups never reach the merchant lookup.
+	/// </summary>
+	private static bool LooksLikeMerchant(string s)
+	{
+		if (string.IsNullOrEmpty(s)) return false;
+		return s.IndexOf("merc", StringComparison.OrdinalIgnoreCase) >= 0
+			|| s.IndexOf("xanthia", StringComparison.OrdinalIgnoreCase) >= 0;
+	}
+
+	/// <summary>One "Wares" line: icon on the left, name vertically centred beside it.</summary>
+	private static float AddWareRow(Transform parent, TMP_FontAsset font, Sprite sprite, string name,
+		float iconSize, float nameX, float nameW, float y, int index)
+	{
+		if ((Object)(object)sprite != (Object)null)
+		{
+			GameObject ic = new GameObject($"WareIcon{index}");
+			ic.transform.SetParent(parent, false);
+			RectTransform ir = ic.AddComponent<RectTransform>();
+			ir.anchorMin = new Vector2(0f, 1f);
+			ir.anchorMax = new Vector2(0f, 1f);
+			ir.pivot = new Vector2(0f, 1f);
+			ir.anchoredPosition = new Vector2(Padding, y);
+			ir.sizeDelta = new Vector2(iconSize, iconSize);
+			Image img = ic.AddComponent<Image>();
+			img.sprite = sprite;
+			img.preserveAspect = true;
+			((Graphic)img).raycastTarget = false;
+		}
+
+		string label = string.IsNullOrEmpty(name) ? "?" : name;
+		GameObject go = CreateTextElement(parent, $"WareName{index}", label, font, 13f,
+			new Color(0.85f, 0.85f, 0.9f, 1f), (FontStyles)0);
+		RectTransform rt = go.GetComponent<RectTransform>();
+		rt.anchorMin = new Vector2(0f, 1f);
+		rt.anchorMax = new Vector2(0f, 1f);
+		rt.pivot = new Vector2(0f, 1f);
+		rt.sizeDelta = new Vector2(nameW, 18f);
+
+		float nameH = 18f;
+		TextMeshProUGUI tmp = go.GetComponent<TextMeshProUGUI>();
+		if ((Object)(object)tmp != (Object)null)
+			nameH = FitTmpHeight(tmp, nameW, 16f, 48f);
+
+		// Centre the name against the icon when it is the shorter of the two
+		float rowH = Mathf.Max(iconSize, nameH);
+		rt.anchoredPosition = new Vector2(nameX, y - (rowH - nameH) * 0.5f);
+		return y - rowH - 4f;
 	}
 
 	public static Type GetCachedArcanaTypeEnum()

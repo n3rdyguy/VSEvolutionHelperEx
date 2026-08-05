@@ -18,8 +18,20 @@ All notable changes to this BepInEx port are listed here.
     away after building it.
 - Selector cells re-register when a selector is reopened mid-run, instead of only after
   unpausing.
+- **Merchant map tooltips showed raw text** — "MERCHANT name" and "MERCHANT description"
+  instead of real text. The game's localization returns those placeholder strings as a
+  *successful* result, so they passed straight through to the tooltip. Lookup results are now
+  checked for that shape, not just lookup inputs. Merchants read **Merchant** and **Xanthia**.
+- Section headers in tooltips no longer overlap the row beneath them when the label wraps to
+  two lines, and no longer run past the right edge of the panel.
 
 ### Added
+- **Merchant wares.** Hovering a custom merchant on the pause map (Xanthia, adventure
+  merchants) lists what they sell, with icons. Read from the game's own merchant data, so it
+  stays right across patches, and DLC items appear only when that DLC is installed.
+  The base Merchant shows name and description only — its stock is rolled per encounter
+  rather than stored, so there is nothing accurate to list ahead of time.
+
 - `Features.WeaponSelectionTooltips` config toggle (default `true`).
 
 ### Changed

@@ -652,11 +652,26 @@ public static class GameData
             else if (!LooksLikeLocKey(s))
                 return s;
         }
+        // "MERCHANT name" / "MERCHANT description" — a key that already lost its xxxLang/
+        // prefix. It has no slash or braces, so LooksLikeLocKey says "prose" and the raw key
+        // was shown verbatim on merchant map icons.
+        if (TryParseBareLangKey(s, out string bareId, out string bareSuffix))
+        {
+            string bt = LocalizeTypedDescription(bareId, bareSuffix);
+            if (!string.IsNullOrEmpty(bt) && !TryParseBareLangKey(bt, out _, out _))
+                return bt;
+            return string.Equals(bareSuffix, "name", StringComparison.OrdinalIgnoreCase)
+                ? HumanizeId(bareId)
+                : null;
+        }
+
         if (!LooksLikeLocKey(s))
             return s;
 
-        // Direct I2 lookup
-        string t = Translate(s);
+        // Direct I2 lookup. I2 can "succeed" and hand back a placeholder that is itself a
+        // stripped key ("MERCHANT name"), so the result is validated, not just the input —
+        // returning it unchecked is what put raw keys on the merchant map tooltip.
+        string t = Usable(Translate(s));
         if (!string.IsNullOrEmpty(t))
             return t;
 
@@ -665,7 +680,7 @@ public static class GameData
             // powerupLang/MERCHANT name  |  itemLang/{MERCHANT}description  |  powerupLang/MERCHANT name
             if (TryParseLangTerm(s, out string prefix, out string id, out string suffix))
             {
-                t = TryLocKeyVariants(prefix, id, suffix);
+                t = Usable(TryLocKeyVariants(prefix, id, suffix));
                 if (!string.IsNullOrEmpty(t))
                     return t;
                 // Cross-table: characters often live under powerupLang in VS data
@@ -673,14 +688,14 @@ public static class GameData
                 {
                     if (string.Equals(alt, prefix, StringComparison.OrdinalIgnoreCase))
                         continue;
-                    t = TryLocKeyVariants(alt, id, suffix);
+                    t = Usable(TryLocKeyVariants(alt, id, suffix));
                     if (!string.IsNullOrEmpty(t))
                         return t;
                 }
                 // Name keys with no translation → humanize the id (better than raw term)
                 if (string.Equals(suffix, "name", StringComparison.OrdinalIgnoreCase)
                     || string.IsNullOrEmpty(suffix))
-                    return HumanizeEnum(id);
+                    return HumanizeId(id);
                 // Description missing — omit rather than show key
                 return null;
             }
@@ -695,12 +710,12 @@ public static class GameData
                 string sfx = braceR + 1 < s.Length ? s.Substring(braceR + 1).Trim() : "";
                 if (!string.IsNullOrEmpty(bid))
                 {
-                    t = TryLocKeyVariants(pfx, bid, sfx);
+                    t = Usable(TryLocKeyVariants(pfx, bid, sfx));
                     if (!string.IsNullOrEmpty(t))
                         return t;
                     if (string.Equals(sfx, "name", StringComparison.OrdinalIgnoreCase)
                         || string.IsNullOrEmpty(sfx))
-                        return HumanizeEnum(bid);
+                        return HumanizeId(bid);
                 }
             }
 
@@ -713,7 +728,7 @@ public static class GameData
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (!string.Equals(stripped, s, StringComparison.Ordinal))
             {
-                t = Translate(stripped);
+                t = Usable(Translate(stripped));
                 if (!string.IsNullOrEmpty(t))
                     return t;
             }
@@ -758,6 +773,313 @@ public static class GameData
             }
         }
         return !string.IsNullOrEmpty(id);
+    }
+
+    /// <summary>What a custom merchant (Xanthia, adventure merchants) has for sale.</summary>
+    public sealed class MerchantWares
+    {
+        public readonly System.Collections.Generic.List<WeaponType> Weapons =
+            new System.Collections.Generic.List<WeaponType>();
+        public readonly System.Collections.Generic.List<ItemType> Items =
+            new System.Collections.Generic.List<ItemType>();
+        public bool Any => Weapons.Count > 0 || Items.Count > 0;
+    }
+
+    /// <summary>
+    /// Wares for a custom merchant, looked up by a loose id (map sprite name such as
+    /// "Mercxanthia", or a type name).
+    ///
+    /// Read from <c>DataManager.AllCustomMerchantsData</c> / <c>AllAdventureMerchantsData</c>,
+    /// keyed by CharacterType, so the list stays correct across patches instead of being
+    /// transcribed from the wiki. This also handles DLC implicitly: content for a DLC that is
+    /// not installed does not load, so its wares resolve to no sprite and are dropped.
+    /// </summary>
+    private static readonly System.Collections.Generic.Dictionary<string, MerchantWares> MerchantWaresCache =
+        new System.Collections.Generic.Dictionary<string, MerchantWares>(StringComparer.OrdinalIgnoreCase);
+
+    private static bool _loggedMerchantKeys;
+
+    public static MerchantWares GetMerchantWares(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return null;
+        string want = NormalizeMerchantId(id);
+        if (want.Length < 5)
+            return null;
+
+        // Hover fires this repeatedly; the dictionary walk and sprite resolution are not free.
+        if (MerchantWaresCache.TryGetValue(want, out MerchantWares cached))
+            return cached;
+
+        MerchantWares result = null;
+        try
+        {
+            if (_dataManager == null)
+            {
+                Plugin.Dbg("[GameData] GetMerchantWares: DataManager not resolved yet");
+                return null; // not cached — retry once the manager exists
+            }
+            LogMerchantKeysOnce();
+            result = LookupMerchantWares(_dataManager.AllCustomMerchantsData, want)
+                  ?? LookupMerchantWares(_dataManager.AllAdventureMerchantsData, want)
+                  // The catalog dictionaries only describe merchants the base game knows about.
+                  // A DLC merchant is built at spawn time, so the live pickup in the scene is
+                  // the authoritative source for it.
+                  ?? LookupMerchantWaresInScene(want);
+            Plugin.Dbg($"[GameData] GetMerchantWares({id} -> {want}): " +
+                $"{(result == null ? "no match" : result.Weapons.Count + " weapons, " + result.Items.Count + " items")}");
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] GetMerchantWares: " + ex.Message);
+        }
+        MerchantWaresCache[want] = result;
+        return result;
+    }
+
+    /// <summary>One-time dump of the merchant dictionaries so a miss can be diagnosed.</summary>
+    private static void LogMerchantKeysOnce()
+    {
+        if (_loggedMerchantKeys || !Plugin.DebugVerbose) return;
+        _loggedMerchantKeys = true;
+        DumpMerchantKeys("AllCustomMerchantsData", _dataManager.AllCustomMerchantsData);
+        DumpMerchantKeys("AllAdventureMerchantsData", _dataManager.AllAdventureMerchantsData);
+    }
+
+    private static void DumpMerchantKeys(string label,
+        Il2CppSystem.Collections.Generic.Dictionary<CharacterType, VampireSurvivors.App.Data.CustomMerchantData> dict)
+    {
+        try
+        {
+            if (dict == null)
+            {
+                Plugin.Dbg($"[GameData] {label}: <null>");
+                return;
+            }
+            var names = new System.Collections.Generic.List<string>();
+            foreach (var kv in dict)
+            {
+                int weapons = 0, items = 0;
+                try { weapons = kv.Value?.MerchantInventory?.Count ?? 0; } catch { }
+                try { items = kv.Value?.MerchantInventoryItems?.Count ?? 0; } catch { }
+                names.Add($"{kv.Key}[{SafeSprite(kv.Value, 0)}|{SafeSprite(kv.Value, 1)}]({weapons}w/{items}i)");
+            }
+            Plugin.Dbg($"[GameData] {label}: {names.Count} -> {string.Join(", ", names)}");
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg($"[GameData] {label}: " + ex.Message);
+        }
+    }
+
+    private static MerchantWares LookupMerchantWares(
+        Il2CppSystem.Collections.Generic.Dictionary<CharacterType, VampireSurvivors.App.Data.CustomMerchantData> dict, string want)
+    {
+        if (dict == null) return null;
+        try
+        {
+            foreach (var kv in dict)
+            {
+                var data = kv.Value;
+                if (data == null) continue;
+
+                // CharacterType only names the base merchants (MERCHANT, ADVENTURE_MERCHANT,
+                // CUSTOM_MERCHANT, TP_MERCHANT_LIBRARIAN) — DLC merchants such as Xanthia have
+                // no named enum member, so the key alone cannot identify them. Their sprite
+                // fields do: the map icon sprite is "mercXanthia".
+                if (!MerchantMatches(data, kv.Key, want)) continue;
+                return BuildWares(data);
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] LookupMerchantWares: " + ex.Message);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Read wares off a live PickupCustomMerchant in the scene. Works for DLC merchants that
+    /// never appear in the catalog dictionaries.
+    ///
+    /// This is a full-scene search, so it runs only for merchant map icons, only when the
+    /// catalog lookup already failed, and its result is cached — a per-frame
+    /// FindObjectsOfType scan is what crashed the Collections tab in 1.10.12.
+    /// </summary>
+    private static MerchantWares LookupMerchantWaresInScene(string want)
+    {
+        try
+        {
+            var pickups = UnityEngine.Object.FindObjectsOfType<VampireSurvivors.Objects.Items.PickupCustomMerchant>();
+            if (pickups == null || pickups.Length == 0)
+            {
+                Plugin.Dbg("[GameData] No PickupCustomMerchant in scene");
+                return null;
+            }
+
+            int seen = 0;
+            for (int i = 0; i < pickups.Length; i++)
+            {
+                var p = pickups[i];
+                if ((UnityEngine.Object)(object)p == (UnityEngine.Object)null) continue;
+                VampireSurvivors.App.Data.CustomMerchantData data = null;
+                try { data = p.CustomMerchantData; } catch { }
+                if (data == null) continue;
+                seen++;
+                Plugin.Dbg($"[GameData] Scene merchant: sprite={SafeSprite(data, 0)} portrait={SafeSprite(data, 1)}");
+                if (MerchantMatches(data, CharacterType.VOID, want))
+                    return BuildWares(data);
+            }
+
+            // Deliberately no "only one merchant in the scene, so it must be this one"
+            // fallback. The base Merchant legitimately matches nothing, and that guess
+            // attributed the custom merchant's stock to him — wrong wares look identical to
+            // right ones. A miss stays a miss.
+            if (seen > 0)
+                Plugin.Dbg($"[GameData] {seen} scene merchant(s), none matching '{want}'");
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] LookupMerchantWaresInScene: " + ex.Message);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Wares from one merchant record. A ware with no resolvable sprite belongs to a DLC that
+    /// is not installed, so it is dropped rather than drawn as an empty slot.
+    /// </summary>
+    private static MerchantWares BuildWares(VampireSurvivors.App.Data.CustomMerchantData data)
+    {
+        if (data == null) return null;
+        var wares = new MerchantWares();
+        try
+        {
+            var weapons = data.MerchantInventory;
+            if (weapons != null)
+            {
+                for (int i = 0; i < weapons.Count; i++)
+                {
+                    WeaponType w = weapons[i];
+                    if ((UnityEngine.Object)(object)GetSprite(w) == (UnityEngine.Object)null) continue;
+                    if (!wares.Weapons.Contains(w)) wares.Weapons.Add(w);
+                }
+            }
+        }
+        catch { }
+        try
+        {
+            var items = data.MerchantInventoryItems;
+            if (items != null)
+            {
+                for (int i = 0; i < items.Count; i++)
+                {
+                    ItemType it = items[i];
+                    if ((UnityEngine.Object)(object)GetItemSprite(it) == (UnityEngine.Object)null) continue;
+                    if (!wares.Items.Contains(it)) wares.Items.Add(it);
+                }
+            }
+        }
+        catch { }
+        return wares.Any ? wares : null;
+    }
+
+    /// <summary>
+    /// Does this merchant correspond to <paramref name="want"/> (a normalized sprite name or
+    /// type name)? Sprite fields are checked before the enum key because DLC merchants have no
+    /// named CharacterType member.
+    /// </summary>
+    private static bool MerchantMatches(VampireSurvivors.App.Data.CustomMerchantData data, CharacterType key, string want)
+    {
+        foreach (string candidate in new[] { SafeSprite(data, 0), SafeSprite(data, 1), SafeSprite(data, 2), SafeSprite(data, 3) })
+        {
+            string c = NormalizeMerchantId(candidate);
+            if (c.Length >= 5 && (c.Contains(want) || want.Contains(c)))
+                return true;
+        }
+        string k = NormalizeMerchantId(key.ToString());
+        return k.Length >= 5 && (k.Contains(want) || want.Contains(k));
+    }
+
+    private static string SafeSprite(VampireSurvivors.App.Data.CustomMerchantData data, int which)
+    {
+        try
+        {
+            switch (which)
+            {
+                case 0: return data.StaticSprite;
+                case 1: return data.PortraitSprite;
+                case 2: return data.StaticSpriteTexture;
+                case 3: return data.PortraitSpriteTexture;
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>Upper-case, letters/digits only, so "Mercxanthia" matches MERCXANTHIA.</summary>
+    private static string NormalizeMerchantId(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        var sb = new System.Text.StringBuilder(s.Length);
+        foreach (char c in s)
+        {
+            if (char.IsLetterOrDigit(c)) sb.Append(char.ToUpperInvariant(c));
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Display names for ids where the humanized enum id is wrong or unhelpful.
+    /// <c>MERCXANTHIA</c> humanizes to "Mercxanthia"; the character is called Xanthia.
+    /// </summary>
+    private static readonly System.Collections.Generic.Dictionary<string, string> DisplayNameOverrides =
+        new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "MERCHANT", "Merchant" },
+            { "MERCXANTHIA", "Xanthia" },
+        };
+
+    /// <summary>
+    /// Humanize an enum id, preferring a curated display name when the mechanical
+    /// humanization would be wrong.
+    /// </summary>
+    public static string HumanizeId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return HumanizeEnum(id);
+        if (DisplayNameOverrides.TryGetValue(id.Trim(), out string name))
+            return name;
+        return HumanizeEnum(id);
+    }
+
+    /// <summary>
+    /// A loc key that has already lost its <c>xxxLang/</c> prefix, e.g. <c>MERCHANT name</c>
+    /// or <c>MERCHANT description</c>. These reach us as plain strings with a space, so the
+    /// normal key detection passed them straight through to the tooltip as display text.
+    /// </summary>
+    /// <summary>
+    /// Null out text that is really a stripped loc key ("MERCHANT name"), so a "successful"
+    /// lookup that returned a placeholder is treated as a miss.
+    /// </summary>
+    private static string Usable(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return null;
+        return TryParseBareLangKey(s, out _, out _) ? null : s;
+    }
+
+    private static bool TryParseBareLangKey(string s, out string id, out string suffix)
+    {
+        id = null;
+        suffix = null;
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        var m = System.Text.RegularExpressions.Regex.Match(
+            s.Trim(),
+            @"^(?<id>[A-Z0-9_]{3,})\s+(?<suffix>name|description|tips|desc)$");
+        if (!m.Success) return false;
+        id = m.Groups["id"].Value;
+        suffix = m.Groups["suffix"].Value;
+        return true;
     }
 
     /// <summary>
@@ -1448,7 +1770,7 @@ public static class GameData
             }
             catch { }
         }
-        return HumanizeEnum(type.ToString());
+        return HumanizeId(type.ToString());
     }
 
     private static string ResolveItemDescription(ItemData data, ItemType type)

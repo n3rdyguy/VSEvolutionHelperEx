@@ -94,6 +94,13 @@ Data comes from `DataManager.AllArcanas` and reverse indexes (which arcanas list
 
 **Shows:** Name + description (simple popup; long names resize).
 
+**Merchants** additionally list their **Wares** — what that merchant sells, with icons.
+This is read from the game's own merchant data, so it stays correct across patches, and DLC
+wares appear only when you have that DLC installed.
+
+The **base Merchant** shows name and description only. Its stock is rolled per encounter
+rather than stored anywhere, so there is nothing accurate to list before you open it.
+
 Kill switch: `Features.MapTooltips`.
 
 ### 3.5 Weapon selectors (1.10.25+)
