@@ -6,7 +6,7 @@ Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` /
 
 | | |
 |--|--|
-| **Latest release** | [v1.10.25](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.10.25) |
+| **Latest release** | [v1.10.27](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.10.27) |
 | **Game** | Vampire Survivors **1.15.x** (tested **1.15.113**), Unity **6000.0.62f1** |
 | **Loader** | [BepInEx 6 IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (BE / bleeding-edge) |
 
@@ -77,33 +77,103 @@ Shown when **Guide** is selected on stage select:
 ## Requirements
 
 - Vampire Survivors (Steam) — **1.15.x**, Unity **6000.x**
-- **[BepInEx 6](https://builds.bepinex.dev/projects/bepinex_be)** — **Unity.IL2CPP** bleeding-edge (e.g. **BE 785+**). Stable BepInEx 5 / MelonLoader will not work on this Unity 6 build.
+- **[BepInEx 6 bleeding-edge (BE)](https://builds.bepinex.dev/projects/bepinex_be)**, **Unity.IL2CPP**, **win-x64**
 - **Do not** run MelonLoader and BepInEx at the same time
+
+### Which BepInEx build, exactly
+
+This is the single most common thing to get wrong, so be precise — three different
+distinctions all matter, and picking the wrong one on any of them means the game launches with
+no mods loaded (or does not launch at all).
+
+| Must be | Must **not** be | Why |
+|---------|-----------------|-----|
+| **6.x bleeding-edge (BE)** | 5.x "stable" | 5.x has no IL2CPP support for Unity 6 |
+| **Unity.IL2CPP** | Unity.Mono | Vampire Survivors is an IL2CPP build; the Mono package silently does nothing |
+| **win-x64** | win-x86 | The game is 64-bit |
+
+BepInEx 6 has **no stable release** — bleeding-edge *is* the correct channel here, not a
+risky choice. Download from the official CI:
+**[builds.bepinex.dev/projects/bepinex_be](https://builds.bepinex.dev/projects/bepinex_be)**
+
+The file you want looks like:
+
+```
+BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.785+<commit>.zip
+```
+
+**Verified working combination** (what this release was built and tested against):
+
+| Component | Version |
+|-----------|---------|
+| BepInEx | **6.0.0-be.785** (Unity.IL2CPP, win-x64) |
+| Vampire Survivors | **1.15.113** |
+| Unity | **6000.0.62f1** |
+| .NET runtime (bundled by BepInEx) | 6.0.7 |
+
+Newer BE builds generally work too. If a very new BE build misbehaves, dropping back to
+**be.785** is the known-good fallback.
 
 ## Install BepInEx (first time)
 
-Official bleeding-edge builds: **[https://builds.bepinex.dev/projects/bepinex_be](https://builds.bepinex.dev/projects/bepinex_be)**
-
-1. Download a recent **Windows** package for **Unity.IL2CPP** (e.g. `BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.xxx+….zip` — **not** Mono).
-2. Extract into the Vampire Survivors game folder (next to `VampireSurvivors.exe`):
+1. **Find the game folder.** In Steam: right-click Vampire Survivors →
+   *Manage* → *Browse local files*. It contains `VampireSurvivors.exe`.
+2. **Extract the BepInEx zip directly into that folder** — not into a subfolder. Afterwards
+   the game folder must look like this, with `winhttp.dll` sitting *next to* the `.exe`:
 
    ```
    <Vampire Survivors>/
      VampireSurvivors.exe
-     winhttp.dll
-     doorstop_config.ini
+     GameAssembly.dll
+     winhttp.dll            ← the loader; if this is missing, nothing loads
+     doorstop_config.ini    ← tells winhttp.dll to start BepInEx
+     .doorstop_version
      BepInEx/
        core/
-       …
    ```
 
-3. Launch the game **once** so BepInEx creates `config/`, `plugins/`, and `LogOutput.log`. Quit.
-4. If you used MelonLoader before: remove/rename Melon’s `version.dll` / MelonLoader folder so only BepInEx’s `winhttp.dll` loads.
+   If you end up with `<Vampire Survivors>/BepInEx-Unity.IL2CPP-win-x64…/`, you extracted one
+   level too deep — move the contents up.
+
+3. **Launch the game once, wait for the main menu, then quit.** The first run generates the
+   IL2CPP interop assemblies, which takes noticeably longer than a normal start (a minute or
+   more is normal). This creates:
+
+   ```
+   BepInEx/
+     config/          ← config files appear here after plugins run
+     plugins/         ← your mods go here
+     interop/         ← generated game API assemblies
+     LogOutput.log    ← check this when something is wrong
+   ```
+
+4. **Confirm it actually loaded.** Open `BepInEx/LogOutput.log`; the first lines should read:
+
+   ```
+   [Message: Preloader] BepInEx 6.0.0-be.785 - VampireSurvivors
+   [Info   :   BepInEx] Process bitness: 64-bit (x64)
+   [Info   :   BepInEx] Running under Unity 6000.0.62f1
+   ```
+
+   No `LogOutput.log` at all means the loader never started — re-check step 2.
+
+5. **If you used MelonLoader before**, it must not load alongside BepInEx. Rename its loader so
+   Windows ignores it (renaming is reversible; deleting is not):
+
+   ```
+   version.dll  →  version.dll.melon.off
+   ```
+
+   Leaving both installed causes the crash this port exists to avoid.
 
 ## Install this mod
 
-1. Install BepInEx as above.
-2. Extract the [release zip](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases) so you have:
+1. Install BepInEx as above, and confirm it loaded (step 4).
+2. **Close the game.** Windows keeps the DLL locked while it runs, so replacing it mid-session
+   either fails or leaves you testing the old build.
+3. Extract the [release zip](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases) into the
+   game folder. The zip already contains the `BepInEx/plugins/…` path, so it merges straight in
+   and you end up with:
 
    ```
    <Vampire Survivors>/
@@ -113,7 +183,9 @@ Official bleeding-edge builds: **[https://builds.bepinex.dev/projects/bepinex_be
            VSEvolutionHelper.dll
    ```
 
-3. **Close the game before replacing the DLL.**
+4. **Upgrading?** Replace the existing `VSEvolutionHelper.dll`. Leave
+   `BepInEx/config/com.nihil.vsevolutionhelper.cfg` alone — your settings carry over, and new
+   options are added on next launch.
 
 Confirm in `BepInEx/LogOutput.log`:
 
@@ -123,6 +195,20 @@ Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete
 ```
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| No `BepInEx/LogOutput.log` at all | Loader never started | `winhttp.dll` must sit next to `VampireSurvivors.exe`, not in a subfolder |
+| Log exists, but no `Loading [VS Evolution Helper …]` | Plugin not found | The DLL must be under `BepInEx/plugins/`, not `BepInEx/` |
+| Log shows a **Mono** BepInEx | Wrong package | Re-download the **Unity.IL2CPP** build |
+| Game crashes on startup | MelonLoader still active | Rename Melon's `version.dll` (see step 5) |
+| First launch seems frozen | Interop generation | Normal on first run only — wait for it to finish |
+| Tooltips missing after an update | Stale DLL | Close the game *before* replacing the DLL, then re-check the version in the log |
+
+When reporting a problem, the first ~10 lines of `LogOutput.log` (BepInEx version, bitness,
+Unity version) plus the plugin's own lines are what actually identify the setup.
 
 ## Install from source (dev)
 
