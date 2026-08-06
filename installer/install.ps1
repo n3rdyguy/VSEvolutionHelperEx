@@ -31,8 +31,14 @@ param(
     [switch]$NoDownload,
     [switch]$Uninstall,
     [switch]$All,
-    [switch]$KeepConfig
+    [switch]$KeepConfig,
+    [switch]$NoBepInEx,
+    [string]$Version
 )
+
+# Nothing on the command line means it was run by double-click or by someone who does not want
+# to learn flags, so ask instead of printing usage at them.
+$Interactive = ($PSBoundParameters.Count -eq 0)
 
 $ErrorActionPreference = 'Stop'
 $AppId = '1794680'
@@ -44,6 +50,9 @@ $BuildsHost  = 'https://builds.bepinex.dev'
 $BuildsPage  = "$BuildsHost/projects/bepinex_be"
 $PinnedBuild = '785'
 $PinnedHash  = '6abdba4'
+
+$Repo         = 'n3rdyguy/VSEvolutionHelperEx'
+$ReleasesPage = "https://github.com/$Repo/releases"
 
 function Write-Banner {
     $bat = @(
@@ -59,6 +68,16 @@ function Write-Banner {
     Write-Host '   V S   E V O L U T I O N   H E L P E R' -ForegroundColor White
     Write-Host '   ~ it is a night of tooltips ~' -ForegroundColor Magenta
     Write-Host ''
+}
+
+# Right-click "Run with PowerShell" closes the window the moment the script ends, taking every
+# message with it. Hold it open so there is something to read.
+function Quit([int]$code) {
+    if ($Interactive) {
+        Write-Host ''
+        Read-Host '   Press Enter to close'
+    }
+    exit $code
 }
 
 function Step($m) { Write-Host '  >  ' -ForegroundColor Cyan -NoNewline;   Write-Host $m }
@@ -147,6 +166,41 @@ function Get-BepInEx {
     return $temp
 }
 
+function Get-Mod {
+    # Fetch from the GitHub release so the script works on its own with nothing beside it.
+    $api = if ($Version) { "https://api.github.com/repos/$Repo/releases/tags/$Version" }
+           else          { "https://api.github.com/repos/$Repo/releases/latest" }
+    Step ("Downloading VS Evolution Helper" + $(if ($Version) { " $Version" } else { ' (latest)' }) + '...')
+    try {
+        $rel = Invoke-RestMethod -Uri $api -Headers @{ 'User-Agent' = 'VSEvolutionHelper-Installer' }
+        $asset = $rel.assets | Where-Object { $_.name -like '*VSEvolutionHelper*.zip' } | Select-Object -First 1
+        if (-not $asset) { Fail 'No release asset found.'; return $null }
+        Info $asset.browser_download_url
+
+        $zip = Join-Path ([System.IO.Path]::GetTempPath()) ("vseh-mod-" + [guid]::NewGuid().ToString('N') + '.zip')
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
+
+        # The release zip mirrors the install layout; pull the DLL out rather than unpacking
+        # the whole thing over the game folder.
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+        try {
+            $entry = $archive.Entries | Where-Object { $_.Name -eq 'VSEvolutionHelper.dll' } | Select-Object -First 1
+            if (-not $entry) { Fail 'The release zip did not contain VSEvolutionHelper.dll.'; return $null }
+            $out = Join-Path ([System.IO.Path]::GetTempPath()) ("vseh-mod-" + [guid]::NewGuid().ToString('N') + '.dll')
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $out, $true)
+        } finally { $archive.Dispose() }
+        Remove-Item $zip -Force -ErrorAction SilentlyContinue
+
+        Ok "Downloaded $($rel.tag_name)"
+        return $out
+    } catch {
+        Fail "Download failed: $($_.Exception.Message)"
+        Info "Download the release zip from $ReleasesPage then re-run with -Mod '<path to dll>'"
+        return $null
+    }
+}
+
 function Find-Payload($pattern) {
     foreach ($dir in @($PSScriptRoot, (Join-Path $PSScriptRoot 'payload'), (Get-Location).Path)) {
         if (-not $dir -or -not (Test-Path $dir)) { continue }
@@ -162,14 +216,39 @@ if (-not $Game) { $Game = Find-Game }
 if (-not $Game) {
     Fail 'Could not find Vampire Survivors.'
     Info 'Pass the folder explicitly:  ./install.ps1 -Game "<path>"'
-    exit 2
+    Quit 2
 }
 Ok "Game folder: $Game"
+
+if ($Interactive) {
+    $modPath = Join-Path $Game 'BepInEx\plugins\VSEvolutionHelper\VSEvolutionHelper.dll'
+    $hasMod = Test-Path $modPath
+    $hasBep = Test-Path (Join-Path $Game 'BepInEx\core')
+    Info ("BepInEx: {0}    Mod: {1}" -f $(if ($hasBep) { 'installed' } else { 'not installed' }),
+                                        $(if ($hasMod) { 'installed' } else { 'not installed' }))
+    Write-Host ''
+    Write-Host '   [1]  Install            BepInEx + the mod' -ForegroundColor White
+    Write-Host '   [2]  Update mod only    keep BepInEx and settings' -ForegroundColor White
+    Write-Host '   [3]  Remove mod         keep BepInEx' -ForegroundColor White
+    Write-Host '   [4]  Remove everything  mod + BepInEx' -ForegroundColor White
+    Write-Host '   [Q]  Quit' -ForegroundColor White
+    Write-Host ''
+    $choice = Read-Host '   Press a key and hit Enter'
+    Write-Host ''
+    switch ($choice.Trim().ToUpper()) {
+        '1' { }
+        '2' { $NoBepInEx = $true }
+        '3' { $Uninstall = $true }
+        '4' { $Uninstall = $true; $All = $true }
+        'Q' { Quit 0 }
+        default { Fail 'Unknown choice.'; Quit 0 }
+    }
+}
 
 if ($Uninstall) {
     if (Get-Process -Name 'VampireSurvivors' -ErrorAction SilentlyContinue) {
         Fail 'Vampire Survivors is running. Close it first.'
-        exit 4
+        Quit 4
     }
 
     $targets = @()
@@ -192,7 +271,7 @@ if ($Uninstall) {
 
     if ($targets.Count -eq 0) {
         Ok 'Nothing to remove - no VS Evolution Helper install found here.'
-        exit 0
+        Quit 0
     }
 
     if ($All) {
@@ -213,7 +292,7 @@ if ($Uninstall) {
     if (-not $Yes) {
         $q = if ($All) { 'Remove the mod AND BepInEx?' } else { 'Remove the mod?' }
         $answer = Read-Host "  ?  $q [y/N]"
-        if ($answer -notmatch '^[Yy]') { Info 'Cancelled.'; exit 0 }
+        if ($answer -notmatch '^[Yy]') { Info 'Cancelled.'; Quit 0 }
     }
 
     $failures = 0
@@ -233,7 +312,7 @@ if ($Uninstall) {
     if ($failures -gt 0) { Fail "$failures item(s) could not be removed."; exit 8 }
     if ($All) { Ok 'BepInEx and the mod removed.' }
     else { Ok 'Mod removed. BepInEx is still installed.'; Info 'Pass -All to remove BepInEx as well.' }
-    exit 0
+    Quit 0
 }
 
 if (-not (Test-Path (Join-Path $Game 'VampireSurvivors.exe')) -and
@@ -248,7 +327,7 @@ if (-not (Test-Path (Join-Path $Game 'VampireSurvivors.exe')) -and
 if (Get-Process -Name 'VampireSurvivors' -ErrorAction SilentlyContinue) {
     Fail 'Vampire Survivors is running.'
     Info 'Close it first - Windows keeps the mod DLL locked while the game runs.'
-    exit 4
+    Quit 4
 }
 
 # MelonLoader and BepInEx both hook the process; together they crash the game. Rename rather
@@ -262,9 +341,9 @@ if (Test-Path $melon) {
     Warn 'Rename it back to undo. Running both loaders crashes the game.'
 }
 
-if (-not $BepInEx) { $BepInEx = Find-Payload 'BepInEx*.zip' }
+if (-not $BepInEx -and -not $NoBepInEx) { $BepInEx = Find-Payload 'BepInEx*.zip' }
 $bepPresent = Test-Path (Join-Path $Game 'BepInEx\core')
-if (-not $BepInEx -and -not $bepPresent -and -not $NoDownload) { $BepInEx = Get-BepInEx }
+if (-not $BepInEx -and -not $bepPresent -and -not $NoDownload -and -not $NoBepInEx) { $BepInEx = Get-BepInEx }
 
 if ($BepInEx) {
     $doIt = $true
@@ -290,15 +369,17 @@ if ($BepInEx) {
     Fail 'BepInEx is not installed and could not be obtained.'
     Info 'Download the Unity.IL2CPP build from https://builds.bepinex.dev/projects/bepinex_be'
     Info 'then re-run with:  ./install.ps1 -BepInEx "<path to zip>"'
-    exit 5
+    Quit 5
 } else {
     Ok 'BepInEx already installed.'
 }
 
 if (-not $Mod) { $Mod = Find-Payload 'VSEvolutionHelper.dll' }
+if (-not $Mod -and -not $NoDownload) { $Mod = Get-Mod }
 if (-not $Mod) {
-    Fail 'Could not find VSEvolutionHelper.dll next to this script.'
-    exit 6
+    Fail 'Could not find or download VSEvolutionHelper.dll.'
+    Info "Download the release zip from $ReleasesPage then re-run with -Mod '<path to dll>'"
+    Quit 6
 }
 
 $target = Join-Path $Game 'BepInEx\plugins\VSEvolutionHelper'
@@ -321,3 +402,5 @@ Info 'IL2CPP interop assemblies. That is normal, not a hang.'
 Write-Host ''
 Info 'To confirm, look in  BepInEx/LogOutput.log  for:'
 Info '    Loading [VS Evolution Helper ...]'
+
+Quit 0

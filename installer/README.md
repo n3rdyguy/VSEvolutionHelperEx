@@ -10,12 +10,45 @@ Two forms, same behaviour — pick whichever you trust more:
 | **Binary** | `vsevolutionhelper-installer` — no runtime to install, one file |
 | **Script** | `install.ps1` (Windows) / `install.sh` (macOS, Linux) — readable before you run it |
 
-## Usage
+## Just run it
+
+Run it with no arguments — double-click the `.exe`, or right-click `install.ps1` →
+**Run with PowerShell** — and it asks what to do:
+
+```
+   Game: D:\SteamLibrary\steamapps\common\Vampire Survivors
+   BepInEx: installed    Mod: installed
+
+   [1]  Install            BepInEx + the mod
+   [2]  Update mod only    keep BepInEx and settings
+   [3]  Remove mod         keep BepInEx
+   [4]  Remove everything  mod + BepInEx
+   [5]  Change game folder
+   [Q]  Quit
+```
+
+**Nothing else needs downloading first.** BepInEx comes from the official CI and the mod from
+its GitHub release, so a bare installer in an empty folder is enough.
+
+The window is held open at the end so you can read what happened — right-click *Run with
+PowerShell* otherwise closes it the instant the script finishes.
+
+> **If Windows refuses to run the `.ps1`** ("running scripts is disabled", or a security
+> warning because it came from the internet):
+>
+> ```powershell
+> Unblock-File .\install.ps1
+> powershell -ExecutionPolicy Bypass -File .\install.ps1
+> ```
+>
+> The `.exe` has no such restriction.
+
+## Command line
 
 ```bash
 # Windows
-vsevolutionhelper-installer.exe
-powershell -ExecutionPolicy Bypass -File install.ps1
+vsevolutionhelper-installer.exe --uninstall
+powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall
 
 # macOS / Linux
 chmod +x vsevolutionhelper-installer install.sh
@@ -29,7 +62,9 @@ Options (all optional; the binary and both scripts accept the same ones):
 |--------|---------|
 | `--game <path>` | Game folder, if auto-detection fails |
 | `--bepinex <zip>` | Use a local BepInEx archive instead of downloading |
-| `--mod <dll>` | `VSEvolutionHelper.dll`; defaults to one found beside the installer |
+| `--mod <dll>` | `VSEvolutionHelper.dll`; defaults to one found beside the installer, else downloaded |
+| `--version <tag>` | Install a specific mod release, e.g. `v1.11.0` |
+| `--no-bepinex` | Update the mod only, leave the loader alone |
 | `--latest` | Download the newest BepInEx BE build instead of the pinned one |
 | `--no-download` | Never reach the network |
 | `--platform <rid>` | `win-x64` or `linux-x64`; needed for Proton |

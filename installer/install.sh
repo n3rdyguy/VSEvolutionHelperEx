@@ -23,7 +23,10 @@ NO_DOWNLOAD=0
 UNINSTALL=0
 REMOVE_ALL=0
 KEEP_CONFIG=0
+NO_BEPINEX=0
 PLATFORM=""
+INTERACTIVE=0
+[ $# -eq 0 ] && INTERACTIVE=1
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The build this mod is developed and tested against. Pinned rather than always taking the
@@ -34,12 +37,17 @@ BUILDS_PAGE="$BUILDS_HOST/projects/bepinex_be"
 PINNED_BUILD="785"
 PINNED_HASH="6abdba4"
 
+REPO="n3rdyguy/VSEvolutionHelperEx"
+RELEASES_PAGE="https://github.com/$REPO/releases"
+VERSION=""
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --game)        GAME="$2"; shift 2 ;;
     --bepinex)     BEPINEX="$2"; shift 2 ;;
     --mod)         MOD="$2"; shift 2 ;;
     --platform)    PLATFORM="$2"; shift 2 ;;
+    --version)     VERSION="$2"; shift 2 ;;
     --latest)      USE_LATEST=1; shift ;;
     --no-download) NO_DOWNLOAD=1; shift ;;
     --uninstall)   UNINSTALL=1; shift ;;
@@ -182,6 +190,38 @@ download_bepinex() {
   printf '%s\n' "$temp"
 }
 
+download_mod() {
+  # Fetch from the GitHub release so the script works on its own with nothing beside it.
+  local api
+  if [ -n "$VERSION" ]; then api="https://api.github.com/repos/$REPO/releases/tags/$VERSION"
+  else api="https://api.github.com/repos/$REPO/releases/latest"; fi
+
+  step "Downloading VS Evolution Helper${VERSION:+ $VERSION}..." >&2
+  local json url zip out
+  json=$(fetch_stdout "$api" 2>/dev/null || true)
+  if [ -z "$json" ]; then fail "Could not reach GitHub." >&2; return 1; fi
+
+  url=$(printf '%s' "$json" \
+    | grep -o '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*VSEvolutionHelper[^"]*\.zip"' \
+    | sed 's/.*"\(https[^"]*\)"/\1/' | head -n1 || true)
+  if [ -z "$url" ]; then fail "No release asset found." >&2; return 1; fi
+  info "$url" >&2
+
+  zip="$(mktemp -t vseh-mod-XXXXXX).zip"
+  if ! fetch "$url" "$zip"; then fail "Download failed." >&2; rm -f "$zip"; return 1; fi
+
+  # The release zip mirrors the install layout; pull the DLL out rather than unpacking the
+  # whole thing over the game folder.
+  out="$(mktemp -d -t vseh-mod-XXXXXX)"
+  if ! unzip -oqj "$zip" '*/VSEvolutionHelper.dll' -d "$out" 2>/dev/null; then
+    fail "The release zip did not contain VSEvolutionHelper.dll." >&2
+    rm -rf "$zip" "$out"; return 1
+  fi
+  rm -f "$zip"
+  ok "Downloaded ${VERSION:-latest}" >&2
+  printf '%s\n' "$out/VSEvolutionHelper.dll"
+}
+
 find_payload() {
   local pattern="$1" dir hit
   for dir in "$HERE" "$HERE/payload" "$PWD"; do
@@ -201,6 +241,32 @@ if [ -z "$GAME" ]; then
   exit 2
 fi
 ok "Game folder: $GAME"
+
+# No arguments means it was run by someone who does not want to learn flags, so ask.
+if [ "$INTERACTIVE" -eq 1 ]; then
+  hasmod="not installed"; hasbep="not installed"
+  [ -f "$GAME/BepInEx/plugins/VSEvolutionHelper/VSEvolutionHelper.dll" ] && hasmod="installed"
+  [ -d "$GAME/BepInEx/core" ] && hasbep="installed"
+  info "BepInEx: $hasbep    Mod: $hasmod"
+  printf '\n'
+  printf '%s   [1]%s  Install            BepInEx + the mod\n' "$C_BLD" "$C_OFF"
+  printf '%s   [2]%s  Update mod only    keep BepInEx and settings\n' "$C_BLD" "$C_OFF"
+  printf '%s   [3]%s  Remove mod         keep BepInEx\n' "$C_BLD" "$C_OFF"
+  printf '%s   [4]%s  Remove everything  mod + BepInEx\n' "$C_BLD" "$C_OFF"
+  printf '%s   [Q]%s  Quit\n' "$C_BLD" "$C_OFF"
+  printf '\n'
+  printf '%s   Press a key and hit Enter: %s' "$C_MAG" "$C_OFF"
+  read -r choice
+  printf '\n'
+  case "$(printf '%s' "$choice" | tr '[:lower:]' '[:upper:]')" in
+    1) ;;
+    2) NO_BEPINEX=1 ;;
+    3) UNINSTALL=1 ;;
+    4) UNINSTALL=1; REMOVE_ALL=1 ;;
+    Q) exit 0 ;;
+    *) fail "Unknown choice."; exit 0 ;;
+  esac
+fi
 
 if [ "$UNINSTALL" -eq 1 ]; then
   if pgrep -i "VampireSurvivors" >/dev/null 2>&1; then
@@ -288,11 +354,11 @@ if [ -f "$GAME/version.dll" ]; then
   warn "Rename it back to undo. Running both loaders crashes the game."
 fi
 
-[ -n "$BEPINEX" ] || BEPINEX=$(find_payload 'BepInEx*.zip' || true)
+if [ -z "$BEPINEX" ] && [ "$NO_BEPINEX" -eq 0 ]; then BEPINEX=$(find_payload 'BepInEx*.zip' || true); fi
 BEP_PRESENT=0
 [ -d "$GAME/BepInEx/core" ] && BEP_PRESENT=1
 
-if [ -z "$BEPINEX" ] && [ "$BEP_PRESENT" -eq 0 ] && [ "$NO_DOWNLOAD" -eq 0 ]; then
+if [ -z "$BEPINEX" ] && [ "$BEP_PRESENT" -eq 0 ] && [ "$NO_DOWNLOAD" -eq 0 ] && [ "$NO_BEPINEX" -eq 0 ]; then
   BEPINEX=$(download_bepinex || true)
 fi
 
@@ -328,8 +394,10 @@ else
 fi
 
 [ -n "$MOD" ] || MOD=$(find_payload 'VSEvolutionHelper.dll' || true)
+if [ -z "$MOD" ] && [ "$NO_DOWNLOAD" -eq 0 ]; then MOD=$(download_mod || true); fi
 if [ -z "$MOD" ]; then
-  fail "Could not find VSEvolutionHelper.dll next to this script."
+  fail "Could not find or download VSEvolutionHelper.dll."
+  info "Download the release zip from $RELEASES_PAGE then re-run with --mod '<path>'"
   exit 6
 fi
 
@@ -358,3 +426,6 @@ info "installing BepInEx is slow - it generates the IL2CPP interop assemblies."
 printf '\n'
 info "To confirm, look in  BepInEx/LogOutput.log  for:"
 info "    Loading [VS Evolution Helper ...]"
+
+if [ "$INTERACTIVE" -eq 1 ]; then printf "
+   Press Enter to close"; read -r _; fi

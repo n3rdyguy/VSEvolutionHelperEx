@@ -29,9 +29,16 @@ internal static class Program
 
         Banner();
 
+        // Nothing on the command line means it was double-clicked, so drive it with a menu
+        // rather than printing usage at someone who never asked for flags.
+        bool interactive = args.Length == 0 || (args.Length == 1 && args[0] == "--no-color");
+
         try
         {
             string game = ArgValue(args, "--game") ?? FindGame();
+
+            if (interactive) return Menu(game, args);
+
             if (game == null)
             {
                 Fail("Could not find Vampire Survivors.");
@@ -45,6 +52,106 @@ internal static class Program
             if (Array.IndexOf(args, "--uninstall") >= 0)
                 return Uninstall(game, args);
 
+            return Install(game, args);
+        }
+        catch (Exception ex)
+        {
+            Fail(ex.Message);
+            return 1;
+        }
+    }
+
+    // ── Interactive menu ─────────────────────────────────────────────────────
+
+    private static int Menu(string game, string[] args)
+    {
+        while (true)
+        {
+            Console.WriteLine();
+            if (game == null) Warn("Vampire Survivors not found — choose [5] to set the folder.");
+            else Ok("Game: " + game);
+
+            bool installed = game != null
+                && File.Exists(Path.Combine(game, "BepInEx", "plugins", ModFolder, ModDll));
+            bool loader = game != null && Directory.Exists(Path.Combine(game, "BepInEx", "core"));
+            Info("BepInEx: " + (loader ? "installed" : "not installed")
+                + "    Mod: " + (installed ? "installed" : "not installed"));
+
+            Console.WriteLine();
+            Console.WriteLine(Paint("   [1]", "1;37") + "  Install            BepInEx + the mod");
+            Console.WriteLine(Paint("   [2]", "1;37") + "  Update mod only    keep BepInEx and settings");
+            Console.WriteLine(Paint("   [3]", "1;37") + "  Remove mod         keep BepInEx");
+            Console.WriteLine(Paint("   [4]", "1;37") + "  Remove everything  mod + BepInEx");
+            Console.WriteLine(Paint("   [5]", "1;37") + "  Change game folder");
+            Console.WriteLine(Paint("   [Q]", "1;37") + "  Quit");
+            Console.WriteLine();
+            Console.Write(Paint("   Press a key: ", "35"));
+
+            char key;
+            try { key = char.ToUpperInvariant(Console.ReadKey(true).KeyChar); }
+            catch { return 0; } // no console to read from
+            Console.WriteLine(key);
+            Console.WriteLine();
+
+            switch (key)
+            {
+                case '1':
+                case '2':
+                    if (game == null) { Fail("Set the game folder first."); break; }
+                    var installArgs = new List<string>(args);
+                    if (key == '2') installArgs.Add("--no-bepinex");
+                    Run(() => Install(game, installArgs.ToArray()));
+                    break;
+
+                case '3':
+                    if (game == null) { Fail("Set the game folder first."); break; }
+                    Run(() => Uninstall(game, args));
+                    break;
+
+                case '4':
+                    if (game == null) { Fail("Set the game folder first."); break; }
+                    var removeArgs = new List<string>(args) { "--all" };
+                    Run(() => Uninstall(game, removeArgs.ToArray()));
+                    break;
+
+                case '5':
+                    Console.Write("   Path to the Vampire Survivors folder: ");
+                    string entered = Console.ReadLine();
+                    if (!string.IsNullOrWhiteSpace(entered))
+                    {
+                        entered = entered.Trim().Trim('"');
+                        if (Directory.Exists(entered)) { game = entered; Ok("Game folder set."); }
+                        else Fail("That folder does not exist.");
+                    }
+                    break;
+
+                case 'Q':
+                case (char)27:
+                    return 0;
+
+                default:
+                    Warn("Unknown choice.");
+                    break;
+            }
+        }
+    }
+
+    /// <summary>Run an action and keep the menu alive even if it throws.</summary>
+    private static void Run(Func<int> action)
+    {
+        try { action(); }
+        catch (Exception ex) { Fail(ex.Message); }
+        Console.WriteLine();
+        Info("Press any key to return to the menu…");
+        try { Console.ReadKey(true); } catch { }
+    }
+
+    // ── Install ──────────────────────────────────────────────────────────────
+
+    private static int Install(string game, string[] args)
+    {
+        try
+        {
             if (!LooksLikeGameFolder(game))
             {
                 Warn("That folder does not look like a Vampire Survivors install.");
@@ -61,10 +168,12 @@ internal static class Program
 
             DisableMelonLoader(game);
 
-            string bepInExZip = ArgValue(args, "--bepinex") ?? FindPayload("BepInEx", ".zip");
+            bool skipBepInEx = Array.IndexOf(args, "--no-bepinex") >= 0;
+            string bepInExZip = skipBepInEx ? null : (ArgValue(args, "--bepinex") ?? FindPayload("BepInEx", ".zip"));
             bool bepInExPresent = Directory.Exists(Path.Combine(game, "BepInEx", "core"));
 
-            if (bepInExZip == null && !bepInExPresent && Array.IndexOf(args, "--no-download") < 0)
+            if (bepInExZip == null && !bepInExPresent && !skipBepInEx
+                && Array.IndexOf(args, "--no-download") < 0)
                 bepInExZip = DownloadBepInEx(args);
 
             if (bepInExZip != null)
@@ -93,9 +202,14 @@ internal static class Program
             }
 
             string dll = ArgValue(args, "--mod") ?? FindPayload(ModDll, null);
+            if (dll == null && Array.IndexOf(args, "--no-download") < 0)
+                dll = DownloadMod(args);
             if (dll == null)
             {
-                Fail("Could not find " + ModDll + " next to the installer.");
+                Fail("Could not find or download " + ModDll + ".");
+                Info("Download the release zip from:");
+                Info("    " + ReleasesPage);
+                Info("then re-run with:  --mod \"<path to " + ModDll + ">\"");
                 return 6;
             }
 
@@ -579,6 +693,85 @@ internal static class Program
             return m.Success ? BuildsHost + m.Value : null;
         }
         catch { return null; }
+    }
+
+    // ── Mod download ─────────────────────────────────────────────────────────
+
+    private const string Repo = "n3rdyguy/VSEvolutionHelperEx";
+    private const string ReleasesPage = "https://github.com/" + Repo + "/releases";
+
+    /// <summary>
+    /// Fetch the mod from its GitHub release, so the installer works on its own with nothing
+    /// beside it. <c>--version vX.Y.Z</c> pins a specific tag; otherwise the latest is used.
+    /// </summary>
+    private static string DownloadMod(string[] args)
+    {
+        string tag = ArgValue(args, "--version");
+        string api = tag == null
+            ? $"https://api.github.com/repos/{Repo}/releases/latest"
+            : $"https://api.github.com/repos/{Repo}/releases/tags/{tag}";
+
+        Step("Downloading VS Evolution Helper" + (tag == null ? " (latest)" : " " + tag) + "…");
+
+        try
+        {
+            using var http = new System.Net.Http.HttpClient();
+            http.Timeout = TimeSpan.FromMinutes(3);
+            // GitHub rejects requests without a User-Agent.
+            http.DefaultRequestHeaders.Add("User-Agent", "VSEvolutionHelper-Installer");
+
+            string json = http.GetStringAsync(api).GetAwaiter().GetResult();
+
+            var asset = Regex.Match(json,
+                "\"browser_download_url\"\\s*:\\s*\"([^\"]+VSEvolutionHelper[^\"]*\\.zip)\"",
+                RegexOptions.IgnoreCase);
+            if (!asset.Success)
+            {
+                Fail("No release asset found" + (tag == null ? "." : " for " + tag + "."));
+                return null;
+            }
+
+            string version = Regex.Match(json, "\"tag_name\"\\s*:\\s*\"([^\"]+)\"").Groups[1].Value;
+            string url = asset.Groups[1].Value;
+            Info(url);
+
+            string temp = Path.Combine(Path.GetTempPath(), "vseh-mod-" + Guid.NewGuid().ToString("N") + ".zip");
+            using (var response = http.GetAsync(url).GetAwaiter().GetResult())
+            {
+                response.EnsureSuccessStatusCode();
+                using var stream = response.Content.ReadAsStream();
+                using var file = File.Create(temp);
+                stream.CopyTo(file);
+            }
+
+            // The release zip mirrors the install layout, so pull the DLL out of it rather than
+            // unpacking the whole thing over the game folder.
+            string extracted = Path.Combine(Path.GetTempPath(), "vseh-mod-" + Guid.NewGuid().ToString("N") + ".dll");
+            using (var archive = ZipFile.OpenRead(temp))
+            {
+                ZipArchiveEntry entry = null;
+                foreach (var e in archive.Entries)
+                {
+                    if (e.Name.Equals(ModDll, StringComparison.OrdinalIgnoreCase)) { entry = e; break; }
+                }
+                if (entry == null)
+                {
+                    Fail("The release zip did not contain " + ModDll + ".");
+                    File.Delete(temp);
+                    return null;
+                }
+                entry.ExtractToFile(extracted, true);
+            }
+            File.Delete(temp);
+
+            Ok("Downloaded " + (string.IsNullOrEmpty(version) ? "mod" : version));
+            return extracted;
+        }
+        catch (Exception ex)
+        {
+            Fail("Download failed: " + ex.Message);
+            return null;
+        }
     }
 
     // ── Payload discovery ────────────────────────────────────────────────────
