@@ -14,7 +14,7 @@ namespace VSItemTooltips;
 /// Grimoire / Collections evolution formula rows use EvolutionItemUI.AddWeaponIcon(WeaponType)
 /// which creates a child icon GameObject per ingredient/result. Generic patches only saw the
 /// parent EvolutionItemUI instance, so every icon in a row shared one InstanceID and only
-/// the last WeaponType stuck — hence "only the middle (or one) icon has a tooltip".
+/// the last WeaponType stuck - hence "only the middle (or one) icon has a tooltip".
 ///
 /// Hit targets: register the full icon root (not a tiny nested sprite), enable raycasts, and
 /// map all graphic children to the same weapon so the whole icon is hoverable.
@@ -118,7 +118,7 @@ public static class GrimoirePatches
 			if ((Object)(object)__result == (Object)null)
 				return;
 
-			// Full icon cell — hit area matches the layout slot, not just the pixel sprite
+			// Full icon cell - hit area matches the layout slot, not just the pixel sprite
 			PrepareIconHitArea(__result);
 			int id = ((Object)__result).GetInstanceID();
 			ItemTooltipsMod.RegisterWeaponUI(id, __result, __0, isAddMethod: false);
@@ -138,7 +138,7 @@ public static class GrimoirePatches
 	}
 
 	/// <summary>
-	/// Instance-only postfix — read types from the UI to avoid IL2CPP Harmony arg marshaling crashes.
+	/// Instance-only postfix - read types from the UI to avoid IL2CPP Harmony arg marshaling crashes.
 	/// </summary>
 	public static void CollectionItem_SetData_Postfix(CollectionItemUI __instance)
 	{

@@ -857,7 +857,7 @@ public static class CharacterSelectPatches
 		hitId = -1;
 		hitGo = null;
 
-		// 1) UI raycast — topmost object; only accept if it maps to a registered card
+		// 1) UI raycast - topmost object; only accept if it maps to a registered card
 		try
 		{
 			EventSystem es = EventSystem.current;
@@ -872,7 +872,7 @@ public static class CharacterSelectPatches
 					GameObject top = results[0].gameObject;
 					if (TryMapToRegistered(top, out hitId, out hitGo))
 						return true;
-					// Top hit is not a character card (e.g. bottom info) — do not fall through
+					// Top hit is not a character card (e.g. bottom info) - do not fall through
 					// unless it's a non-blocking area; treat as no-hit for tooltips
 					if (IsBlockingNonCard(top))
 						return false;

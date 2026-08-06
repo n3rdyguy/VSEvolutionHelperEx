@@ -112,7 +112,7 @@ public static class GameData
             return true;
         }
 
-        // DataManager is not a UnityEngine.Object — resolve via UI pages / GameManager injection.
+        // DataManager is not a UnityEngine.Object - resolve via UI pages / GameManager injection.
         if (_dataManager == null)
         {
             try
@@ -389,7 +389,7 @@ public static class GameData
     public static string GetWeaponName(WeaponType type)
     {
         EnsureLoaded();
-        // VOID is not a real weapon — callers that care should use IsRealWeaponType first
+        // VOID is not a real weapon - callers that care should use IsRealWeaponType first
         if (!IsRealWeaponType(type))
             return "";
         if (WeaponNames.TryGetValue(type, out string cached) && !string.IsNullOrEmpty(cached))
@@ -652,7 +652,7 @@ public static class GameData
             else if (!LooksLikeLocKey(s))
                 return s;
         }
-        // "MERCHANT name" / "MERCHANT description" — a key that already lost its xxxLang/
+        // "MERCHANT name" / "MERCHANT description" - a key that already lost its xxxLang/
         // prefix. It has no slash or braces, so LooksLikeLocKey says "prose" and the raw key
         // was shown verbatim on merchant map icons.
         if (TryParseBareLangKey(s, out string bareId, out string bareSuffix))
@@ -669,7 +669,7 @@ public static class GameData
             return s;
 
         // Direct I2 lookup. I2 can "succeed" and hand back a placeholder that is itself a
-        // stripped key ("MERCHANT name"), so the result is validated, not just the input —
+        // stripped key ("MERCHANT name"), so the result is validated, not just the input -
         // returning it unchecked is what put raw keys on the merchant map tooltip.
         string t = Usable(Translate(s));
         if (!string.IsNullOrEmpty(t))
@@ -696,7 +696,7 @@ public static class GameData
                 if (string.Equals(suffix, "name", StringComparison.OrdinalIgnoreCase)
                     || string.IsNullOrEmpty(suffix))
                     return HumanizeId(id);
-                // Description missing — omit rather than show key
+                // Description missing - omit rather than show key
                 return null;
             }
 
@@ -789,7 +789,7 @@ public static class GameData
     /// <summary>
     /// The full record for a secret, from <c>DataManager.AllSecrets</c>.
     ///
-    /// The SecretData handed to SecretItemUI is sparse — every reward field arrives null (or
+    /// The SecretData handed to SecretItemUI is sparse - every reward field arrives null (or
     /// VOID), so reading rewards off the UI's copy yields nothing. The catalog keyed by
     /// SecretType holds the populated record. Same shape as the custom-merchant catalog.
     /// </summary>
@@ -815,7 +815,7 @@ public static class GameData
     // ── Secrets: rewards live in the raw JSON, not in the parsed record ──────
     //
     // Every reward field on SecretData reads back as the enum's VOID member for mystery
-    // secrets, in both the row's copy and the DataManager.AllSecrets catalog — but the raw
+    // secrets, in both the row's copy and the DataManager.AllSecrets catalog - but the raw
     // JSON DataManager parsed those records from still carries them as plain strings
     // ("characterToUnlock": "NEO"). So the shipped data does hold the answers; only the
     // deserialized view is blank. Reading the JSON is therefore the only reliable source.
@@ -843,7 +843,7 @@ public static class GameData
 
     private static void EnsureSecretRewards()
     {
-        // Not "tried" until DataManager exists — otherwise an early call would poison the
+        // Not "tried" until DataManager exists - otherwise an early call would poison the
         // cache with an empty result for the rest of the session.
         if (_secretRewardsParsed || _dataManager == null) return;
         _secretRewardsParsed = true;
@@ -1011,7 +1011,7 @@ public static class GameData
 
     /// <summary>
     /// Resolve reward ids to displayable rows. Ids that no longer parse to a live enum member
-    /// — DLC content that is not installed — still render as a humanized label rather than
+    /// - DLC content that is not installed - still render as a humanized label rather than
     /// silently vanishing, so the list never looks shorter than it really is.
     /// </summary>
     public static System.Collections.Generic.List<IconRow> BuildRewardRows(RewardIds e)
@@ -1124,7 +1124,7 @@ public static class GameData
     }
 
     /// <summary>
-    /// maxHp is stored at a tenth of the value the game reports — an enemy the Bestiary calls
+    /// maxHp is stored at a tenth of the value the game reports - an enemy the Bestiary calls
     /// 5 HP is 0.5 in the data. Scaled here so the tooltip agrees with the game.
     /// </summary>
     private const float EnemyHpScale = 10f;
@@ -1151,8 +1151,8 @@ public static class GameData
     private static Sprite XpIcon() { try { return GetItemSprite(ItemType.GEM); } catch { return null; } }
 
     // "Found in" is captured from the game's own Bestiary info panel rather than derived.
-    // Deriving it from the stage JSON disagreed with the game — Boss Rash for an enemy the
-    // game lists under Cappella Magna — and missed stages entirely, and a wrong stage list is
+    // Deriving it from the stage JSON disagreed with the game - Boss Rash for an enemy the
+    // game lists under Cappella Magna - and missed stages entirely, and a wrong stage list is
     // indistinguishable from a right one to whoever reads it.
     private static readonly System.Collections.Generic.Dictionary<string, string> _enemyFoundIn =
         new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -1186,7 +1186,7 @@ public static class GameData
     /// <summary>
     /// One-time dump of an enemy's raw JSON. The parse reports one record per enemy while the
     /// Bestiary shows stat ranges, so either the ranges are computed from fields on a single
-    /// record or the array is shaped differently than assumed — this tells us which.
+    /// record or the array is shaped differently than assumed - this tells us which.
     /// </summary>
     public static void DumpEnemyJsonOnce(string enemyId)
     {
@@ -1237,7 +1237,7 @@ public static class GameData
     /// Everything the Bestiary knows about an enemy but never shows. The resistance fields are
     /// the point of this: nothing in game explains why an enemy shrugs off freeze or Rosary.
     ///
-    /// Values are reported as the data stores them rather than converted to percentages — the
+    /// Values are reported as the data stores them rather than converted to percentages - the
     /// scale is not documented anywhere and inventing one would be worse than showing none.
     /// </summary>
     /// <summary>Min/max of a stat across an enemy's level variants.</summary>
@@ -1264,7 +1264,7 @@ public static class GameData
         public bool HasHp, HasPower, HasSpeed, HasXp, HasKnock;
         public float Hp, Power, SpeedMin, SpeedMax, Xp, Knock;
         public System.Collections.Generic.List<string> Traits = new System.Collections.Generic.List<string>();
-        /// <summary>Sibling ids the Bestiary groups into one entry — the source of stat ranges.</summary>
+        /// <summary>Sibling ids the Bestiary groups into one entry - the source of stat ranges.</summary>
         public System.Collections.Generic.List<string> Variants;
         /// <summary>Stage ids the Bestiary lists under "Found in".</summary>
         public System.Collections.Generic.List<string> Places;
@@ -1279,7 +1279,7 @@ public static class GameData
     /// <c>bVariants</c> (the sibling ids one Bestiary entry covers), <c>bPlaces</c> (its stage
     /// list), <c>bName</c> and <c>bDesc</c>.
     ///
-    /// The ranges the Bestiary prints come from aggregating over <c>bVariants</c> — BAT1's
+    /// The ranges the Bestiary prints come from aggregating over <c>bVariants</c> - BAT1's
     /// entry spans BAT1/BAT2/BAT3, which is why one record read alone showed a single value.
     /// </summary>
     private static void EnsureEnemyRecs()
@@ -1532,7 +1532,7 @@ public static class GameData
     /// Read achievements from JSON rather than the typed catalog.
     ///
     /// AchievementData's reward fields are plain strings, so the VOID problem that broke the
-    /// secrets does not apply — but its list fields are IL2CPP lists of enums, and iterating
+    /// secrets does not apply - but its list fields are IL2CPP lists of enums, and iterating
     /// those returned the same value for every element when the Bestiary tried it. The JSON
     /// sidesteps both and covers every row without needing one selected first.
     /// </summary>
@@ -1690,7 +1690,7 @@ public static class GameData
     // atlases are torn down between scenes, so a cached Sprite would go stale.
     //
     // The name parts matter as much as the portrait. Several characters were renamed after
-    // their enum id was fixed — GRAZIELLA ships as "Minnah Mannarah" — so a single
+    // their enum id was fixed - GRAZIELLA ships as "Minnah Mannarah" - so a single
     // `<id> name` term returns the retired name while the game builds its own from
     // charName/surname. Composing the same way is what makes the tooltip agree with the
     // in-game unlock banner.
@@ -1794,7 +1794,7 @@ public static class GameData
 
     /// <summary>
     /// A character reward label. When the composed name and the id's own localization term
-    /// disagree — a renamed character — both are shown, because either may be the name the
+    /// disagree - a renamed character - both are shown, because either may be the name the
     /// player recognizes depending on how long they have been playing.
     /// </summary>
     public static string DescribeRewardCharacter(string id)
@@ -1816,7 +1816,7 @@ public static class GameData
     ///
     /// SecretData carries each reward kind in its own nullable field, so this is a flat sweep
     /// of all of them rather than one "reward" lookup. Rows with no resolvable sprite still
-    /// render (label only) — characters and stages often have no icon we can reach.
+    /// render (label only) - characters and stages often have no icon we can reach.
     /// </summary>
     public static System.Collections.Generic.List<IconRow> GetSecretRewards(VampireSurvivors.Data.SecretData data)
     {
@@ -1930,7 +1930,7 @@ public static class GameData
 
     /// <summary>
     /// The game stores "no reward of this kind" as the enum's VOID member (value 0), not as a
-    /// null nullable — so HasValue is true for fields that award nothing. Without this every
+    /// null nullable - so HasValue is true for fields that award nothing. Without this every
     /// secret listed one reward called "Void".
     /// </summary>
     private static bool IsVoidValue(string id)
@@ -1994,7 +1994,7 @@ public static class GameData
             if (_dataManager == null)
             {
                 Plugin.Dbg("[GameData] GetMerchantWares: DataManager not resolved yet");
-                return null; // not cached — retry once the manager exists
+                return null; // not cached - retry once the manager exists
             }
             LogMerchantKeysOnce();
             result = LookupMerchantWares(_dataManager.AllCustomMerchantsData, want)
@@ -2061,7 +2061,7 @@ public static class GameData
                 if (data == null) continue;
 
                 // CharacterType only names the base merchants (MERCHANT, ADVENTURE_MERCHANT,
-                // CUSTOM_MERCHANT, TP_MERCHANT_LIBRARIAN) — DLC merchants such as Xanthia have
+                // CUSTOM_MERCHANT, TP_MERCHANT_LIBRARIAN) - DLC merchants such as Xanthia have
                 // no named enum member, so the key alone cannot identify them. Their sprite
                 // fields do: the map icon sprite is "mercXanthia".
                 if (!MerchantMatches(data, kv.Key, want)) continue;
@@ -2080,7 +2080,7 @@ public static class GameData
     /// never appear in the catalog dictionaries.
     ///
     /// This is a full-scene search, so it runs only for merchant map icons, only when the
-    /// catalog lookup already failed, and its result is cached — a per-frame
+    /// catalog lookup already failed, and its result is cached - a per-frame
     /// FindObjectsOfType scan is what crashed the Collections tab in 1.10.12.
     /// </summary>
     private static MerchantWares LookupMerchantWaresInScene(string want)
@@ -2110,7 +2110,7 @@ public static class GameData
 
             // Deliberately no "only one merchant in the scene, so it must be this one"
             // fallback. The base Merchant legitimately matches nothing, and that guess
-            // attributed the custom merchant's stock to him — wrong wares look identical to
+            // attributed the custom merchant's stock to him - wrong wares look identical to
             // right ones. A miss stays a miss.
             if (seen > 0)
                 Plugin.Dbg($"[GameData] {seen} scene merchant(s), none matching '{want}'");
@@ -2326,7 +2326,7 @@ public static class GameData
     {
         if (string.IsNullOrWhiteSpace(s))
             return true;
-        // Multi-line with real prose — not a single term (handled by LocalizeMultiline)
+        // Multi-line with real prose - not a single term (handled by LocalizeMultiline)
         if ((s.IndexOf('\n') >= 0 || s.IndexOf('\r') >= 0)
             && s.IndexOf("Lang/", StringComparison.OrdinalIgnoreCase) < 0
             && s.IndexOf('{') < 0)
@@ -3034,7 +3034,7 @@ public static class GameData
         // Powerups are also WeaponType entries for many passives; already covered by SpriteToWeapon
         if (SpriteToPowerUp.TryGetValue(spriteName, out PowerUpType pu) || SpriteToPowerUp.TryGetValue(bare, out pu))
         {
-            // PowerUpType and ItemType share some numeric values but different enums — try name match as item first failed
+            // PowerUpType and ItemType share some numeric values but different enums - try name match as item first failed
             if (TryParseWeaponType(pu.ToString(), out wt))
             {
                 weapon = wt;

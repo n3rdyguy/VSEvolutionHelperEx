@@ -11,7 +11,7 @@ public static class EquipmentIconPatches
 {
 	/// <summary>
 	/// Typed patch for EquipmentIconPaused.SetData(WeaponType t, int level, int maxLevel, Sprite s, bool isBanished).
-	/// Use __0 (positional) — do NOT use a named "type" arg; Harmony matches names to the original method.
+	/// Use __0 (positional) - do NOT use a named "type" arg; Harmony matches names to the original method.
 	/// </summary>
 	public static void SetData_Weapon_Postfix(EquipmentIconPaused __instance, WeaponType __0)
 	{

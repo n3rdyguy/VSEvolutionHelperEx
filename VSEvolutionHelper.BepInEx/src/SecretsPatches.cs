@@ -14,8 +14,8 @@ namespace VSItemTooltips;
 ///
 /// SecretData keeps every reward kind in its own nullable field (character, weapon, stage,
 /// hyper, relic, arcana, power-up, skins, gold), so the rewards are readable whether or not
-/// the player has found the secret. Revealing un-achieved secrets is a deliberate choice —
-/// the game obscures them by design — so it is behind a config switch.
+/// the player has found the secret. Revealing un-achieved secrets is a deliberate choice -
+/// the game obscures them by design - so it is behind a config switch.
 ///
 /// Rows are SelectableUI. The hover is attached to the reward image rather than the row root
 /// so the row's own button wiring is untouched, and the root is mapped separately for
@@ -51,7 +51,7 @@ public static class SecretsPatches
 	}
 
 	/// <summary>
-	/// Instance-only postfix — the data is read back off the row rather than taken from the
+	/// Instance-only postfix - the data is read back off the row rather than taken from the
 	/// patched call's arguments, matching the other IL2CPP postfixes here.
 	/// </summary>
 	public static void SetData_Postfix(SecretItemUI __instance)
@@ -64,7 +64,7 @@ public static class SecretsPatches
 			bool haveType = false;
 			try { type = __instance._type; haveType = true; } catch { }
 
-			// Only used for the debug line and the typed fallback — the rewards themselves
+			// Only used for the debug line and the typed fallback - the rewards themselves
 			// come from the JSON, since both the row's copy and the catalog record read back
 			// with every reward field VOID.
 			SecretData data = null;

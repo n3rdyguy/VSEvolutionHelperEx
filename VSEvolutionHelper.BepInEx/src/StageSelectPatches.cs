@@ -127,7 +127,7 @@ public static class StageSelectPatches
 				return;
 			}
 
-			// Fallback: spawn-order from StageData relic lists (no GO match) — skip
+			// Fallback: spawn-order from StageData relic lists (no GO match) - skip
 			// If GOs exist without types, try resolve from stage relic lists by index
 			if (nGo > 0 && stage != null)
 			{

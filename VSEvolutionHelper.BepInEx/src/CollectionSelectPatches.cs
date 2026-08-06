@@ -21,7 +21,7 @@ public static class CollectionSelectPatches
 
 	public static void Apply(Harmony harmony)
 	{
-		// Only safe, high-signal hooks — do NOT patch Sort* (re-entrancy / mid-layout)
+		// Only safe, high-signal hooks - do NOT patch Sort* (re-entrancy / mid-layout)
 		TryPatch(harmony, typeof(CollectionsPage), "OnShowStart", nameof(Page_Postfix));
 		TryPatch(harmony, typeof(CollectionsPage), "Populate", nameof(Page_Postfix));
 	}
@@ -64,7 +64,7 @@ public static class CollectionSelectPatches
 
 	public static void Page_Postfix()
 	{
-		// One delayed scan after UI settles — never scan re-entrantly from Sort
+		// One delayed scan after UI settles - never scan re-entrantly from Sort
 		if (_scanQueued) return;
 		_scanQueued = true;
 		ItemTooltipsMod.DelayFrames(3, () =>
@@ -129,7 +129,7 @@ public static class CollectionSelectPatches
 			ItemTooltipsMod.ClearCollectionUnlockHints();
 
 			CollectionItemUI[] uis = null;
-			try { uis = Object.FindObjectsOfType<CollectionItemUI>(false); } // active only — safer
+			try { uis = Object.FindObjectsOfType<CollectionItemUI>(false); } // active only - safer
 			catch
 			{
 				try { uis = Object.FindObjectsOfType<CollectionItemUI>(); } catch { }

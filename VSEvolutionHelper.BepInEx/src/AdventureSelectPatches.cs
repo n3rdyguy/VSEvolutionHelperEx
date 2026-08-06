@@ -16,7 +16,7 @@ namespace VSItemTooltips;
 
 /// <summary>
 /// Adventures list: hover tooltips with cast / weapons summary.
-/// Scan after Populate — do not Harmony-patch AdventureItemUI.SetData (IL2CPP risk).
+/// Scan after Populate - do not Harmony-patch AdventureItemUI.SetData (IL2CPP risk).
 /// </summary>
 public static class AdventureSelectPatches
 {

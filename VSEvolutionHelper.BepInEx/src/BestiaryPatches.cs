@@ -10,7 +10,7 @@ namespace VSItemTooltips;
 /// Bestiary: show an enemy's real stats on hover.
 ///
 /// The page lists enemies and a kill count, and shows nothing about what they actually do.
-/// EnemyData carries HP, damage, speed, XP and — the reason this exists — per-effect
+/// EnemyData carries HP, damage, speed, XP and - the reason this exists - per-effect
 /// resistances (freeze, Rosary, debuffs, knockback, corridor, defang) plus a fire weakness.
 /// None of that is surfaced anywhere in game, and "why won't this thing freeze" has no answer
 /// without it.
@@ -52,7 +52,7 @@ public static class BestiaryPatches
 			}
 			if (!patchedData) Plugin.Log.LogWarning("[Bestiary] EnemyItemUI.SetData not found");
 
-			// The page owns the info panel — EnemyItemUI.SetInfoPanel() never fired, because
+			// The page owns the info panel - EnemyItemUI.SetInfoPanel() never fired, because
 			// the page calls its own overload.
 			foreach (var m in typeof(VampireSurvivors.UI.BestiaryPage).GetMethods(
 				System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
@@ -125,7 +125,7 @@ public static class BestiaryPatches
 
 	/// <summary>
 	/// The game works out which stages an enemy appears in and writes it into the Bestiary's
-	/// own Found In label. Capture that rather than deriving a stage list — a derived one
+	/// own Found In label. Capture that rather than deriving a stage list - a derived one
 	/// disagreed with the game and there is no way for a reader to tell which is right.
 	///
 	/// The panel is populated for the selected enemy, so the cache fills as rows are selected;
@@ -173,7 +173,7 @@ public static class BestiaryPatches
 	/// <summary>
 	/// Prefer the row's own label, which the game has already localized. Undiscovered enemies
 	/// render as a row of dashes, though, so that placeholder is rejected and the name is
-	/// rebuilt from the enum id — otherwise revealing the stats but not the name would be a
+	/// rebuilt from the enum id - otherwise revealing the stats but not the name would be a
 	/// half-spoiler that helps nobody.
 	/// </summary>
 	private static string ResolveName(EnemyItemUI item)

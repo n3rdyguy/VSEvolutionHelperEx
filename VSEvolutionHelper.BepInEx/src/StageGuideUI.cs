@@ -131,7 +131,7 @@ public static class StageGuideUI
 		if (!_tabBar.activeInHierarchy)
 			return;
 
-		// Shoulder / hotkeys — work even when focus is on the stage list
+		// Shoulder / hotkeys - work even when focus is on the stage list
 		if (Input.GetKeyDown(KeyCode.JoystickButton4) || Input.GetKeyDown(KeyCode.Q)
 			|| Input.GetKeyDown(KeyCode.PageUp))
 		{
@@ -228,7 +228,7 @@ public static class StageGuideUI
 			return false;
 		}
 
-		// Tab bar — same horizontal bounds as song panel, sit flush on its top edge
+		// Tab bar - same horizontal bounds as song panel, sit flush on its top edge
 		if ((Object)(object)_tabBar == (Object)null)
 		{
 			_tabBar = new GameObject("EvoHelper_StageTabs");
@@ -275,7 +275,7 @@ public static class StageGuideUI
 			catch { }
 		}
 
-		// Guide root — same top/width as song panel; scroll when content is tall
+		// Guide root - same top/width as song panel; scroll when content is tall
 		if ((Object)(object)_guideRoot == (Object)null)
 		{
 			_guideRoot = new GameObject("EvoHelper_StageGuide");
@@ -446,11 +446,11 @@ public static class StageGuideUI
 		// Prefer song panel width so wrap matches the visible column
 		float width = ResolveContentWidth();
 
-		// Title only — flavor description + hyper/mods already show on the stage stats panel
+		// Title only - flavor description + hyper/mods already show on the stage stats panel
 		string name = SafeLoc(() => _stage.GetLocalizedName(_stageType), _stage.stageName);
 		y = AddHeader(_guideScrollContent.transform, font, name, Gold, 18f, width, y);
 
-		// Curated notes first — highest value, not duplicated on the bottom panel
+		// Curated notes first - highest value, not duplicated on the bottom panel
 		if (StageExtraTips.TryGet(_stageType, out string extra))
 		{
 			y = AddHeader(_guideScrollContent.transform, font, "Guide", new Color(0.7f, 0.85f, 1f, 1f), 14f, width, y + 6f);
@@ -480,7 +480,7 @@ public static class StageGuideUI
 			y = AddBody(_guideScrollContent.transform, font, string.Join("\n", featureLines), Muted, 12f, width, y, 2f);
 		}
 
-		// Relics / unlocks — omit when empty
+		// Relics / unlocks - omit when empty
 		var relics = CollectRelics(_stage);
 		if (relics.Count > 0)
 		{
@@ -857,7 +857,7 @@ public static class StageGuideUI
 		GameObject go = new GameObject(name);
 		go.transform.SetParent(parent, false);
 		RectTransform rt = go.AddComponent<RectTransform>();
-		// Left-top anchored fixed box — width is set by callers for wrapping
+		// Left-top anchored fixed box - width is set by callers for wrapping
 		rt.anchorMin = new Vector2(0f, 1f);
 		rt.anchorMax = new Vector2(0f, 1f);
 		rt.pivot = new Vector2(0f, 1f);
@@ -926,7 +926,7 @@ public static class StageGuideUI
 		((TMP_Text)tmp).fontSize = 16f;
 		((TMP_Text)tmp).fontStyle = (FontStyles)1;
 		((Graphic)tmp).color = Soft;
-		// Midline+Center (4098) — better optical center for single-line UI labels than Middle
+		// Midline+Center (4098) - better optical center for single-line UI labels than Middle
 		((TMP_Text)tmp).alignment = (TextAlignmentOptions)4098;
 		((TMP_Text)tmp).enableWordWrapping = false;
 		((TMP_Text)tmp).overflowMode = TextOverflowModes.Ellipsis;

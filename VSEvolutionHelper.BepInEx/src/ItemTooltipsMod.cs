@@ -86,7 +86,7 @@ public class ItemTooltipsMod
 	private static int lastSceneBuildIndex = -1;
 	private static readonly List<(int framesLeft, Action action)> pendingDelayedActions = new List<(int, Action)>();
 	internal static void DelayFrames(int frames, Action action) { pendingDelayedActions.Add((frames, action)); }
-	
+
 	private static Type FindTypeByName(string typeName, string namespaceContains = null)
 	{
 		foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
@@ -226,7 +226,7 @@ public class ItemTooltipsMod
 	private static WeaponType? levelUpPendingWeapon = null;
 	private static ItemType? levelUpPendingItem = null;
 	private static float levelUpPendingSince = -1f;
-	// Short settle delay — main guard is "mouse must move after Level Up opens" (config: Tooltips.LevelUpHoverDelay)
+	// Short settle delay - main guard is "mouse must move after Level Up opens" (config: Tooltips.LevelUpHoverDelay)
 	private static float LevelUpHoverDelay => Plugin.LevelUpHoverDelay;
 
 	private static bool interactiveMode = false;
@@ -538,9 +538,9 @@ public class ItemTooltipsMod
 									}
 									string text = num2 switch
 									{
-										0 => "SetWeapon_Postfix", 
-										1 => "SetWeapon_Postfix_Arg1", 
-										_ => "SetWeapon_Postfix_ArgN", 
+										0 => "SetWeapon_Postfix",
+										1 => "SetWeapon_Postfix_Arg1",
+										_ => "SetWeapon_Postfix_ArgN",
 									};
 									if (1 == 0)
 									{
@@ -557,9 +557,9 @@ public class ItemTooltipsMod
 									}
 									string text = num3 switch
 									{
-										0 => "SetItem_Postfix", 
-										1 => "SetItem_Postfix_Arg1", 
-										_ => "SetItem_Postfix_ArgN", 
+										0 => "SetItem_Postfix",
+										1 => "SetItem_Postfix_Arg1",
+										_ => "SetItem_Postfix_ArgN",
 									};
 									if (1 == 0)
 									{
@@ -770,11 +770,11 @@ public class ItemTooltipsMod
 		bool flag = IsGamePaused();
 		if (flag && !wasGamePaused)
 		{
-			// Level Up / pause / merchant just opened — never keep a stale or auto tooltip
+			// Level Up / pause / merchant just opened - never keep a stale or auto tooltip
 			HideAllPopups();
 			ResetHoverDwellState();
 			// Keep App Collections registrations (main menu); only clear in-run clutter
-			// collectionIcons are App-UI cells — clearing them on pause made Collections feel "dead"
+			// collectionIcons are App-UI cells - clearing them on pause made Collections feel "dead"
 			// after any in-run pause. Re-scan on next Collections open if needed.
 			HideCollectionPopup();
 			ClearTrackedIcons();
@@ -867,7 +867,7 @@ public class ItemTooltipsMod
 		{
 			ClearAdventureIcons();
 		}
-		// Collections / Grimoire (App menu) — NOT gated on IsGamePaused (main menu is never "paused")
+		// Collections / Grimoire (App menu) - NOT gated on IsGamePaused (main menu is never "paused")
 		if (collectionIcons.Count > 0)
 		{
 			if (usingController)
@@ -1246,7 +1246,7 @@ public class ItemTooltipsMod
 	///
 	/// This is not just about the fallback scan. IsGamePaused() decides "a modal is open" for
 	/// this screen from the same weaponSelectionView field (:1025), and ShowItemPopup returns
-	/// early when that is false (:3742) — silently, as that branch logs nothing. So while the
+	/// early when that is false (:3742) - silently, as that branch logs nothing. So while the
 	/// field was null every selector tooltip was built and then dropped on the floor, which is
 	/// why hovering logged ShowItemPopup but drew nothing.
 	/// </summary>
@@ -1289,7 +1289,7 @@ public class ItemTooltipsMod
 
 		// Report the real hierarchy once per session, before any early return. Which view the
 		// field currently holds, and whether it is live, is the thing that took three builds to
-		// pin down — so it stays diagnosable rather than becoming a silent exit again.
+		// pin down - so it stays diagnosable rather than becoming a silent exit again.
 		if (!loggedWeaponSelectDiag && Plugin.DebugVerbose)
 		{
 			loggedWeaponSelectDiag = true;
@@ -1306,7 +1306,7 @@ public class ItemTooltipsMod
 			return;
 		}
 
-		// Highest ancestor that still names the selector — the view root, not an inner panel.
+		// Highest ancestor that still names the selector - the view root, not an inner panel.
 		Transform view = null;
 		for (Transform t = cell; (Object)(object)t != (Object)null; t = t.parent)
 		{
@@ -1356,7 +1356,7 @@ public class ItemTooltipsMod
 	/// selector whose bind method is not one of the two patched above.
 	///
 	/// The cell type is now referenced directly from the interop assembly. The previous version
-	/// looked for it by walking assemblies for one whose name contained "Il2Cpp" — a MelonLoader
+	/// looked for it by walking assemblies for one whose name contained "Il2Cpp" - a MelonLoader
 	/// naming convention. BepInEx interop assemblies are unprefixed (VampireSurvivors.Runtime),
 	/// so that search never matched and this scan returned before touching a single cell, which
 	/// is why no weapon selector ever showed tooltips.
@@ -2657,7 +2657,7 @@ public class ItemTooltipsMod
 			}
 			return;
 		}
-		// Only enter controller mode on real gamepad/keyboard nav input —
+		// Only enter controller mode on real gamepad/keyboard nav input -
 		// NOT merely because Level Up auto-selected the first card (that was
 		// causing unsolicited tooltips with a stationary mouse).
 		EventSystem current = EventSystem.current;
@@ -2706,7 +2706,7 @@ public class ItemTooltipsMod
 		try { ExitInteractiveMode(); } catch { }
 	}
 
-	/// <summary>Called when Level Up UI opens — clear popups so nothing shows until real hover.</summary>
+	/// <summary>Called when Level Up UI opens - clear popups so nothing shows until real hover.</summary>
 	public static void OnLevelUpOpened()
 	{
 		try
@@ -3032,7 +3032,7 @@ public class ItemTooltipsMod
 	}
 
 	/// <summary>
-	/// Map a GameObject to a weapon for keyboard/controller dwell only — no EventTrigger, so
+	/// Map a GameObject to a weapon for keyboard/controller dwell only - no EventTrigger, so
 	/// the object's own button wiring is left untouched.
 	///
 	/// Needed where the pointer hover target is a *child* of the object the EventSystem
@@ -3900,7 +3900,7 @@ public class ItemTooltipsMod
 			else if (characterIcons.Count > 0 && haveType)
 			{
 				// Character selection is a menu, not paused gameplay, so the modal path never
-				// applies here and this used to fall through to HideAllPopups — the click
+				// applies here and this used to fall through to HideAllPopups - the click
 				// landed but the nested popup was destroyed on the way in. Route to the same
 				// detail popup collections uses, anchored to the clicked icon so it parents to
 				// the character-select canvas rather than the Collections view, and cascaded
@@ -4885,7 +4885,7 @@ public class ItemTooltipsMod
 		var rows = GameData.BuildEvoRowsFor(weaponType);
 		if (rows == null || rows.Count == 0)
 		{
-			// No forward recipes — show reverse "evolved from" if this is an evolution itself
+			// No forward recipes - show reverse "evolved from" if this is an evolution itself
 			yOffset = AddEvolvedFromSection(parent, font, weaponType, yOffset, maxWidth);
 			return yOffset;
 		}
@@ -6385,7 +6385,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			EventTrigger val = go.AddComponent<EventTrigger>();
 			ArcanaType captured = arcanaType;
 			EventTrigger.Entry val2 = new EventTrigger.Entry();
-			// PointerClick — nested popup (same as weapon icons)
+			// PointerClick - nested popup (same as weapon icons)
 			val2.eventID = EventTriggerType.PointerClick;
 			((UnityEvent<BaseEventData>)(object)val2.callback).AddListener((UnityEngine.Events.UnityAction<UnityEngine.EventSystems.BaseEventData>)(System.Action<UnityEngine.EventSystems.BaseEventData>)(delegate
 			{
@@ -6426,7 +6426,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// <summary>
 	/// Weapon selector and merchant cells are much larger than the icons on other screens, so
 	/// the default up-and-left popup origin lands on top of the artwork. Nudge it down and
-	/// right on those screens only — every other screen's placement is already tuned.
+	/// right on those screens only - every other screen's placement is already tuned.
 	/// </summary>
 	private const float LargeCellPopupOffsetX = 36f;
 
@@ -6805,7 +6805,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			}
 			if (!ScreenPointHitsUi(component, mouse, hitPad, out float screenArea, out float distSq))
 				continue;
-			// Huge panels (full evo row / list) — only use if nothing better
+			// Huge panels (full evo row / list) - only use if nothing better
 			bool huge = screenArea > maxRowArea;
 			// Tiny badges / 1px plates
 			if (screenArea < 8f) continue;
@@ -6861,7 +6861,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 		else
 		{
-			// Left all icons — clear pending; hide popup only after leaving the popup itself
+			// Left all icons - clear pending; hide popup only after leaving the popup itself
 			pendingCollectionHoverId = -1;
 		}
 	}
@@ -6954,7 +6954,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// <summary>True while building a Collections-menu docked tooltip (enables Collections-only flavor copy).</summary>
 	private static bool _collectionMenuTooltipContext;
 
-	/// <param name="anchor">Hovered collection cell — optional; docked panel ignores mouse follow.</param>
+	/// <param name="anchor">Hovered collection cell - optional; docked panel ignores mouse follow.</param>
 	/// <param name="cascade">
 	/// Stack over the popup it was opened from instead of docking to the right margin. Used on
 	/// Character Selection, where the tooltip is anchored next to the card and a docked panel
@@ -7075,7 +7075,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		else
 			// Fixed dock outside the main Collections grid (does not follow mouse)
 			PositionCollectionPopupDocked(collectionPopup);
-		// Keep clickable — user moves to the right panel to click formula icons
+		// Keep clickable - user moves to the right panel to click formula icons
 		EnableCollectionPanelInteraction(collectionPopup);
 		try { collectionPopup.SetActive(true); } catch { }
 		}
@@ -7135,7 +7135,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 	/// <summary>
 	/// Park the Collections tooltip in free space outside the center grid (~60% middle).
-	/// Default: right margin of App Safe Area, upper-middle — stable, always visible, no mouse tracking.
+	/// Default: right margin of App Safe Area, upper-middle - stable, always visible, no mouse tracking.
 	/// </summary>
 	private static void PositionCollectionPopupDocked(GameObject popup)
 	{
@@ -7179,7 +7179,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			popupRt.localScale = Vector3.one;
 			popupRt.localRotation = Quaternion.identity;
 
-			// Anchor to right edge of Safe Area, top-ish — clears the center collection grid
+			// Anchor to right edge of Safe Area, top-ish - clears the center collection grid
 			// pivot top-left of tooltip so it grows left/down into the right margin
 			popupRt.anchorMin = new Vector2(1f, 0.5f);
 			popupRt.anchorMax = new Vector2(1f, 0.5f);
@@ -7210,7 +7210,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			}
 			catch { }
 
-			// Do NOT disable raycasts here — docked panel must stay clickable
+			// Do NOT disable raycasts here - docked panel must stay clickable
 		}
 		catch (Exception ex)
 		{
@@ -7345,7 +7345,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		if (!IsUnderGameUI(go.transform))
 		{
 			collectionIcons[instanceId] = (go, type, null, null);
-			// App UI (Collections / Grimoire): EventTriggers — rect-scan alone is unreliable on App canvas
+			// App UI (Collections / Grimoire): EventTriggers - rect-scan alone is unreliable on App canvas
 			AttachCollectionMenuHover(go, type, null, null);
 			return;
 		}
@@ -7431,7 +7431,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 	/// <summary>
 	/// Pointer enter/exit on Collections / Grimoire / menu cells (App canvas).
-	/// Does not require IsGamePaused() — main menu is never "paused".
+	/// Does not require IsGamePaused() - main menu is never "paused".
 	/// </summary>
 	private static void AttachCollectionMenuHover(GameObject go, WeaponType? weapon, ItemType? item, object arcana)
 	{
@@ -8224,8 +8224,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 		Vector2 mouse = Input.mousePosition;
 
-		// The character tooltip is interactive — its evolution icons open nested popups on
-		// click — so the pointer has to be able to rest on it. Hold everything while it does.
+		// The character tooltip is interactive - its evolution icons open nested popups on
+		// click - so the pointer has to be able to rest on it. Hold everything while it does.
 		if (currentCharacterHoverId != -1 && IsPointerOverCharacterTooltip())
 		{
 			characterTooltipAwaySince = -1f;
@@ -8275,7 +8275,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				// Deliberately does not hide the current popup. Reaching the popup means
 				// crossing neighbouring cards, and hiding on first touch destroyed it before
 				// its icons could ever be clicked. The swap happens below, once the new card
-				// has actually been dwelt on — by which point the pointer either reached the
+				// has actually been dwelt on - by which point the pointer either reached the
 				// popup (handled above) or genuinely moved to another character.
 			}
 			else if (Time.unscaledTime - characterHoverStartTime >= Plugin.TooltipHoverDelay)
@@ -8470,7 +8470,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		catch { }
 		y -= titleH + gap;
 
-		// Flavor (final scrub — never paint raw I2 keys)
+		// Flavor (final scrub - never paint raw I2 keys)
 		string flavor = data.Flavor;
 		if (GameData.LooksLikeLocKey(flavor))
 			flavor = GameData.LocalizeDisplayText(flavor);
@@ -8728,9 +8728,9 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// <summary>
 	/// Advance past a section header by its **rendered** height instead of a fixed step.
 	///
-	/// Headers were given a fixed rect and the caller stepped a fixed 22–32px. Labels like
+	/// Headers were given a fixed rect and the caller stepped a fixed 22-32px. Labels like
 	/// "Evolutions (2): (click icons for details)" wrap to two lines in a narrow tooltip, and
-	/// TMP draws the overflow outside its rect — so the wrapped line landed on top of the icon
+	/// TMP draws the overflow outside its rect - so the wrapped line landed on top of the icon
 	/// row below. Sizing to the real width also stops stretched-anchor headers from measuring
 	/// far wider than the tooltip.
 	/// </summary>
@@ -8744,7 +8744,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 		// Pin to the top-left corner so sizeDelta.x IS the width. Some headers were left with
 		// stretched anchors (anchorMax.x = 1), where the real width is parentWidth +
-		// sizeDelta.x — and the parent has no width yet at build time, so they measured far too
+		// sizeDelta.x - and the parent has no width yet at build time, so they measured far too
 		// wide and ran off the edge instead of wrapping. Anchors are reset here rather than at
 		// each call site so every header measures against the same geometry.
 		RectTransform rt = header.GetComponent<RectTransform>();
@@ -8815,7 +8815,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	}
 
 	/// <summary>
-	/// Make a popup click-through so whatever it covers stays selectable — except for the
+	/// Make a popup click-through so whatever it covers stays selectable - except for the
 	/// icons that are themselves interactive.
 	///
 	/// A blanket pass over every Graphic also silences the evolution icons wired for click,
@@ -8962,7 +8962,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				|| RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, null)
 				|| RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, Camera.main);
 
-			// Map icons are tiny — also accept within a screen-space radius of the icon center
+			// Map icons are tiny - also accept within a screen-space radius of the icon center
 			if (!hit)
 			{
 				Vector3[] corners = new Vector3[4];
@@ -9017,7 +9017,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			pendingMapHoverId = -1;
 			if (hitId == -1 && currentMapHoverId != -1)
 			{
-				// keep popup until mouse leaves popup area — simple: hide when no icon
+				// keep popup until mouse leaves popup area - simple: hide when no icon
 				// Don't immediately hide if over the popup itself
 				if ((Object)(object)mapPopup != (Object)null)
 				{
@@ -9084,7 +9084,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 
 		// Custom merchants (Xanthia, adventure merchants) list what they sell. Try the sprite
-		// name first — that is what identifies the merchant; the item type is the generic
+		// name first - that is what identifies the merchant; the item type is the generic
 		// MERCHANT/CUSTOM_MERCHANT for all of them.
 		GameData.MerchantWares wares = null;
 		try
@@ -9430,7 +9430,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// <summary>
 	/// Show a popup docked to a fixed spot in the App Safe Area rather than placed next to the
 	/// row it describes. List pages (Secrets, Bestiary, Achievements, Power-ups) are all
-	/// ScrollRects, and a popup parented inside one gets clipped by the mask — the same trap
+	/// ScrollRects, and a popup parented inside one gets clipped by the mask - the same trap
 	/// the Collections tooltip fell into.
 	/// </summary>
 	public static void ShowDockedPopup(string title, string description, Sprite sprite,
@@ -9490,7 +9490,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// Is a screen point inside every mask that clips this object?
 	///
 	/// Rect-contains hover fallbacks test a cell's own rect, which stays valid after the cell
-	/// has been scrolled out of its viewport — so hovering empty space above or below a list
+	/// has been scrolled out of its viewport - so hovering empty space above or below a list
 	/// matches a cell that is not on screen. An EventSystem raycast is clipped by masks
 	/// automatically; these fallbacks are not, so they have to ask.
 	///
@@ -10728,7 +10728,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 	/// <summary>
 	/// Typed: all arcanas whose weapons list includes this weapon (from DataManager.AllArcanas).
-	/// No longer limited to "active run" arcanas — data-driven so collection + pause work reliably.
+	/// No longer limited to "active run" arcanas - data-driven so collection + pause work reliably.
 	/// </summary>
 	private static List<ArcanaInfo> GetActiveArcanasForWeapon(WeaponType weaponType)
 	{

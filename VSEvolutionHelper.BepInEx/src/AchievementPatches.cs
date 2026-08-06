@@ -51,7 +51,7 @@ public static class AchievementPatches
 	}
 
 	/// <summary>
-	/// Instance-only postfix — the achievement is read back off the row rather than taken from
+	/// Instance-only postfix - the achievement is read back off the row rather than taken from
 	/// the patched call's arguments, matching the other IL2CPP postfixes here. There are two
 	/// SetData overloads (normal and adventure) and this serves both.
 	/// </summary>

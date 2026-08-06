@@ -19,8 +19,8 @@ namespace VSItemTooltips;
 /// (VampireSurvivors.Runtime), so the search never matched, the type stayed null, and the
 /// scan returned before touching a cell. No selector ever got tooltips.
 ///
-/// Two cells bind through *different* methods — SetData for the ordinary selector and
-/// SetPenshinData for the Penshin Fatcha tuna list — so both are patched. Binding per cell
+/// Two cells bind through *different* methods - SetData for the ordinary selector and
+/// SetPenshinData for the Penshin Fatcha tuna list - so both are patched. Binding per cell
 /// also removes the need for the scan's one-shot flag, which was only reset on unpause and
 /// so never re-armed for a selector opened mid-run.
 /// </summary>
@@ -68,7 +68,7 @@ public static class WeaponSelectionPatches
 	}
 
 	/// <summary>
-	/// Instance-only postfix — the weapon is read back off the cell rather than taken from the
+	/// Instance-only postfix - the weapon is read back off the cell rather than taken from the
 	/// patched call's arguments, which is how the other IL2CPP postfixes here avoid Harmony
 	/// argument-marshaling crashes (see GrimoirePatches).
 	/// </summary>
@@ -87,7 +87,7 @@ public static class WeaponSelectionPatches
 		{
 			if ((Object)(object)item == (Object)null) return;
 
-			// Do this before the weapon check — the view root is worth having even for a cell
+			// Do this before the weapon check - the view root is worth having even for a cell
 			// we end up skipping, since the popup layer depends on it.
 			ItemTooltipsMod.AdoptWeaponSelectionView(((Component)item).transform);
 
@@ -110,7 +110,7 @@ public static class WeaponSelectionPatches
 			ItemTooltipsMod.RegisterWeaponUI(((Object)target).GetInstanceID(), target, wt);
 
 			// Keyboard/pad select the cell root, and dwell only searches upward from the
-			// selection — so a hover registered on the frame child alone is unreachable
+			// selection - so a hover registered on the frame child alone is unreachable
 			// without a mouse. Map the root too, without touching its button wiring.
 			GameObject root = ((Component)item).gameObject;
 			if ((Object)(object)root != (Object)(object)target)
@@ -127,7 +127,7 @@ public static class WeaponSelectionPatches
 	/// <summary>
 	/// Prefer a child graphic (weapon frame, then icon) over the cell root. The root carries the
 	/// game's own Button/selection wiring, and registering a hover replaces any EventTrigger on
-	/// the target — clobbering the root is how a similar patch broke character select in 1.9.1.
+	/// the target - clobbering the root is how a similar patch broke character select in 1.9.1.
 	/// The root is only used when it has no EventTrigger of its own to destroy.
 	/// </summary>
 	private static GameObject HoverTarget(WeaponSelectionItemUI item)
