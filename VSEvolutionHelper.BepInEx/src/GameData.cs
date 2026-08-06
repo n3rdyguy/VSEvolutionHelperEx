@@ -3816,6 +3816,117 @@ public static class GameData
         return result;
     }
 
+    /// <summary>
+    /// What an arcana touches, as tooltip rows: every weapon it names, then every passive.
+    ///
+    /// The same two lookups the Collections arcana popup already runs, shaped for the docked
+    /// panel. An arcana that names nothing - the several that only change a global rule - gets
+    /// no rows at all, and its description carries the tooltip on its own.
+    /// </summary>
+    public static System.Collections.Generic.List<IconRow> GetArcanaAffectRows(ArcanaType type)
+    {
+        var rows = new System.Collections.Generic.List<IconRow>();
+        try
+        {
+            var weapons = GetWeaponsAffectedByArcana(type);
+            var items = GetItemsAffectedByArcana(type);
+            if ((weapons == null || weapons.Count == 0) && (items == null || items.Count == 0))
+                return rows;
+
+            if (weapons != null)
+            {
+                foreach (WeaponType w in weapons)
+                {
+                    string n = GetWeaponName(w);
+                    rows.Add(new IconRow(GetSprite(w), string.IsNullOrEmpty(n) ? HumanizeEnum(w.ToString()) : n));
+                }
+            }
+            if (items != null)
+            {
+                foreach (ItemType it in items)
+                {
+                    string n = GetItemName(it);
+                    rows.Add(new IconRow(GetItemSprite(it), string.IsNullOrEmpty(n) ? HumanizeEnum(it.ToString()) : n));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] GetArcanaAffectRows: " + ex.Message);
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// A music track's composer and where it came from, plus how it is unlocked.
+    ///
+    /// The page itself shows a title and nothing else. <c>MusicData</c> carries the author and
+    /// source the game credits nowhere in the UI, and the three unlock fields answer the only
+    /// question a greyed-out row provokes. Those three are nullable enums, so each is checked
+    /// for a value rather than compared against a sentinel.
+    /// </summary>
+    public static System.Collections.Generic.List<IconRow> GetMusicRows(
+        VampireSurvivors.Data.MusicData data, out string description)
+    {
+        description = null;
+        var rows = new System.Collections.Generic.List<IconRow>();
+        if (data == null) return rows;
+
+        try
+        {
+            var lines = new System.Collections.Generic.List<string>();
+            string author = null, source = null;
+            try { author = data.author; } catch { }
+            try { source = data.source; } catch { }
+            if (!string.IsNullOrWhiteSpace(author) && !LooksLikeLocKey(author))
+                lines.Add("Composed by " + author.Trim());
+            if (!string.IsNullOrWhiteSpace(source) && !LooksLikeLocKey(source))
+                lines.Add("From " + source.Trim());
+            if (lines.Count > 0) description = string.Join("\n", lines.ToArray());
+
+            bool unlocked = true;
+            try { unlocked = data.isUnlocked; } catch { }
+
+            try
+            {
+                var stage = data.unlockedByStage;
+                if (stage.HasValue && !IsVoidValue(stage.Value.ToString()))
+                    rows.Add(new IconRow(null, DescribeStage(stage.Value.ToString()) + " (stage)"));
+            }
+            catch { }
+            try
+            {
+                var chr = data.unlockedByCharacter;
+                if (chr.HasValue && !IsVoidValue(chr.Value.ToString()))
+                {
+                    string id = chr.Value.ToString();
+                    rows.Add(new IconRow(GetCharacterPortrait(id), DescribeRewardCharacter(id)));
+                }
+            }
+            catch { }
+            try
+            {
+                var item = data.unlockedByItem;
+                if (item.HasValue && !IsVoidValue(item.Value.ToString()))
+                {
+                    ItemType it = item.Value;
+                    string n = GetItemName(it);
+                    rows.Add(new IconRow(GetItemSprite(it), string.IsNullOrEmpty(n) ? HumanizeEnum(it.ToString()) : n));
+                }
+            }
+            catch { }
+
+            // A track with no unlock field and no credits would otherwise show an empty panel.
+            if (rows.Count == 0 && string.IsNullOrEmpty(description) && !unlocked)
+                description = "Locked - keep playing to unlock.";
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] GetMusicRows: " + ex.Message);
+        }
+        return rows;
+    }
+
     private static ArcanaDisplayInfo ToArcanaDisplay(ArcanaType type)
     {
         return new ArcanaDisplayInfo

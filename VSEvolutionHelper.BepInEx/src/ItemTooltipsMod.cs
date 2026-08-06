@@ -405,6 +405,12 @@ public class ItemTooltipsMod
 			try {
 				PowerUpPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("PowerUp patches: " + ex.Message); }
+			try {
+				ArcanaCardPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("ArcanaCard patches: " + ex.Message); }
+			try {
+				MusicPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("Music patches: " + ex.Message); }
 			Plugin.Log.LogInfo("Patches applied successfully");
 		}
 		catch (Exception arg)
@@ -9509,11 +9515,134 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	public static readonly Vector2 SidePanelPivot = new Vector2(0.5f, 1f);
 
 	/// <summary>
+	/// The Music page's free space, which sits higher and further right than the list pages':
+	/// the track list runs down the left and the panel that would normally occupy the middle is
+	/// not there.
+	///
+	/// Pinned by its top left corner rather than its top centre, so a long track name grows the
+	/// panel rightwards and downwards from a fixed corner instead of spreading both ways from a
+	/// centre line. Measured from the screen box 1917,154 - 2437,394 at 2560x1600: left edge
+	/// 0.749 -> (0.749 - 0.5) * 1920 = 478, top edge 0.097 -> (0.5 - 0.097) * 1200 = 484.
+	/// </summary>
+	public const float MusicPanelX = 478f;
+	public const float MusicPanelTopY = 484f;
+	public static readonly Vector2 MusicPanelPivot = new Vector2(0f, 1f);
+
+	/// <summary>
 	/// Show a popup docked to a fixed spot in the App Safe Area rather than placed next to the
 	/// row it describes. List pages (Secrets, Bestiary, Achievements, Power-ups) are all
 	/// ScrollRects, and a popup parented inside one gets clipped by the mask - the same trap
 	/// the Collections tooltip fell into.
 	/// </summary>
+	/// <summary>
+	/// Where a docked popup hangs. The menu Safe Area is the usual answer, but it does not exist
+	/// during a run - the arcana cards dealt mid-run live under GAME UI instead, and a popup
+	/// parented to a menu canvas that is not in the scene is simply never drawn.
+	///
+	/// The menu canvas is preferred when both are present: it is the one on top on a page that
+	/// happens to be open over a paused run.
+	/// </summary>
+	private static GameObject FindDockParent()
+	{
+		GameObject app = GameObject.Find("UI/Canvas - App/Safe Area");
+		if ((Object)(object)app != (Object)null && app.activeInHierarchy) return app;
+		GameObject game = GameObject.Find("GAME UI/Canvas - Game UI/Safe Area");
+		if ((Object)(object)game != (Object)null && game.activeInHierarchy) return game;
+		return app ?? game;
+	}
+
+	/// <summary>
+	/// Draw the popup over the screen dimmer.
+	///
+	/// Several pages darken everything behind their panel with a full-screen overlay, and being
+	/// the last sibling is not enough to clear it: the dimmer is its own Canvas, and a Canvas
+	/// sorts against other Canvases by sorting order, not by sibling index. Giving the popup its
+	/// own Canvas with <c>overrideSorting</c> puts it in that same contest.
+	///
+	/// The layer has to be inherited rather than assumed. A fresh Canvas starts on the Default
+	/// sorting layer, and sorting layer beats sorting order outright - so an absolute order of
+	/// 30000 on Default still drew underneath every canvas on the game's own UI layer, which
+	/// made the tooltip vanish completely rather than merely stay dimmed. Order is likewise
+	/// relative to the canvas we are sitting inside instead of a fixed large number.
+	///
+	/// A GraphicRaycaster comes with it. A child Canvas does not inherit the parent's, and
+	/// without one the popup's own graphics stop taking pointer events - which is how a tooltip
+	/// that a row is still hovering would flicker off the moment it appeared.
+	/// </summary>
+	private static void LiftAboveDimmer(GameObject go)
+	{
+		try
+		{
+			Canvas parent = null;
+			try
+			{
+				Transform p = go.transform.parent;
+				if ((Object)(object)p != (Object)null)
+					parent = ((Component)p).GetComponentInParent<Canvas>();
+			}
+			catch { }
+			// Nothing to sort against, so nothing to fix - and overriding blind is what broke it.
+			if ((Object)(object)parent == (Object)null) return;
+
+			Canvas c = go.GetComponent<Canvas>();
+			if ((Object)(object)c == (Object)null) c = go.AddComponent<Canvas>();
+			c.overrideSorting = true;
+			c.sortingLayerID = parent.sortingLayerID;
+			c.sortingOrder = TopOrderOnLayer(parent, go) + DockedPopupSortingBoost;
+			if ((Object)(object)go.GetComponent<UnityEngine.UI.GraphicRaycaster>() == (Object)null)
+				go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+			if (Plugin.DebugVerbose)
+				Plugin.Dbg($"[Tooltip] sorting: layer={c.sortingLayerName} order={c.sortingOrder} "
+					+ $"(parent '{((Object)parent).name}' layer={parent.sortingLayerName} order={parent.sortingOrder})");
+		}
+		catch (Exception ex)
+		{
+			Plugin.Dbg("[Tooltip] sorting: " + ex.Message);
+		}
+	}
+
+	/// <summary>
+	/// The highest sorting order currently drawn on this layer.
+	///
+	/// Sitting a fixed step above the parent canvas is not enough: the dimmer is not a child of
+	/// the canvas it darkens, it is its own root canvas at whatever order the page gave it, and
+	/// on the Music page that was above parent+100. Asking the scene what is actually there
+	/// removes the guess - the answer moves with the page rather than with a constant here.
+	///
+	/// Only canvases on the same sorting layer count; ones on another layer are settled by layer
+	/// and their orders are not comparable. The popup itself is skipped, so a re-show does not
+	/// ratchet its own order upward every hover.
+	/// </summary>
+	private static int TopOrderOnLayer(Canvas parent, GameObject self)
+	{
+		int top = parent.sortingOrder;
+		try
+		{
+			Canvas[] all = Object.FindObjectsOfType<Canvas>();
+			if (all == null) return top;
+			foreach (Canvas c in all)
+			{
+				if ((Object)(object)c == (Object)null) continue;
+				if (((Component)c).gameObject == self) continue;
+				if (!((Component)c).gameObject.activeInHierarchy) continue;
+				if (c.sortingLayerID != parent.sortingLayerID) continue;
+				if (c.sortingOrder > top) top = c.sortingOrder;
+			}
+		}
+		catch (Exception ex)
+		{
+			Plugin.Dbg("[Tooltip] top order: " + ex.Message);
+		}
+		return top;
+	}
+
+	/// <summary>
+	/// One clear step above everything already drawn, rather than a large absolute number that
+	/// would also clear things the game deliberately keeps on top.
+	/// </summary>
+	private const int DockedPopupSortingBoost = 10;
+
 	public static void ShowDockedPopup(string title, string description, Sprite sprite,
 		List<GameData.IconRow> rows, string sectionHeader, string logTag = "Tooltip",
 		Vector2? offset = null, Vector2? pivot = null)
@@ -9522,7 +9651,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		if ((rows == null || rows.Count == 0) && string.IsNullOrEmpty(description)) return;
 		try
 		{
-			GameObject view = GameObject.Find("UI/Canvas - App/Safe Area");
+			GameObject view = FindDockParent();
 			if ((Object)(object)view == (Object)null) return;
 
 			dockedPopup = CreateSimpleMapPopup(view.transform, title, description, sprite, rows, sectionHeader);
@@ -9531,6 +9660,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			RectTransform rt = dockedPopup.GetComponent<RectTransform>();
 			if ((Object)(object)rt == (Object)null) return;
 			dockedPopup.transform.SetAsLastSibling();
+			LiftAboveDimmer(dockedPopup);
 			rt.localScale = Vector3.one;
 			// Anchor to the centre and place with an explicit offset rather than an anchor
 			// fraction: changing anchorMin/anchorMax does not recompute the transform in the

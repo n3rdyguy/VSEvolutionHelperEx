@@ -36,6 +36,9 @@ public class Plugin : BasePlugin
     internal static bool BestiarySpoilers;
     internal static bool AchievementTooltipsEnabled;
     internal static bool PowerUpTooltipsEnabled;
+    internal static bool ArcanaCardTooltipsEnabled;
+    internal static bool MusicTooltipsEnabled;
+    internal static bool MusicSpoilers;
 
     private ConfigEntry<bool> _debugVerbose;
     private ConfigEntry<float> _tooltipHoverDelay;
@@ -54,6 +57,9 @@ public class Plugin : BasePlugin
     private ConfigEntry<bool> _bestiarySpoilers;
     private ConfigEntry<bool> _achievementTooltipsEnabled;
     private ConfigEntry<bool> _powerUpTooltipsEnabled;
+    private ConfigEntry<bool> _arcanaCardTooltipsEnabled;
+    private ConfigEntry<bool> _musicTooltipsEnabled;
+    private ConfigEntry<bool> _musicSpoilers;
 
     public override void Load()
     {
@@ -162,11 +168,29 @@ public class Plugin : BasePlugin
             true,
             "Show the full price ladder and remaining cost when hovering upgrades on the Power Up page.");
 
+        _arcanaCardTooltipsEnabled = Config.Bind(
+            "Features",
+            "ArcanaCardTooltips",
+            true,
+            "Show what an arcana affects when hovering a card, including the pick offered mid-run.");
+
+        _musicTooltipsEnabled = Config.Bind(
+            "Features",
+            "MusicTooltips",
+            true,
+            "Show the composer, source and unlock condition when hovering tracks on the Music page.");
+
+        _musicSpoilers = Config.Bind(
+            "Features",
+            "MusicSpoilers",
+            true,
+            "Also name tracks you have NOT unlocked yet, which the page itself masks with dashes. Set false to keep the mask.");
+
         ApplyConfigValues();
 
         Log.LogInfo($"{PluginName} {PluginVersion} loading (BepInEx port)...");
         Log.LogInfo($"Debug.VerboseLogging={DebugVerbose} Tooltips.HoverDelay={TooltipHoverDelay:0.##}s LevelUpHoverDelay={LevelUpHoverDelay:0.##}s");
-        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled} Character={CharacterTooltipsEnabled} Adventure={AdventureTooltipsEnabled} WeaponSelect={WeaponSelectionTooltipsEnabled} Secrets={SecretTooltipsEnabled} Bestiary={BestiaryTooltipsEnabled} Achievements={AchievementTooltipsEnabled} PowerUps={PowerUpTooltipsEnabled}");
+        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled} Character={CharacterTooltipsEnabled} Adventure={AdventureTooltipsEnabled} WeaponSelect={WeaponSelectionTooltipsEnabled} Secrets={SecretTooltipsEnabled} Bestiary={BestiaryTooltipsEnabled} Achievements={AchievementTooltipsEnabled} PowerUps={PowerUpTooltipsEnabled} ArcanaCards={ArcanaCardTooltipsEnabled} Music={MusicTooltipsEnabled}");
 
         ClassInjector.RegisterTypeInIl2Cpp<PluginBehaviour>();
         _behaviour = AddComponent<PluginBehaviour>();
@@ -194,6 +218,9 @@ public class Plugin : BasePlugin
         BestiarySpoilers = _bestiarySpoilers.Value;
         AchievementTooltipsEnabled = _achievementTooltipsEnabled.Value;
         PowerUpTooltipsEnabled = _powerUpTooltipsEnabled.Value;
+        ArcanaCardTooltipsEnabled = _arcanaCardTooltipsEnabled.Value;
+        MusicTooltipsEnabled = _musicTooltipsEnabled.Value;
+        MusicSpoilers = _musicSpoilers.Value;
     }
 
     internal static void Dbg(string message)
