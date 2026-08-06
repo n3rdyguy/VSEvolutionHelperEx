@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>vsevolutionhelper-installer</AssemblyName>
+    <RootNamespace>VSEvolutionHelper.Installer</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- One file, no runtime to install, no console window quirks. -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- 35 MB untrimmed vs 11 MB trimmed, for four platforms. Nothing here uses reflection
+         over types the trimmer cannot see: Regex, Process and ZipFile are all trim-safe. -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <DebugType>none</DebugType>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+</Project>

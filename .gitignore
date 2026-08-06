@@ -29,3 +29,7 @@ Desktop.ini
 # Private working material — not shipped in the public repo
 scripts/
 docs/
+
+# Installer publish output (binaries are attached to releases, not committed)
+installer/dist/
+installer/dist-trim/
