@@ -1,6 +1,6 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.11.0** — Evolution, arcana, grimoire, collection, map, stage, character, adventure, and secrets tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.11.0** - Evolution, arcana, grimoire, collection, map, stage, character, adventure, and secrets tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
@@ -43,10 +43,10 @@ Please support the original authors. This port reuses their design with typed Il
 | **Adventure selection** | Hover an adventure → cast / weapon summary (config `AdventureTooltips`) |
 | **Weapon selectors** | Hover a weapon on a selector screen (Penshin Fatcha tuna forms, Arma Dio) → tooltip (config `WeaponSelectionTooltips`) |
 | **Collection / Grimoire** | Tooltips on evolution formula icons and collection grid items/arcanas. Collections tooltips **dock to the right margin** (always visible, never clipped by the grid) and stay **clickable** for nested formula detail; locked cells show an **Unlock:** hint |
-| **Stage selection — relics** | Hover **Relics in stage** icons for name + description (dynamic sizing for long names) |
-| **Stage selection — Music \| Guide** | Tabs above the song panel: **Music** keeps the track list; **Guide** reuses that space for stage help |
+| **Stage selection - relics** | Hover **Relics in stage** icons for name + description (dynamic sizing for long names) |
+| **Stage selection - Music \| Guide** | Tabs above the song panel: **Music** keeps the track list; **Guide** reuses that space for stage help |
 | **Secrets** | Hover a secret → what it unlocks (character portrait, weapons, relic, arcana, power-up, skins, stage, gold). Renamed characters show both names. Turn off `SecretSpoilers` to reveal only secrets you have already found |
-| **Bestiary** | Hover an enemy → HP, damage, speed, XP, knockback, plus **resistances**, skills and the stages it appears in — none of which the page itself shows. Stats read as ranges where one entry covers a family of enemies. Turn off `BestiarySpoilers` for killed enemies only |
+| **Bestiary** | Hover an enemy → HP, damage, speed, XP, knockback, plus **resistances**, skills and the stages it appears in - none of which the page itself shows. Stats read as ranges where one entry covers a family of enemies. Turn off `BestiarySpoilers` for killed enemies only |
 
 ### Stage Guide (right column)
 
@@ -55,12 +55,12 @@ Shown when **Guide** is selected on stage select:
 | Section | Content |
 |---------|---------|
 | **Title** | Localized stage name |
-| **Guide** | Curated short notes when available (`StageExtraTips` — main path + many DLC/adventure stages) |
+| **Guide** | Curated short notes when available (`StageExtraTips` - main path + many DLC/adventure stages) |
 | **Tips / Hyper tips** | Game-localized stage tips when present |
 | **Features** | Things the bottom stats bar usually does **not** repeat: merchant banned, clock speed-up banned, Survarots blocked, racing, day/night, **coffin unlock** character, arcana/timed treasure, boss & event counts |
 | **Relics** | Interactive relic rows with hover tooltips |
 
-**Not duplicated** in Guide: Hyper unlocked, stage length multipliers, HP/Gold mods — those stay on the bottom stage stats panel.
+**Not duplicated** in Guide: Hyper unlocked, stage length multipliers, HP/Gold mods - those stay on the bottom stage stats panel.
 
 **Controller / keyboard (stage select):** LB/RB (or Q/E) switch Music|Guide; vertical axis scrolls Guide content; dwell on Guide relic icons for tooltips.
 
@@ -79,7 +79,7 @@ Shown when **Guide** is selected on stage select:
 
 Download **`vsevolutionhelper-installer-win-x64.exe`** from the
 [latest release](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/latest) and run it.
-It finds your Steam copy of the game, downloads BepInEx and this mod, and installs both — then
+It finds your Steam copy of the game, downloads BepInEx and this mod, and installs both - then
 offers install / update / uninstall from a menu.
 
 Prefer a script you can read first? `vsevolutionhelper-installer-scripts.zip` has `install.ps1`
@@ -89,13 +89,13 @@ Everything below is the manual route, and is also what to read when something go
 
 ## Requirements
 
-- Vampire Survivors (Steam) — **1.15.x**, Unity **6000.x**
+- Vampire Survivors (Steam) - **1.15.x**, Unity **6000.x**
 - **[BepInEx 6 bleeding-edge (BE)](https://builds.bepinex.dev/projects/bepinex_be)**, **Unity.IL2CPP**, **win-x64**
 - **Do not** run MelonLoader and BepInEx at the same time
 
 ### Which BepInEx build, exactly
 
-This is the single most common thing to get wrong, so be precise — three different
+This is the single most common thing to get wrong, so be precise - three different
 distinctions all matter, and picking the wrong one on any of them means the game launches with
 no mods loaded (or does not launch at all).
 
@@ -105,7 +105,7 @@ no mods loaded (or does not launch at all).
 | **Unity.IL2CPP** | Unity.Mono | Vampire Survivors is an IL2CPP build; the Mono package silently does nothing |
 | **win-x64** | win-x86 | The game is 64-bit |
 
-BepInEx 6 has **no stable release** — bleeding-edge *is* the correct channel here, not a
+BepInEx 6 has **no stable release** - bleeding-edge *is* the correct channel here, not a
 risky choice. Download from the official CI:
 **[builds.bepinex.dev/projects/bepinex_be](https://builds.bepinex.dev/projects/bepinex_be)**
 
@@ -131,7 +131,7 @@ Newer BE builds generally work too. If a very new BE build misbehaves, dropping 
 
 1. **Find the game folder.** In Steam: right-click Vampire Survivors →
    *Manage* → *Browse local files*. It contains `VampireSurvivors.exe`.
-2. **Extract the BepInEx zip directly into that folder** — not into a subfolder. Afterwards
+2. **Extract the BepInEx zip directly into that folder** - not into a subfolder. Afterwards
    the game folder must look like this, with `winhttp.dll` sitting *next to* the `.exe`:
 
    ```
@@ -146,7 +146,7 @@ Newer BE builds generally work too. If a very new BE build misbehaves, dropping 
    ```
 
    If you end up with `<Vampire Survivors>/BepInEx-Unity.IL2CPP-win-x64…/`, you extracted one
-   level too deep — move the contents up.
+   level too deep - move the contents up.
 
 3. **Launch the game once, wait for the main menu, then quit.** The first run generates the
    IL2CPP interop assemblies, which takes noticeably longer than a normal start (a minute or
@@ -168,7 +168,7 @@ Newer BE builds generally work too. If a very new BE build misbehaves, dropping 
    [Info   :   BepInEx] Running under Unity 6000.0.62f1
    ```
 
-   No `LogOutput.log` at all means the loader never started — re-check step 2.
+   No `LogOutput.log` at all means the loader never started - re-check step 2.
 
 5. **If you used MelonLoader before**, it must not load alongside BepInEx. Rename its loader so
    Windows ignores it (renaming is reversible; deleting is not):
@@ -197,7 +197,7 @@ Newer BE builds generally work too. If a very new BE build misbehaves, dropping 
    ```
 
 4. **Upgrading?** Replace the existing `VSEvolutionHelper.dll`. Leave
-   `BepInEx/config/com.nihil.vsevolutionhelper.cfg` alone — your settings carry over, and new
+   `BepInEx/config/com.nihil.vsevolutionhelper.cfg` alone - your settings carry over, and new
    options are added on next launch.
 
 Confirm in `BepInEx/LogOutput.log`:
@@ -217,7 +217,7 @@ Chainloader startup complete
 | Log exists, but no `Loading [VS Evolution Helper …]` | Plugin not found | The DLL must be under `BepInEx/plugins/`, not `BepInEx/` |
 | Log shows a **Mono** BepInEx | Wrong package | Re-download the **Unity.IL2CPP** build |
 | Game crashes on startup | MelonLoader still active | Rename Melon's `version.dll` (see step 5) |
-| First launch seems frozen | Interop generation | Normal on first run only — wait for it to finish |
+| First launch seems frozen | Interop generation | Normal on first run only - wait for it to finish |
 | Tooltips missing after an update | Stale DLL | Close the game *before* replacing the DLL, then re-check the version in the log |
 
 When reporting a problem, the first ~10 lines of `LogOutput.log` (BepInEx version, bitness,
@@ -276,7 +276,7 @@ Every feature and every config key is described below.
 
 ## Keyboard / controller
 
-Tooltips do not need a mouse. Move the selection and hold it — the tooltip appears after
+Tooltips do not need a mouse. Move the selection and hold it - the tooltip appears after
 `Tooltips.ControllerDwellDelay` (default 0.5s).
 
 | Key | Pad | Does |
@@ -292,7 +292,7 @@ and weapon selector screens.
 
 **Moving the mouse returns to mouse mode immediately**, closing any nav mode.
 
-**Not yet keyboard-reachable:** pause **map** icons — they are hit-tested against the mouse
+**Not yet keyboard-reachable:** pause **map** icons - they are hit-tested against the mouse
 pointer and have no selection to move. Use the mouse for those.
 
 ---
@@ -315,7 +315,7 @@ Planning notes, the smoke-test checklist and save tooling are kept outside this 
 
 ## License / attribution
 
-- **Original work:** [NihilXD](https://github.com/NihilXD/VSEvolutionHelper) — VS Evolution Helper / VS Item Tooltips (MelonLoader)
+- **Original work:** [NihilXD](https://github.com/NihilXD/VSEvolutionHelper) - VS Evolution Helper / VS Item Tooltips (MelonLoader)
 - **1.14 community update:** [ashimpure on Nexus](https://www.nexusmods.com/vampiresurvivors/mods/101)
 - **This repo:** BepInEx IL2CPP port and VS 1.15 / Unity 6 fixes
 

@@ -1,19 +1,19 @@
-# VS Evolution Helper — installer
+# VS Evolution Helper - installer
 
 Installs **BepInEx** and the **mod** into a Steam copy of Vampire Survivors, finding the game
 through Steam's own library index rather than guessing at `Program Files`.
 
-Two forms, same behaviour — pick whichever you trust more:
+Two forms, same behaviour - pick whichever you trust more:
 
 | | |
 |--|--|
-| **Binary** | `vsevolutionhelper-installer` — no runtime to install, one file |
-| **Script** | `install.ps1` (Windows) / `install.sh` (macOS, Linux) — readable before you run it |
+| **Binary** | `vsevolutionhelper-installer` - no runtime to install, one file |
+| **Script** | `install.ps1` (Windows) / `install.sh` (macOS, Linux) - readable before you run it |
 
 ## Just run it
 
-Run it with no arguments — double-click the `.exe`, or right-click `install.ps1` →
-**Run with PowerShell** — and it asks what to do:
+Run it with no arguments - double-click the `.exe`, or right-click `install.ps1` →
+**Run with PowerShell** - and it asks what to do:
 
 ```
    Game: D:\SteamLibrary\steamapps\common\Vampire Survivors
@@ -30,7 +30,7 @@ Run it with no arguments — double-click the `.exe`, or right-click `install.ps
 **Nothing else needs downloading first.** BepInEx comes from the official CI and the mod from
 its GitHub release, so a bare installer in an empty folder is enough.
 
-The window is held open at the end so you can read what happened — right-click *Run with
+The window is held open at the end so you can read what happened - right-click *Run with
 PowerShell* otherwise closes it the instant the script finishes.
 
 > **If Windows refuses to run the `.ps1`** ("running scripts is disabled", or a security
@@ -87,7 +87,7 @@ PowerShell uses the same names as switches: `-Game`, `-BepInEx`, `-Mod`, `-Lates
 ```
 
 Everything to be deleted is listed and confirmed before anything is touched, because
-`BepInEx/plugins` is shared — **removing BepInEx takes any other mods with it**, and the
+`BepInEx/plugins` is shared - **removing BepInEx takes any other mods with it**, and the
 installer names them first so that is a decision rather than a surprise.
 
 By default the config file is removed too; `--keep-config` keeps your settings for a later
@@ -102,16 +102,16 @@ removing a game file to tidy up is a bad trade.
 If BepInEx is not already installed and no archive is sitting beside the installer, it is
 fetched over HTTPS from the official CI at
 [builds.bepinex.dev](https://builds.bepinex.dev/projects/bepinex_be) (~33 MB) and checked for
-being a real zip before anything is unpacked — a CI error page saved as `.zip` would otherwise
+being a real zip before anything is unpacked - a CI error page saved as `.zip` would otherwise
 fail much later and far less clearly.
 
-**A specific build is pinned by default** — `6.0.0-be.785`, the one this mod is developed and
+**A specific build is pinned by default** - `6.0.0-be.785`, the one this mod is developed and
 tested against. Bleeding-edge means exactly that, and a loader that breaks on a fresh CI build
 is much harder to diagnose than one that is merely out of date. Pass `--latest` to take the
 newest instead; if the build list cannot be read it falls back to the pinned build rather than
 failing.
 
-The URL cannot be constructed from a version number alone — the filename embeds a commit hash
+The URL cannot be constructed from a version number alone - the filename embeds a commit hash
 (`…-6.0.0-be.785+6abdba4.zip`), which is why `--latest` scrapes rather than guesses.
 
 Use `--bepinex <zip>` or `--no-download` for an offline install.
@@ -127,7 +127,7 @@ Use `--bepinex <zip>` or `--no-download` for an offline install.
 3. **Disables MelonLoader if present**, by renaming `version.dll` to `version.dll.melon.off`.
    Both loaders hooking the process is what crashes the game. Renaming is reversible; deleting
    another mod loader is not this installer's call.
-4. **Unpacks BepInEx** into the game folder — lifting the contents out if the archive wraps
+4. **Unpacks BepInEx** into the game folder - lifting the contents out if the archive wraps
    everything in a single top-level folder, which is the "extracted one level too deep" mistake.
 5. **Installs the mod** to `BepInEx/plugins/VSEvolutionHelper/`.
 6. **Checks the loader landed**, and says which one it expected: `winhttp.dll` on Windows,
@@ -135,7 +135,7 @@ Use `--bepinex <zip>` or `--no-download` for an offline install.
 
 ## Platform notes
 
-The mod itself is a managed DLL and is platform-independent — what differs is the loader.
+The mod itself is a managed DLL and is platform-independent - what differs is the loader.
 
 | Platform | Status |
 |----------|--------|
@@ -143,14 +143,14 @@ The mod itself is a managed DLL and is platform-independent — what differs is 
 | **Linux** | Implemented and downloadable (`linux-x64` IL2CPP exists), but **untested** by us. |
 | **macOS** | **BepInEx publishes no IL2CPP build for macOS.** The installer runs and can install the mod, but there is no loader to fetch, so it cannot complete an install on its own. |
 
-- **Linux** — BepInEx attaches through `run_bepinex.sh` rather than a DLL, so Steam needs launch
+- **Linux** - BepInEx attaches through `run_bepinex.sh` rather than a DLL, so Steam needs launch
   options. The installer prints this with the real path once it has installed:
 
   ```
   "/path/to/Vampire Survivors/run_bepinex.sh" %command%
   ```
 
-- **Proton** — the game is still the *Windows* build, so it needs the **win-x64** loader even
+- **Proton** - the game is still the *Windows* build, so it needs the **win-x64** loader even
   though the host is Linux. That cannot be detected from inside the installer, so pass
   `--platform win-x64` explicitly.
 
@@ -164,5 +164,5 @@ dotnet publish -c Release -r osx-x64   -o ../dist/osx-x64
 dotnet publish -c Release -r osx-arm64 -o ../dist/osx-arm64
 ```
 
-Self-contained, single-file and trimmed — about 11–13 MB per platform, no .NET runtime required
+Self-contained, single-file and trimmed - about 11-13 MB per platform, no .NET runtime required
 on the user's machine.
