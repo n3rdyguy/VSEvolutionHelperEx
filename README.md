@@ -75,6 +75,18 @@ Shown when **Guide** is selected on stage select:
 
 ---
 
+## Install the easy way
+
+Download **`vsevolutionhelper-installer-win-x64.exe`** from the
+[latest release](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/latest) and run it.
+It finds your Steam copy of the game, downloads BepInEx and this mod, and installs both — then
+offers install / update / uninstall from a menu.
+
+Prefer a script you can read first? `vsevolutionhelper-installer-scripts.zip` has `install.ps1`
+and `install.sh`. Details in [installer/README.md](installer/README.md).
+
+Everything below is the manual route, and is also what to read when something goes wrong.
+
 ## Requirements
 
 - Vampire Survivors (Steam) — **1.15.x**, Unity **6000.x**

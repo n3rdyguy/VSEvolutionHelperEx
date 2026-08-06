@@ -33,3 +33,5 @@ docs/
 # Installer publish output (binaries are attached to releases, not committed)
 installer/dist/
 installer/dist-trim/
+
+installer/release/
