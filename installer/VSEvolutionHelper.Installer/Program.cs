@@ -60,6 +60,9 @@ internal static class Program
             string bepInExZip = ArgValue(args, "--bepinex") ?? FindPayload("BepInEx", ".zip");
             bool bepInExPresent = Directory.Exists(Path.Combine(game, "BepInEx", "core"));
 
+            if (bepInExZip == null && !bepInExPresent && Array.IndexOf(args, "--no-download") < 0)
+                bepInExZip = DownloadBepInEx(args);
+
             if (bepInExZip != null)
             {
                 if (bepInExPresent && !Confirm(args, "BepInEx is already installed. Reinstall it?"))
@@ -74,7 +77,7 @@ internal static class Program
             }
             else if (!bepInExPresent)
             {
-                Fail("BepInEx is not installed and no BepInEx archive was bundled.");
+                Fail("BepInEx is not installed and could not be obtained.");
                 Info("Download the Unity.IL2CPP build for your platform from:");
                 Info("    https://builds.bepinex.dev/projects/bepinex_be");
                 Info("then re-run with:  --bepinex \"<path to that zip>\"");
@@ -336,6 +339,113 @@ internal static class Program
             Warn("Expected winhttp.dll — the archive may have been the Mono build, or extracted one level too deep.");
         else
             Warn("Expected run_bepinex.sh — on macOS/Linux the game is launched through that script.");
+    }
+
+    // ── BepInEx download ─────────────────────────────────────────────────────
+
+    private const string BuildsHost = "https://builds.bepinex.dev";
+    private const string BuildsPage = BuildsHost + "/projects/bepinex_be";
+
+    /// <summary>
+    /// The build this mod is developed and tested against. Pinned by default rather than always
+    /// taking the newest: bleeding-edge means exactly that, and a broken loader is much harder
+    /// for someone to diagnose than an out-of-date one. <c>--latest</c> opts into the newest.
+    /// </summary>
+    private const string PinnedBuild = "785";
+    private const string PinnedCommit = "6abdba4";
+
+    /// <summary>
+    /// Fetch BepInEx from the official CI.
+    ///
+    /// Only win-x64 and linux-x64 IL2CPP artifacts are published — there is no macOS IL2CPP
+    /// build, so macOS cannot be served this way at all.
+    /// </summary>
+    private static string DownloadBepInEx(string[] args)
+    {
+        string platform = ArgValue(args, "--platform") ?? DefaultPlatform();
+        if (platform == null)
+        {
+            Warn("No BepInEx IL2CPP build is published for macOS.");
+            Info("Only win-x64 and linux-x64 IL2CPP artifacts exist on builds.bepinex.dev.");
+            return null;
+        }
+
+        string url = null;
+        if (Array.IndexOf(args, "--latest") >= 0)
+        {
+            url = ResolveLatest(platform);
+            if (url == null) Warn("Could not read the build list; falling back to the pinned build.");
+        }
+        url ??= $"{BuildsHost}/projects/bepinex_be/{PinnedBuild}"
+              + $"/BepInEx-Unity.IL2CPP-{platform}-6.0.0-be.{PinnedBuild}%2B{PinnedCommit}.zip";
+
+        Step($"Downloading BepInEx ({platform})…");
+        Info(url);
+
+        try
+        {
+            string temp = Path.Combine(Path.GetTempPath(), "vseh-bepinex-" + Guid.NewGuid().ToString("N") + ".zip");
+            using (var http = new System.Net.Http.HttpClient())
+            {
+                http.Timeout = TimeSpan.FromMinutes(5);
+                http.DefaultRequestHeaders.Add("User-Agent", "VSEvolutionHelper-Installer");
+                using var response = http.GetAsync(url).GetAwaiter().GetResult();
+                response.EnsureSuccessStatusCode();
+                using var stream = response.Content.ReadAsStream();
+                using var file = File.Create(temp);
+                stream.CopyTo(file);
+            }
+
+            // A CI error page saved as .zip would otherwise fail much later and much less
+            // clearly, so the archive is opened before it is trusted.
+            try { using var probe = ZipFile.OpenRead(temp); }
+            catch
+            {
+                File.Delete(temp);
+                Fail("The downloaded file is not a valid zip archive.");
+                return null;
+            }
+
+            Ok($"Downloaded {new FileInfo(temp).Length / 1024 / 1024} MB");
+            return temp;
+        }
+        catch (Exception ex)
+        {
+            Fail("Download failed: " + ex.Message);
+            Info("Download it manually from " + BuildsPage);
+            Info("then re-run with:  --bepinex \"<path to that zip>\"");
+            return null;
+        }
+    }
+
+    private static string DefaultPlatform()
+    {
+        if (OperatingSystem.IsWindows()) return "win-x64";
+        // Under Proton the game is the Windows build and needs the Windows loader, which cannot
+        // be detected from here — hence --platform.
+        if (OperatingSystem.IsLinux()) return "linux-x64";
+        return null;
+    }
+
+    /// <summary>
+    /// Scrape the newest artifact link. The filename carries a commit hash, so the URL cannot
+    /// be constructed from a build number alone.
+    /// </summary>
+    private static string ResolveLatest(string platform)
+    {
+        try
+        {
+            using var http = new System.Net.Http.HttpClient();
+            http.Timeout = TimeSpan.FromSeconds(30);
+            http.DefaultRequestHeaders.Add("User-Agent", "VSEvolutionHelper-Installer");
+            string html = http.GetStringAsync(BuildsPage).GetAwaiter().GetResult();
+
+            var m = Regex.Match(html,
+                "/projects/bepinex_be/\\d+/BepInEx-Unity\\.IL2CPP-" + Regex.Escape(platform) + "-[^\"'<>\\s]+\\.zip",
+                RegexOptions.IgnoreCase);
+            return m.Success ? BuildsHost + m.Value : null;
+        }
+        catch { return null; }
     }
 
     // ── Payload discovery ────────────────────────────────────────────────────

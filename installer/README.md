@@ -28,12 +28,34 @@ Options (all optional; the binary and both scripts accept the same ones):
 | Option | Purpose |
 |--------|---------|
 | `--game <path>` | Game folder, if auto-detection fails |
-| `--bepinex <zip>` | BepInEx archive to install; defaults to one found beside the installer |
+| `--bepinex <zip>` | Use a local BepInEx archive instead of downloading |
 | `--mod <dll>` | `VSEvolutionHelper.dll`; defaults to one found beside the installer |
+| `--latest` | Download the newest BepInEx BE build instead of the pinned one |
+| `--no-download` | Never reach the network |
+| `--platform <rid>` | `win-x64` or `linux-x64`; needed for Proton |
 | `--yes` | Answer prompts with yes |
 | `--no-color` | Plain output (binary only) |
 
-PowerShell uses `-Game`, `-BepInEx`, `-Mod`, `-Yes`.
+PowerShell uses `-Game`, `-BepInEx`, `-Mod`, `-Latest`, `-NoDownload`, `-Yes`.
+
+## BepInEx is downloaded for you
+
+If BepInEx is not already installed and no archive is sitting beside the installer, it is
+fetched over HTTPS from the official CI at
+[builds.bepinex.dev](https://builds.bepinex.dev/projects/bepinex_be) (~33 MB) and checked for
+being a real zip before anything is unpacked — a CI error page saved as `.zip` would otherwise
+fail much later and far less clearly.
+
+**A specific build is pinned by default** — `6.0.0-be.785`, the one this mod is developed and
+tested against. Bleeding-edge means exactly that, and a loader that breaks on a fresh CI build
+is much harder to diagnose than one that is merely out of date. Pass `--latest` to take the
+newest instead; if the build list cannot be read it falls back to the pinned build rather than
+failing.
+
+The URL cannot be constructed from a version number alone — the filename embeds a commit hash
+(`…-6.0.0-be.785+6abdba4.zip`), which is why `--latest` scrapes rather than guesses.
+
+Use `--bepinex <zip>` or `--no-download` for an offline install.
 
 ## What it does
 
@@ -52,31 +74,26 @@ PowerShell uses `-Game`, `-BepInEx`, `-Mod`, `-Yes`.
 6. **Checks the loader landed**, and says which one it expected: `winhttp.dll` on Windows,
    `run_bepinex.sh` on macOS/Linux.
 
-## BepInEx archive
-
-Bundled releases include it. If you are running the installer on its own, download the
-**Unity.IL2CPP** build for your platform from
-[builds.bepinex.dev/projects/bepinex_be](https://builds.bepinex.dev/projects/bepinex_be) and
-either drop the zip beside the installer or pass `--bepinex <zip>`.
-
-The three things people get wrong: it must be **6.x bleeding-edge** (5.x has no IL2CPP support
-for Unity 6), **Unity.IL2CPP** (the Mono package silently does nothing), and **64-bit**.
-
 ## Platform notes
 
 The mod itself is a managed DLL and is platform-independent — what differs is the loader.
 
-- **Windows** — verified. `winhttp.dll` sits next to `VampireSurvivors.exe`.
-- **Linux / macOS** — the installer handles these, but **the mod has not been tested there.**
-  BepInEx attaches through `run_bepinex.sh` rather than a DLL, so Steam needs launch options:
+| Platform | Status |
+|----------|--------|
+| **Windows** | Verified end to end, including the download path. `winhttp.dll` lands next to `VampireSurvivors.exe`. |
+| **Linux** | Implemented and downloadable (`linux-x64` IL2CPP exists), but **untested** by us. |
+| **macOS** | **BepInEx publishes no IL2CPP build for macOS.** The installer runs and can install the mod, but there is no loader to fetch, so it cannot complete an install on its own. |
+
+- **Linux** — BepInEx attaches through `run_bepinex.sh` rather than a DLL, so Steam needs launch
+  options. The installer prints this with the real path once it has installed:
 
   ```
   "/path/to/Vampire Survivors/run_bepinex.sh" %command%
   ```
 
-  The installer prints this with the real path once it has installed.
-- **Proton** — the game is still the Windows build, so use the **win-x64** BepInEx even on Linux.
-  The installer cannot detect this reliably; pass `--bepinex` with the Windows archive.
+- **Proton** — the game is still the *Windows* build, so it needs the **win-x64** loader even
+  though the host is Linux. That cannot be detected from inside the installer, so pass
+  `--platform win-x64` explicitly.
 
 ## Building
 

@@ -18,14 +18,28 @@ GAME=""
 BEPINEX=""
 MOD=""
 ASSUME_YES=0
+USE_LATEST=0
+NO_DOWNLOAD=0
+PLATFORM=""
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# The build this mod is developed and tested against. Pinned rather than always taking the
+# newest: bleeding-edge means exactly that, and a broken loader is harder to diagnose than an
+# out-of-date one. --latest opts into the newest build instead.
+BUILDS_HOST="https://builds.bepinex.dev"
+BUILDS_PAGE="$BUILDS_HOST/projects/bepinex_be"
+PINNED_BUILD="785"
+PINNED_HASH="6abdba4"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --game)    GAME="$2"; shift 2 ;;
-    --bepinex) BEPINEX="$2"; shift 2 ;;
-    --mod)     MOD="$2"; shift 2 ;;
-    --yes|-y)  ASSUME_YES=1; shift ;;
+    --game)        GAME="$2"; shift 2 ;;
+    --bepinex)     BEPINEX="$2"; shift 2 ;;
+    --mod)         MOD="$2"; shift 2 ;;
+    --platform)    PLATFORM="$2"; shift 2 ;;
+    --latest)      USE_LATEST=1; shift ;;
+    --no-download) NO_DOWNLOAD=1; shift ;;
+    --yes|-y)      ASSUME_YES=1; shift ;;
     -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 64 ;;
   esac
@@ -103,6 +117,65 @@ find_game() {
   return 1
 }
 
+fetch() {
+  # curl and wget are both common enough that requiring one specifically is unhelpful.
+  if command -v curl >/dev/null 2>&1; then curl -fsSL "$1" -o "$2"
+  elif command -v wget >/dev/null 2>&1; then wget -qO "$2" "$1"
+  else return 127
+  fi
+}
+
+fetch_stdout() {
+  if command -v curl >/dev/null 2>&1; then curl -fsSL "$1"
+  elif command -v wget >/dev/null 2>&1; then wget -qO- "$1"
+  else return 127
+  fi
+}
+
+download_bepinex() {
+  # Only win-x64 and linux-x64 IL2CPP artifacts are published; there is no macOS build.
+  local plat="$PLATFORM"
+  if [ -z "$plat" ]; then
+    if [ "$(uname -s)" = "Darwin" ]; then
+      warn "No BepInEx IL2CPP build is published for macOS." >&2
+      info "Only win-x64 and linux-x64 IL2CPP artifacts exist on builds.bepinex.dev." >&2
+      return 1
+    fi
+    plat="linux-x64"
+  fi
+
+  local url=""
+  if [ "$USE_LATEST" -eq 1 ]; then
+    url=$(fetch_stdout "$BUILDS_PAGE" 2>/dev/null \
+      | grep -o "/projects/bepinex_be/[0-9]*/BepInEx-Unity\.IL2CPP-${plat}-[^\"'<> ]*\.zip" \
+      | head -n1 || true)
+    [ -n "$url" ] && url="$BUILDS_HOST$url"
+    [ -z "$url" ] && warn "Could not read the build list; falling back to the pinned build." >&2
+  fi
+  if [ -z "$url" ]; then
+    url="$BUILDS_HOST/projects/bepinex_be/$PINNED_BUILD/BepInEx-Unity.IL2CPP-${plat}-6.0.0-be.${PINNED_BUILD}%2B${PINNED_HASH}.zip"
+  fi
+
+  step "Downloading BepInEx ($plat)..." >&2
+  info "$url" >&2
+  local temp
+  temp="$(mktemp -t vseh-bepinex-XXXXXX).zip"
+  if ! fetch "$url" "$temp"; then
+    fail "Download failed (curl or wget required)." >&2
+    info "Download it manually from $BUILDS_PAGE then re-run with --bepinex '<path>'" >&2
+    rm -f "$temp"
+    return 1
+  fi
+  # A CI error page saved as .zip would fail much later and much less clearly.
+  if command -v unzip >/dev/null 2>&1 && ! unzip -tq "$temp" >/dev/null 2>&1; then
+    fail "The downloaded file is not a valid zip archive." >&2
+    rm -f "$temp"
+    return 1
+  fi
+  ok "Downloaded $(( $(wc -c < "$temp") / 1048576 )) MB" >&2
+  printf '%s\n' "$temp"
+}
+
 find_payload() {
   local pattern="$1" dir hit
   for dir in "$HERE" "$HERE/payload" "$PWD"; do
@@ -147,6 +220,10 @@ fi
 BEP_PRESENT=0
 [ -d "$GAME/BepInEx/core" ] && BEP_PRESENT=1
 
+if [ -z "$BEPINEX" ] && [ "$BEP_PRESENT" -eq 0 ] && [ "$NO_DOWNLOAD" -eq 0 ]; then
+  BEPINEX=$(download_bepinex || true)
+fi
+
 if [ -n "$BEPINEX" ]; then
   DO_IT=1
   if [ "$BEP_PRESENT" -eq 1 ]; then
@@ -170,7 +247,7 @@ if [ -n "$BEPINEX" ]; then
     info "Keeping the existing BepInEx."
   fi
 elif [ "$BEP_PRESENT" -eq 0 ]; then
-  fail "BepInEx is not installed and no BepInEx archive was found next to this script."
+  fail "BepInEx is not installed and could not be obtained."
   info "Download the Unity.IL2CPP build from https://builds.bepinex.dev/projects/bepinex_be"
   info 'then re-run with:  ./install.sh --bepinex "<path to zip>"'
   exit 5

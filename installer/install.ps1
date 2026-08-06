@@ -26,11 +26,21 @@ param(
     [string]$Game,
     [string]$BepInEx,
     [string]$Mod,
-    [switch]$Yes
+    [switch]$Yes,
+    [switch]$Latest,
+    [switch]$NoDownload
 )
 
 $ErrorActionPreference = 'Stop'
 $AppId = '1794680'
+
+# The build this mod is developed and tested against. Pinned rather than always taking the
+# newest: bleeding-edge means exactly that, and a broken loader is harder to diagnose than an
+# out-of-date one. -Latest opts into the newest build instead.
+$BuildsHost  = 'https://builds.bepinex.dev'
+$BuildsPage  = "$BuildsHost/projects/bepinex_be"
+$PinnedBuild = '785'
+$PinnedHash  = '6abdba4'
 
 function Write-Banner {
     $bat = @(
@@ -96,6 +106,44 @@ function Find-Game {
     return $null
 }
 
+function Get-BepInEx {
+    # Only win-x64 and linux-x64 IL2CPP artifacts are published; there is no macOS build.
+    $url = $null
+    if ($Latest) {
+        try {
+            $html = (Invoke-WebRequest -Uri $BuildsPage -UseBasicParsing).Content
+            $m = [regex]::Match($html, '/projects/bepinex_be/\d+/BepInEx-Unity\.IL2CPP-win-x64-[^"''<>\s]+\.zip')
+            if ($m.Success) { $url = "$BuildsHost$($m.Value)" }
+        } catch { }
+        if (-not $url) { Warn 'Could not read the build list; falling back to the pinned build.' }
+    }
+    if (-not $url) {
+        $url = "$BuildsHost/projects/bepinex_be/$PinnedBuild/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.$PinnedBuild%2B$PinnedHash.zip"
+    }
+
+    Step 'Downloading BepInEx (win-x64)...'
+    Info $url
+    $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("vseh-bepinex-" + [guid]::NewGuid().ToString('N') + '.zip')
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $temp -UseBasicParsing
+    } catch {
+        Fail "Download failed: $($_.Exception.Message)"
+        Info "Download it manually from $BuildsPage then re-run with -BepInEx '<path to zip>'"
+        return $null
+    }
+    # A CI error page saved as .zip would fail much later and much less clearly.
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $probe = [System.IO.Compression.ZipFile]::OpenRead($temp); $probe.Dispose()
+    } catch {
+        Remove-Item $temp -Force -ErrorAction SilentlyContinue
+        Fail 'The downloaded file is not a valid zip archive.'
+        return $null
+    }
+    Ok ("Downloaded {0} MB" -f [int]((Get-Item $temp).Length / 1MB))
+    return $temp
+}
+
 function Find-Payload($pattern) {
     foreach ($dir in @($PSScriptRoot, (Join-Path $PSScriptRoot 'payload'), (Get-Location).Path)) {
         if (-not $dir -or -not (Test-Path $dir)) { continue }
@@ -143,6 +191,7 @@ if (Test-Path $melon) {
 
 if (-not $BepInEx) { $BepInEx = Find-Payload 'BepInEx*.zip' }
 $bepPresent = Test-Path (Join-Path $Game 'BepInEx\core')
+if (-not $BepInEx -and -not $bepPresent -and -not $NoDownload) { $BepInEx = Get-BepInEx }
 
 if ($BepInEx) {
     $doIt = $true
@@ -165,7 +214,7 @@ if ($BepInEx) {
         Info 'Keeping the existing BepInEx.'
     }
 } elseif (-not $bepPresent) {
-    Fail 'BepInEx is not installed and no BepInEx archive was found next to this script.'
+    Fail 'BepInEx is not installed and could not be obtained.'
     Info 'Download the Unity.IL2CPP build from https://builds.bepinex.dev/projects/bepinex_be'
     Info 'then re-run with:  ./install.ps1 -BepInEx "<path to zip>"'
     exit 5
