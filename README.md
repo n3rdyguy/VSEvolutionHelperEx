@@ -7,6 +7,7 @@ Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` /
 | | |
 |--|--|
 | **Latest release** | [v1.13.0](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.13.0) |
+| **Nexus Mods** | [VS Evolution Helper (BepInEx port)](https://www.nexusmods.com/vampiresurvivors/mods/105) |
 | **Game** | Vampire Survivors **1.15.x** (tested **1.15.114**), Unity **6000.0.62f1** |
 | **Loader** | [BepInEx 6 IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (BE / bleeding-edge) |
 
@@ -327,6 +328,7 @@ are kept outside this repo.
 
 - **Original work:** [NihilXD](https://github.com/NihilXD/VSEvolutionHelper) - VS Evolution Helper / VS Item Tooltips (MelonLoader)
 - **1.14 community update:** [ashimpure on Nexus](https://www.nexusmods.com/vampiresurvivors/mods/101)
-- **This repo:** BepInEx IL2CPP port and VS 1.15 / Unity 6 fixes
+- **This repo:** BepInEx IL2CPP port and VS 1.15 / Unity 6 fixes - also on
+  [Nexus](https://www.nexusmods.com/vampiresurvivors/mods/105)
 
 If you redistribute this port, keep the credits and links to NihilXD’s original mod.
