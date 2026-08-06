@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using VampireSurvivors.Data;
 using VampireSurvivors.UI;
@@ -24,8 +23,7 @@ namespace VSItemTooltips;
 /// </summary>
 public static class SecretsPatches
 {
-	private static readonly Dictionary<int, (string title, List<GameData.IconRow> rows)> Registered =
-		new Dictionary<int, (string, List<GameData.IconRow>)>();
+	private static readonly RowTooltipRegistry Rows = new RowTooltipRegistry("Secrets");
 
 	public static void Apply(Harmony harmony)
 	{
@@ -101,21 +99,12 @@ public static class SecretsPatches
 			GameObject root = ((Component)__instance).gameObject;
 			GameObject target = RewardImage(__instance);
 
-			string title = achieved ? "Secret (found)" : "Secret (not found yet)";
-
-			// Register the row root as well as the reward icon. The selected row draws a
-			// highlight over its contents, which swallows the pointer before it reaches the
-			// icon; a handler on the root still fires, because pointer events bubble up to
-			// the first ancestor that handles them.
-			if ((Object)(object)target != (Object)null)
+			Rows.Register(root, target, new RowTooltipRegistry.Entry
 			{
-				int id = ((Object)target).GetInstanceID();
-				Registered[id] = (title, rows);
-				AttachHover(target, id);
-			}
-			int rootId = ((Object)root).GetInstanceID();
-			Registered[rootId] = (title, rows);
-			AttachHover(root, rootId);
+				Title = achieved ? "Secret (found)" : "Secret (not found yet)",
+				Rows = rows,
+				SectionHeader = "Unlocks:",
+			});
 
 			Plugin.Dbg($"Secrets: registered {rows.Count} on "
 				+ $"{((Object)(object)target != (Object)null ? ((Object)target).name : "-")}+root achieved={achieved}");
@@ -177,66 +166,8 @@ public static class SecretsPatches
 		return null;
 	}
 
-	/// <summary>Rows are recycled, so each GameObject only needs wiring once.</summary>
-	private static readonly HashSet<int> Wired = new HashSet<int>();
-
-	/// <summary>
-	/// Pointer enter/exit. An existing EventTrigger is reused and its entries are left alone —
-	/// clearing them on a row that owns its own wiring is how a similar patch broke character
-	/// select in 1.9.1. Re-registration updates the row's data without re-adding listeners.
-	/// </summary>
-	private static void AttachHover(GameObject go, int id)
-	{
-		if ((Object)(object)go == (Object)null) return;
-		if (!Wired.Add(id)) return;
-		try
-		{
-			Graphic g = go.GetComponent<Graphic>();
-			if ((Object)(object)g == (Object)null)
-			{
-				Image img = go.AddComponent<Image>();
-				img.color = new Color(1f, 1f, 1f, 0.01f);
-				g = img;
-			}
-			g.raycastTarget = true;
-
-			EventTrigger et = go.GetComponent<EventTrigger>();
-			if ((Object)(object)et == (Object)null) et = go.AddComponent<EventTrigger>();
-
-			int captured = id;
-
-			var enter = new EventTrigger.Entry();
-			enter.eventID = EventTriggerType.PointerEnter;
-			enter.callback.AddListener((UnityEngine.Events.UnityAction<BaseEventData>)(Action<BaseEventData>)(delegate
-			{
-				Show(captured);
-			}));
-			et.triggers.Add(enter);
-
-			var exit = new EventTrigger.Entry();
-			exit.eventID = EventTriggerType.PointerExit;
-			exit.callback.AddListener((UnityEngine.Events.UnityAction<BaseEventData>)(Action<BaseEventData>)(delegate
-			{
-				ItemTooltipsMod.HideSecretRewardPopup();
-			}));
-			et.triggers.Add(exit);
-		}
-		catch (Exception ex)
-		{
-			Plugin.Dbg("[Secrets] hover: " + ex.Message);
-		}
-	}
-
-	private static void Show(int id)
-	{
-		if (!Registered.TryGetValue(id, out var entry)) return;
-		ItemTooltipsMod.ShowSecretRewardPopup(entry.title, entry.rows);
-	}
-
 	public static void Clear()
 	{
-		Registered.Clear();
-		Wired.Clear();
-		ItemTooltipsMod.HideSecretRewardPopup();
+		Rows.Clear();
 	}
 }

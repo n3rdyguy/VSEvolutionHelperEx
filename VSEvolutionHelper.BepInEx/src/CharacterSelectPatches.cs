@@ -907,6 +907,11 @@ public static class CharacterSelectPatches
 				|| RectTransformUtility.RectangleContainsScreenPoint(rt, screenPos, null);
 			if (!inside) continue;
 
+			// A scrolled-out card keeps a valid rect off-screen, so containment alone would
+			// report a hit while hovering empty space above or below the grid. The raycast
+			// path above is clipped by the mask for free; this one has to check.
+			if (!ItemTooltipsMod.IsInsideClip(card, screenPos, cam)) continue;
+
 			float area = Mathf.Max(1f, Mathf.Abs(rt.rect.width) * Mathf.Abs(rt.rect.height));
 			// Prefer smaller cards (grid) over any large strip that slipped through
 			if (area < bestArea)

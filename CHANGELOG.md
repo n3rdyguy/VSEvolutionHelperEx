@@ -2,7 +2,34 @@
 
 All notable changes to this BepInEx port are listed here.
 
-## [1.10.27] — 2026-08-06
+## [1.11.0] — 2026-08-06
+
+Tested on Vampire Survivors **1.15.114** (no patches needed re-targeting from 1.15.113).
+
+### Added
+- **Bestiary tooltips.** Hover an enemy to see HP, damage, speed, XP and knockback, plus its
+  resistances, skills and the stages it appears in — none of which the page shows. Stats are
+  ranges where the Bestiary groups several enemy ids into one entry. Config `BestiaryTooltips`;
+  `BestiarySpoilers` (default on) also covers enemies you have not killed yet.
+- **Character Selection tooltips are interactive.** The evolution, passive and starting-weapon
+  icons now open the same nested formula popups the Grimoire has, stacking down-right from the
+  tooltip they came from. Related arcanas are clickable too.
+
+### Fixed
+- **Character tooltips triggered outside the visible grid.** After scrolling, the hover
+  fallback tested each card's rectangle without checking it was still inside the scroll
+  viewport, so empty space above the list matched a card that had scrolled out of view.
+- **Character tooltips could not be reached.** The tooltip was destroyed the moment the pointer
+  touched a neighbouring card — before that card's own delay had elapsed — so moving onto it to
+  click anything was impossible. It now survives until another card is genuinely dwelt on, and
+  holds while the pointer is on the tooltip or any popup opened from it.
+- **Clicks passed through the character tooltip.** Every graphic in it was made click-through so
+  the card underneath stayed selectable, which also silenced the icons themselves. Only
+  interactive icons opt back in; the background and text still pass clicks through.
+
+### Internal
+- Shared `RowTooltipRegistry` and a generalized docked popup, so list pages (Secrets, Bestiary)
+  no longer each carry their own copy of the hover/registry code.
 
 ### Added
 - **Secrets page tooltips.** Hover a secret to see what it unlocks — character (with portrait),

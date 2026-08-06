@@ -1,13 +1,13 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.10.27** — Evolution, arcana, grimoire, collection, map, stage, character, adventure, and secrets tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.11.0** — Evolution, arcana, grimoire, collection, map, stage, character, adventure, and secrets tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
 | | |
 |--|--|
-| **Latest release** | [v1.10.27](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.10.27) |
-| **Game** | Vampire Survivors **1.15.x** (tested **1.15.113**), Unity **6000.0.62f1** |
+| **Latest release** | [v1.11.0](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.11.0) |
+| **Game** | Vampire Survivors **1.15.x** (tested **1.15.114**), Unity **6000.0.62f1** |
 | **Loader** | [BepInEx 6 IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (BE / bleeding-edge) |
 
 ## Credits / original creators
@@ -46,6 +46,7 @@ Please support the original authors. This port reuses their design with typed Il
 | **Stage selection — relics** | Hover **Relics in stage** icons for name + description (dynamic sizing for long names) |
 | **Stage selection — Music \| Guide** | Tabs above the song panel: **Music** keeps the track list; **Guide** reuses that space for stage help |
 | **Secrets** | Hover a secret → what it unlocks (character portrait, weapons, relic, arcana, power-up, skins, stage, gold). Renamed characters show both names. Turn off `SecretSpoilers` to reveal only secrets you have already found |
+| **Bestiary** | Hover an enemy → HP, damage, speed, XP, knockback, plus **resistances**, skills and the stages it appears in — none of which the page itself shows. Stats read as ranges where one entry covers a family of enemies. Turn off `BestiarySpoilers` for killed enemies only |
 
 ### Stage Guide (right column)
 
@@ -107,7 +108,7 @@ BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.785+<commit>.zip
 | Component | Version |
 |-----------|---------|
 | BepInEx | **6.0.0-be.785** (Unity.IL2CPP, win-x64) |
-| Vampire Survivors | **1.15.113** |
+| Vampire Survivors | **1.15.114** |
 | Unity | **6000.0.62f1** |
 | .NET runtime (bundled by BepInEx) | 6.0.7 |
 
@@ -190,7 +191,7 @@ Newer BE builds generally work too. If a very new BE build misbehaves, dropping 
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.10.27]
+Loading [VS Evolution Helper 1.11.0]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete
@@ -244,6 +245,8 @@ Created on first run:
 | Features | `WeaponSelectionTooltips` | **true** | Weapon selector screen tooltips |
 | Features | `SecretTooltips` | **true** | Secrets page unlock tooltips |
 | Features | `SecretSpoilers` | **true** | Also reveal secrets you have **not** discovered yet |
+| Features | `BestiaryTooltips` | **true** | Bestiary enemy stat tooltips |
+| Features | `BestiarySpoilers` | **true** | Also show stats for enemies you have **not** killed yet |
 
 Restart the game (or re-enter menus) after edits so values reload.
 

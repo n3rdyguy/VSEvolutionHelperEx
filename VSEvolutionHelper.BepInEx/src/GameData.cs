@@ -780,7 +780,10 @@ public static class GameData
     {
         public Sprite Sprite;
         public string Label;
+        /// <summary>Render as a section heading rather than an icon row.</summary>
+        public bool IsHeader;
         public IconRow(Sprite sprite, string label) { Sprite = sprite; Label = label; }
+        public static IconRow Header(string label) { return new IconRow(null, label) { IsHeader = true }; }
     }
 
     /// <summary>
@@ -983,16 +986,44 @@ public static class GameData
     }
 
     /// <summary>
-    /// Everything a secret awards, resolved from the raw JSON by secret key (the
-    /// <c>SecretType</c> name, e.g. <c>KissMe</c>). Ids that no longer parse to a live enum
-    /// member — DLC content that is not installed — still render as a humanized label.
+    /// What some piece of content awards, as plain ids. Secrets fill this from the raw JSON;
+    /// achievements can fill it straight from their typed record, whose reward fields are
+    /// already strings.
     /// </summary>
-    public static System.Collections.Generic.List<IconRow> GetSecretRewards(string key)
+    public sealed class RewardIds
+    {
+        public string Character;
+        public System.Collections.Generic.List<string> CharacterList;
+        public string Weapon;
+        public System.Collections.Generic.List<string> WeaponList;
+        public string Relic;
+        public string Arcana;
+        public string PowerUp;
+        public System.Collections.Generic.List<string> Skins;
+        public string Stage;
+        public string Hyper;
+        public int Gold;
+        public string CustomText;
+        public string CustomFrame;
+        public string CustomTexture;
+        public string Special;
+    }
+
+    /// <summary>
+    /// Resolve reward ids to displayable rows. Ids that no longer parse to a live enum member
+    /// — DLC content that is not installed — still render as a humanized label rather than
+    /// silently vanishing, so the list never looks shorter than it really is.
+    /// </summary>
+    public static System.Collections.Generic.List<IconRow> BuildRewardRows(RewardIds e)
     {
         var rows = new System.Collections.Generic.List<IconRow>();
-        EnsureSecretRewards();
-        if (_secretRewards == null || string.IsNullOrEmpty(key)) return rows;
-        if (!_secretRewards.TryGetValue(key, out SecretRewardJson e) || e == null) return rows;
+        if (e == null) return rows;
+
+        void addCharacter(string id)
+        {
+            if (IsVoidValue(id)) return;
+            rows.Add(new IconRow(GetCharacterPortrait(id), DescribeRewardCharacter(id)));
+        }
 
         void addWeapon(string id)
         {
@@ -1005,8 +1036,8 @@ public static class GameData
             else rows.Add(new IconRow(null, HumanizeId(id)));
         }
 
-        if (!IsVoidValue(e.Character))
-            rows.Add(new IconRow(GetCharacterPortrait(e.Character), DescribeRewardCharacter(e.Character)));
+        addCharacter(e.Character);
+        if (e.CharacterList != null) foreach (string id in e.CharacterList) addCharacter(id);
 
         addWeapon(e.Weapon);
         if (e.WeaponList != null) foreach (string id in e.WeaponList) addWeapon(id);
@@ -1051,6 +1082,437 @@ public static class GameData
         }
 
         return rows;
+    }
+
+    /// <summary>
+    /// Everything a secret awards, resolved from the raw JSON by secret key (the
+    /// <c>SecretType</c> name, e.g. <c>KissMe</c>).
+    /// </summary>
+    public static System.Collections.Generic.List<IconRow> GetSecretRewards(string key)
+    {
+        EnsureSecretRewards();
+        if (_secretRewards == null || string.IsNullOrEmpty(key))
+            return new System.Collections.Generic.List<IconRow>();
+        if (!_secretRewards.TryGetValue(key, out SecretRewardJson e) || e == null)
+            return new System.Collections.Generic.List<IconRow>();
+
+        return BuildRewardRows(new RewardIds
+        {
+            Character = e.Character,
+            Weapon = e.Weapon,
+            WeaponList = e.WeaponList,
+            Relic = e.Relic,
+            Arcana = e.Arcana,
+            PowerUp = e.PowerUp,
+            Skins = e.Skins,
+            Stage = e.Stage,
+            Hyper = e.Hyper,
+            Gold = e.Gold,
+            CustomText = e.CustomText,
+            CustomFrame = e.CustomFrame,
+            CustomTexture = e.CustomTexture,
+            Special = e.Special,
+        });
+    }
+
+    // ── Bestiary ─────────────────────────────────────────────────────────────
+
+    /// <summary>Enemy stats, traits and stage list as one labelled row list.</summary>
+    public sealed class EnemyInfo
+    {
+        public System.Collections.Generic.List<IconRow> Rows;
+    }
+
+    /// <summary>
+    /// maxHp is stored at a tenth of the value the game reports — an enemy the Bestiary calls
+    /// 5 HP is 0.5 in the data. Scaled here so the tooltip agrees with the game.
+    /// </summary>
+    private const float EnemyHpScale = 10f;
+
+    /// <summary>
+    /// Tidy a humanized enum id for display: HumanizeId turns HpXLevel into "Hp X Level", but
+    /// the stat is HP and the multiplier reads as a lowercase x.
+    /// </summary>
+    private static string PrettyTrait(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\bHp\b", "HP");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\bX\b", "x");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\bXp\b", "XP");
+        return s;
+    }
+
+    // Stat icons: the passive that governs each stat, so the rows read like the game's own
+    // item vocabulary (Hollow Heart, Wings, Spinach) rather than bare numbers.
+    private static Sprite HpIcon() { try { return GetSprite(WeaponType.MAXHEALTH); } catch { return null; } }
+    private static Sprite SpeedIcon() { try { return GetSprite(WeaponType.MOVESPEED); } catch { return null; } }
+    private static Sprite PowerIcon() { try { return GetSprite(WeaponType.POWER); } catch { return null; } }
+    /// <summary>The XP gem, same icon stage selection uses for its XP Bonus stat.</summary>
+    private static Sprite XpIcon() { try { return GetItemSprite(ItemType.GEM); } catch { return null; } }
+
+    // "Found in" is captured from the game's own Bestiary info panel rather than derived.
+    // Deriving it from the stage JSON disagreed with the game — Boss Rash for an enemy the
+    // game lists under Cappella Magna — and missed stages entirely, and a wrong stage list is
+    // indistinguishable from a right one to whoever reads it.
+    private static readonly System.Collections.Generic.Dictionary<string, string> _enemyFoundIn =
+        new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What the game's own Bestiary info panel printed. Keyed by the displayed title, which is
+    /// what a hovered row can be matched on.
+    /// </summary>
+    public sealed class EnemyPanel
+    {
+        public string Hp, Power, Speed, Resistances, Skills, FoundIn;
+    }
+
+    private static readonly System.Collections.Generic.Dictionary<string, EnemyPanel> _enemyPanels =
+        new System.Collections.Generic.Dictionary<string, EnemyPanel>(StringComparer.OrdinalIgnoreCase);
+
+    public static void SetEnemyPanel(string title, EnemyPanel panel)
+    {
+        if (string.IsNullOrWhiteSpace(title) || panel == null) return;
+        _enemyPanels[title.Trim()] = panel;
+    }
+
+    public static EnemyPanel GetEnemyPanel(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return null;
+        return _enemyPanels.TryGetValue(title.Trim(), out EnemyPanel p) ? p : null;
+    }
+
+    private static bool _dumpedEnemyJson;
+
+    /// <summary>
+    /// One-time dump of an enemy's raw JSON. The parse reports one record per enemy while the
+    /// Bestiary shows stat ranges, so either the ranges are computed from fields on a single
+    /// record or the array is shaped differently than assumed — this tells us which.
+    /// </summary>
+    public static void DumpEnemyJsonOnce(string enemyId)
+    {
+        if (_dumpedEnemyJson || _dataManager == null || !Plugin.DebugVerbose || string.IsNullOrEmpty(enemyId)) return;
+        try
+        {
+            var json = _dataManager._allEnemiesJson;
+            if (json == null) { _dumpedEnemyJson = true; return; }
+            string raw = json.ToString();
+            if (string.IsNullOrEmpty(raw)) { _dumpedEnemyJson = true; return; }
+            int at = raw.IndexOf("\"" + enemyId + "\"", StringComparison.OrdinalIgnoreCase);
+            if (at < 0) return;
+            _dumpedEnemyJson = true;
+            int len = Math.Min(900, raw.Length - at);
+            Plugin.Dbg($"[GameData] enemy JSON '{enemyId}': " + raw.Substring(at, len).Replace('\n', ' '));
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] enemy JSON dump: " + ex.Message);
+        }
+    }
+
+    /// <summary>Record what the game printed in its own Found In label for an enemy.</summary>
+    public static void SetEnemyFoundIn(string enemyId, string text)
+    {
+        if (string.IsNullOrEmpty(enemyId) || string.IsNullOrWhiteSpace(text)) return;
+        string t = text.Trim();
+        if (LooksLikeLocKey(t)) return;
+        _enemyFoundIn[enemyId] = t;
+    }
+
+    public static string GetEnemyFoundIn(string enemyId)
+    {
+        if (string.IsNullOrEmpty(enemyId)) return null;
+        return _enemyFoundIn.TryGetValue(enemyId, out string t) ? t : null;
+    }
+
+
+    /// <summary>Format without a locale decimal comma, so it matches the game's English UI.</summary>
+    private static string Num(float v)
+    {
+        if (Math.Abs(v - Mathf.Round(v)) < 0.005f)
+            return Mathf.RoundToInt(v).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Everything the Bestiary knows about an enemy but never shows. The resistance fields are
+    /// the point of this: nothing in game explains why an enemy shrugs off freeze or Rosary.
+    ///
+    /// Values are reported as the data stores them rather than converted to percentages — the
+    /// scale is not documented anywhere and inventing one would be worse than showing none.
+    /// </summary>
+    /// <summary>Min/max of a stat across an enemy's level variants.</summary>
+    private struct Range
+    {
+        public float Min, Max;
+        public bool Any;
+        public void Add(float v)
+        {
+            if (!Any) { Min = Max = v; Any = true; return; }
+            if (v < Min) Min = v;
+            if (v > Max) Max = v;
+        }
+        public string Text(float scale = 1f)
+        {
+            float a = Min * scale, b = Max * scale;
+            return Math.Abs(a - b) < 0.005f ? Num(a) : $"{Num(a)}–{Num(b)}";
+        }
+    }
+
+    /// <summary>One enemy's record from the enemies JSON, including its Bestiary metadata.</summary>
+    private sealed class EnemyRec
+    {
+        public bool HasHp, HasPower, HasSpeed, HasXp, HasKnock;
+        public float Hp, Power, SpeedMin, SpeedMax, Xp, Knock;
+        public System.Collections.Generic.List<string> Traits = new System.Collections.Generic.List<string>();
+        /// <summary>Sibling ids the Bestiary groups into one entry — the source of stat ranges.</summary>
+        public System.Collections.Generic.List<string> Variants;
+        /// <summary>Stage ids the Bestiary lists under "Found in".</summary>
+        public System.Collections.Generic.List<string> Places;
+        public string Name, Desc;
+    }
+
+    private static System.Collections.Generic.Dictionary<string, EnemyRec> _enemyRecs;
+    private static bool _enemyRecsParsed;
+
+    /// <summary>
+    /// Parse the enemies JSON, which carries the Bestiary's own metadata alongside the stats:
+    /// <c>bVariants</c> (the sibling ids one Bestiary entry covers), <c>bPlaces</c> (its stage
+    /// list), <c>bName</c> and <c>bDesc</c>.
+    ///
+    /// The ranges the Bestiary prints come from aggregating over <c>bVariants</c> — BAT1's
+    /// entry spans BAT1/BAT2/BAT3, which is why one record read alone showed a single value.
+    /// </summary>
+    private static void EnsureEnemyRecs()
+    {
+        if (_enemyRecsParsed || _dataManager == null) return;
+        _enemyRecsParsed = true;
+
+        var map = new System.Collections.Generic.Dictionary<string, EnemyRec>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var json = _dataManager._allEnemiesJson;
+            if (json == null) { Plugin.Dbg("[GameData] _allEnemiesJson is null"); return; }
+            string raw = null;
+            try { raw = json.ToString(); } catch { }
+            if (string.IsNullOrEmpty(raw)) return;
+
+            using (var doc = System.Text.Json.JsonDocument.Parse(raw))
+            {
+                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    System.Text.Json.JsonElement rec = prop.Value;
+                    if (rec.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        bool any = false;
+                        foreach (var f in rec.EnumerateArray()) { rec = f; any = true; break; }
+                        if (!any) continue;
+                    }
+                    if (rec.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                    map[prop.Name] = ReadEnemyRec(rec);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] enemies JSON: " + ex.Message);
+        }
+
+        _enemyRecs = map;
+        int withVariants = 0, withPlaces = 0;
+        foreach (var kv in map)
+        {
+            if (kv.Value.Variants != null && kv.Value.Variants.Count > 1) withVariants++;
+            if (kv.Value.Places != null && kv.Value.Places.Count > 0) withPlaces++;
+        }
+        Plugin.Dbg($"[GameData] enemy records: {map.Count}, {withVariants} with variants, {withPlaces} with places");
+    }
+
+    private static EnemyRec ReadEnemyRec(System.Text.Json.JsonElement rec)
+    {
+        var r = new EnemyRec();
+        r.HasHp = TryJsonFloat(rec, "maxHp", out r.Hp);
+        r.HasPower = TryJsonFloat(rec, "power", out r.Power) && r.Power > 0f;
+        r.HasSpeed = TryJsonFloat(rec, "speed", out r.SpeedMin) && r.SpeedMin > 0f;
+        if (!TryJsonFloat(rec, "maxSpeed", out r.SpeedMax) || r.SpeedMax <= 0f) r.SpeedMax = r.SpeedMin;
+        r.HasXp = TryJsonFloat(rec, "xp", out r.Xp) && r.Xp > 0f;
+        r.HasKnock = TryJsonFloat(rec, "knockback", out r.Knock) && r.Knock > 0f;
+
+        void trait(string s)
+        {
+            if (!string.IsNullOrEmpty(s) && !r.Traits.Contains(s)) r.Traits.Add(s);
+        }
+        void resist(string label, string field)
+        {
+            if (TryJsonFloat(rec, field, out float v)) trait($"{label}: {Num(v)}");
+        }
+        resist("Freeze resist", "res_Freeze");
+        resist("Rosary resist", "res_Rosary");
+        resist("Debuff resist", "res_Debuffs");
+        resist("Knockback resist", "res_Knockback");
+        resist("Corridor resist", "res_Corridor");
+        resist("Defang resist", "res_Defang");
+        resist("Fire weakness", "weak_Fire");
+        if (TryJsonProp(rec, "passThroughWalls", out var ptw)
+            && ptw.ValueKind == System.Text.Json.JsonValueKind.True)
+            trait("Passes through walls");
+        if (TryJsonFloat(rec, "shieldDuration", out float sd) && sd > 0f) trait("Shield: " + Num(sd) + "s");
+        if (TryJsonFloat(rec, "lives", out float lv) && lv > 1f) trait("Lives: " + Num(lv));
+        var skills = JsonStrList(rec, "skills");
+        if (skills != null)
+            foreach (string s in skills)
+                if (!IsVoidValue(s)) trait(PrettyTrait(HumanizeId(s)));
+
+        r.Variants = JsonStrList(rec, "bVariants");
+        r.Places = JsonStrList(rec, "bPlaces");
+        r.Name = JsonStr(rec, "bName");
+        r.Desc = JsonStr(rec, "bDesc");
+        return r;
+    }
+
+    /// <summary>The Bestiary name for an enemy, as shipped in its record.</summary>
+    public static string GetEnemyName(string enemyId)
+    {
+        EnsureEnemyRecs();
+        if (_enemyRecs == null || string.IsNullOrEmpty(enemyId)) return null;
+        if (!_enemyRecs.TryGetValue(enemyId, out EnemyRec r) || r == null) return null;
+        if (string.IsNullOrWhiteSpace(r.Name)) return null;
+        string t = LocalizeDisplayText(r.Name) ?? r.Name;
+        return LooksLikeLocKey(t) ? null : t.Trim();
+    }
+
+    private static System.Collections.Generic.Dictionary<string, string> _stageNames;
+    private static bool _stageNamesParsed;
+
+    /// <summary>Stage id → display name, for turning <c>bPlaces</c> into readable stages.</summary>
+    private static string StageDisplayName(string stageId)
+    {
+        if (string.IsNullOrEmpty(stageId)) return null;
+        if (!_stageNamesParsed && _dataManager != null)
+        {
+            _stageNamesParsed = true;
+            var map = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var json = _dataManager._allStagesJson;
+                string raw = json != null ? json.ToString() : null;
+                if (!string.IsNullOrEmpty(raw))
+                {
+                    using (var doc = System.Text.Json.JsonDocument.Parse(raw))
+                    {
+                        if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            foreach (var prop in doc.RootElement.EnumerateObject())
+                            {
+                                System.Text.Json.JsonElement rec = prop.Value;
+                                if (rec.ValueKind == System.Text.Json.JsonValueKind.Array)
+                                {
+                                    bool any = false;
+                                    foreach (var f in rec.EnumerateArray()) { rec = f; any = true; break; }
+                                    if (!any) continue;
+                                }
+                                if (rec.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                                string n = JsonStr(rec, "stageName");
+                                if (string.IsNullOrWhiteSpace(n)) continue;
+                                string loc = LocalizeDisplayText(n) ?? n;
+                                if (!string.IsNullOrWhiteSpace(loc) && !LooksLikeLocKey(loc))
+                                    map[prop.Name] = loc.Trim();
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) { Plugin.Dbg("[GameData] stage names: " + ex.Message); }
+            _stageNames = map;
+            Plugin.Dbg($"[GameData] stage names: {map.Count}");
+        }
+        if (_stageNames != null && _stageNames.TryGetValue(stageId, out string name)) return name;
+        return DescribeStage(stageId);
+    }
+
+    private static bool TryJsonFloat(System.Text.Json.JsonElement obj, string name, out float value)
+    {
+        value = 0f;
+        if (!TryJsonProp(obj, name, out var v)) return false;
+        if (v.ValueKind == System.Text.Json.JsonValueKind.Number && v.TryGetDouble(out double d))
+        {
+            value = (float)d;
+            return true;
+        }
+        if (v.ValueKind == System.Text.Json.JsonValueKind.String
+            && float.TryParse(v.GetString(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float f))
+        {
+            value = f;
+            return true;
+        }
+        return false;
+    }
+
+    public static EnemyInfo GetEnemyInfo(VampireSurvivors.Data.Enemies.EnemyData data, string enemyId = null,
+        VampireSurvivors.Data.EnemyType? type = null, string title = null)
+    {
+        var rows = new System.Collections.Generic.List<IconRow>();
+
+        EnsureEnemyRecs();
+        EnemyRec self = null;
+        if (_enemyRecs != null && !string.IsNullOrEmpty(enemyId)) _enemyRecs.TryGetValue(enemyId, out self);
+
+        if (self == null)
+        {
+            if (data == null) return null;
+            try { rows.Add(new IconRow(HpIcon(), "HP: " + Num(data.maxHp * EnemyHpScale))); } catch { }
+            try { if (data.power > 0f) rows.Add(new IconRow(PowerIcon(), "Damage: " + Num(data.power))); } catch { }
+            try { if (data.speed > 0f) rows.Add(new IconRow(SpeedIcon(), "Speed: " + Num(data.speed))); } catch { }
+            return rows.Count > 0 ? new EnemyInfo { Rows = rows } : null;
+        }
+
+        // One Bestiary entry covers a family of ids; its printed stats span all of them.
+        var family = new System.Collections.Generic.List<EnemyRec> { self };
+        if (self.Variants != null)
+        {
+            foreach (string vid in self.Variants)
+            {
+                if (string.Equals(vid, enemyId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (_enemyRecs.TryGetValue(vid, out EnemyRec v) && v != null) family.Add(v);
+            }
+        }
+
+        Range hp = default, power = default, speed = default, xp = default, knock = default;
+        var traits = new System.Collections.Generic.List<string>();
+        foreach (var r in family)
+        {
+            if (r.HasHp) hp.Add(r.Hp);
+            if (r.HasPower) power.Add(r.Power);
+            if (r.HasSpeed) { speed.Add(r.SpeedMin); speed.Add(r.SpeedMax); }
+            if (r.HasXp) xp.Add(r.Xp);
+            if (r.HasKnock) knock.Add(r.Knock);
+            foreach (string t in r.Traits) if (!traits.Contains(t)) traits.Add(t);
+        }
+
+        if (hp.Any) rows.Add(new IconRow(HpIcon(), "HP: " + hp.Text(EnemyHpScale)));
+        if (power.Any) rows.Add(new IconRow(PowerIcon(), "Damage: " + power.Text()));
+        if (speed.Any) rows.Add(new IconRow(SpeedIcon(), "Speed: " + speed.Text()));
+        if (xp.Any) rows.Add(new IconRow(XpIcon(), "XP: " + xp.Text()));
+        if (knock.Any) rows.Add(new IconRow(null, "Knockback: " + knock.Text()));
+
+        if (traits.Count > 0)
+        {
+            rows.Add(IconRow.Header("Traits:"));
+            foreach (string t in traits) rows.Add(new IconRow(null, t));
+        }
+
+        if (self.Places != null && self.Places.Count > 0)
+        {
+            rows.Add(IconRow.Header("Found in:"));
+            foreach (string pid in self.Places)
+            {
+                string n = StageDisplayName(pid);
+                if (!string.IsNullOrEmpty(n)) rows.Add(new IconRow(null, n));
+            }
+        }
+
+        return rows.Count > 0 ? new EnemyInfo { Rows = rows } : null;
     }
 
     // ── Character records (for secret reward rows) ───────────────────────────

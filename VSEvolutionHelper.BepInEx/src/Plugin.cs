@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string PluginGuid = "com.nihil.vsevolutionhelper";
     public const string PluginName = "VS Evolution Helper";
-    public const string PluginVersion = "1.10.27";
+    public const string PluginVersion = "1.11.0";
 
     internal static new ManualLogSource Log;
     internal static Plugin Instance;
@@ -32,6 +32,8 @@ public class Plugin : BasePlugin
     internal static bool WeaponSelectionTooltipsEnabled;
     internal static bool SecretTooltipsEnabled;
     internal static bool SecretSpoilers;
+    internal static bool BestiaryTooltipsEnabled;
+    internal static bool BestiarySpoilers;
 
     private ConfigEntry<bool> _debugVerbose;
     private ConfigEntry<float> _tooltipHoverDelay;
@@ -46,6 +48,8 @@ public class Plugin : BasePlugin
     private ConfigEntry<bool> _weaponSelectionTooltipsEnabled;
     private ConfigEntry<bool> _secretTooltipsEnabled;
     private ConfigEntry<bool> _secretSpoilers;
+    private ConfigEntry<bool> _bestiaryTooltipsEnabled;
+    private ConfigEntry<bool> _bestiarySpoilers;
 
     public override void Load()
     {
@@ -130,11 +134,23 @@ public class Plugin : BasePlugin
             true,
             "Also reveal rewards for secrets you have NOT discovered yet. Set false to only show secrets you have already unlocked.");
 
+        _bestiaryTooltipsEnabled = Config.Bind(
+            "Features",
+            "BestiaryTooltips",
+            true,
+            "Show enemy stats and resistances when hovering rows on the Bestiary page.");
+
+        _bestiarySpoilers = Config.Bind(
+            "Features",
+            "BestiarySpoilers",
+            true,
+            "Also show stats for enemies you have NOT killed yet. Set false to only show enemies you have already encountered.");
+
         ApplyConfigValues();
 
         Log.LogInfo($"{PluginName} {PluginVersion} loading (BepInEx port)...");
         Log.LogInfo($"Debug.VerboseLogging={DebugVerbose} Tooltips.HoverDelay={TooltipHoverDelay:0.##}s LevelUpHoverDelay={LevelUpHoverDelay:0.##}s");
-        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled} Character={CharacterTooltipsEnabled} Adventure={AdventureTooltipsEnabled} WeaponSelect={WeaponSelectionTooltipsEnabled}");
+        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled} Character={CharacterTooltipsEnabled} Adventure={AdventureTooltipsEnabled} WeaponSelect={WeaponSelectionTooltipsEnabled} Secrets={SecretTooltipsEnabled} Bestiary={BestiaryTooltipsEnabled}");
 
         ClassInjector.RegisterTypeInIl2Cpp<PluginBehaviour>();
         _behaviour = AddComponent<PluginBehaviour>();
@@ -158,6 +174,8 @@ public class Plugin : BasePlugin
         WeaponSelectionTooltipsEnabled = _weaponSelectionTooltipsEnabled.Value;
         SecretTooltipsEnabled = _secretTooltipsEnabled.Value;
         SecretSpoilers = _secretSpoilers.Value;
+        BestiaryTooltipsEnabled = _bestiaryTooltipsEnabled.Value;
+        BestiarySpoilers = _bestiarySpoilers.Value;
     }
 
     internal static void Dbg(string message)

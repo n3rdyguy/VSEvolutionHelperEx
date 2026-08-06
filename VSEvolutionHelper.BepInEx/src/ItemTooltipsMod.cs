@@ -396,6 +396,9 @@ public class ItemTooltipsMod
 			try {
 				SecretsPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("Secrets patches: " + ex.Message); }
+			try {
+				BestiaryPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("Bestiary patches: " + ex.Message); }
 			Plugin.Log.LogInfo("Patches applied successfully");
 		}
 		catch (Exception arg)
@@ -3882,12 +3885,24 @@ public class ItemTooltipsMod
 		{
 			// This branch used to return without logging, which hid a whole broken screen:
 			// the popup was built, then discarded here because the view was never recognised.
-			Plugin.Dbg($"ShowItemPopup: no modal UI active (collectionIcons={collectionIcons.Count}) - routing to collection popup or hiding");
-			if (collectionIcons.Count > 0 && (weaponType.HasValue || itemType.HasValue))
+			Plugin.Dbg($"ShowItemPopup: no modal UI active (collectionIcons={collectionIcons.Count} "
+				+ $"characterIcons={characterIcons.Count}) - routing to detail popup or hiding");
+			bool haveType = weaponType.HasValue || itemType.HasValue;
+			if (collectionIcons.Count > 0 && haveType)
 			{
 				currentCollectionHoverId = -1;
 				pendingCollectionHoverId = -1;
 				ShowCollectionPopup(weaponType, itemType);
+			}
+			else if (characterIcons.Count > 0 && haveType)
+			{
+				// Character selection is a menu, not paused gameplay, so the modal path never
+				// applies here and this used to fall through to HideAllPopups — the click
+				// landed but the nested popup was destroyed on the way in. Route to the same
+				// detail popup collections uses, anchored to the clicked icon so it parents to
+				// the character-select canvas rather than the Collections view, and cascaded
+				// over the tooltip it came from instead of docked to the screen edge.
+				ShowCollectionPopup(weaponType, itemType, null, anchor, cascade: true);
 			}
 			else
 			{
@@ -6113,7 +6128,25 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	{
 		if (!IsGamePaused())
 		{
-			HideAllPopups();
+			// Same trap as ShowItemPopup: menus are not "paused", so this used to throw away
+			// every popup the moment an arcana icon was clicked. Route to the detail panel
+			// instead, cascading on Character Selection where there is no docking column.
+			Plugin.Dbg($"ShowArcanaPopup arcana={arcanaType} no modal UI "
+				+ $"(collectionIcons={collectionIcons.Count} characterIcons={characterIcons.Count})");
+			if (collectionIcons.Count > 0)
+			{
+				currentCollectionHoverId = -1;
+				pendingCollectionHoverId = -1;
+				ShowCollectionPopup(null, null, arcanaType);
+			}
+			else if (characterIcons.Count > 0)
+			{
+				ShowCollectionPopup(null, null, arcanaType, anchor, cascade: true);
+			}
+			else
+			{
+				HideAllPopups();
+			}
 			return;
 		}
 		int num = ((anchor != null) ? ((Object)anchor).GetInstanceID() : 0);
@@ -6919,8 +6952,38 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	private static bool _collectionMenuTooltipContext;
 
 	/// <param name="anchor">Hovered collection cell — optional; docked panel ignores mouse follow.</param>
-	private static void ShowCollectionPopup(WeaponType? weaponType, ItemType? itemType, object arcanaType = null, Transform anchor = null)
+	/// <param name="cascade">
+	/// Stack over the popup it was opened from instead of docking to the right margin. Used on
+	/// Character Selection, where the tooltip is anchored next to the card and a docked panel
+	/// would fly to the far edge of the screen.
+	/// </param>
+	private static void ShowCollectionPopup(WeaponType? weaponType, ItemType? itemType, object arcanaType = null,
+		Transform anchor = null, bool cascade = false)
 	{
+		// Capture where to stack before HideCollectionPopup destroys the popup being replaced.
+		// Cascading off the topmost popup keeps a chain of nested tooltips stepping down-right
+		// rather than every level landing in the same spot.
+		bool haveCascade = false;
+		Transform cascadeParent = null;
+		Vector2 cascadeAnchored = Vector2.zero, cascadeMin = Vector2.zero, cascadeMax = Vector2.zero, cascadePivot = Vector2.zero;
+		if (cascade)
+		{
+			GameObject over = (Object)(object)collectionPopup != (Object)null ? collectionPopup : characterPopup;
+			if ((Object)(object)over != (Object)null)
+			{
+				RectTransform ort = over.GetComponent<RectTransform>();
+				if ((Object)(object)ort != (Object)null)
+				{
+					cascadeParent = over.transform.parent;
+					cascadeAnchored = ort.anchoredPosition;
+					cascadeMin = ort.anchorMin;
+					cascadeMax = ort.anchorMax;
+					cascadePivot = ort.pivot;
+					haveCascade = true;
+				}
+			}
+		}
+
 		if (interactiveMode && (Object)(object)collectionPopup != (Object)null)
 		{
 			collectionPopupBackStack.Add(currentCollectionPopupData);
@@ -7004,8 +7067,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			return;
 		}
 
-		// Fixed dock outside the main Collections grid (does not follow mouse)
-		PositionCollectionPopupDocked(collectionPopup);
+		if (haveCascade)
+			PositionPopupCascade(collectionPopup, cascadeParent, cascadeAnchored, cascadeMin, cascadeMax, cascadePivot);
+		else
+			// Fixed dock outside the main Collections grid (does not follow mouse)
+			PositionCollectionPopupDocked(collectionPopup);
 		// Keep clickable — user moves to the right panel to click formula icons
 		EnableCollectionPanelInteraction(collectionPopup);
 		try { collectionPopup.SetActive(true); } catch { }
@@ -7013,6 +7079,54 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		finally
 		{
 			_collectionMenuTooltipContext = false;
+		}
+	}
+
+	/// <summary>Step of each nested tooltip, in Safe Area reference units. Right and down.</summary>
+	private const float CascadeOffsetX = 48f;
+	private const float CascadeOffsetY = 48f;
+
+	/// <summary>
+	/// Stack a nested tooltip over the one it was opened from, offset down-right, so the parent
+	/// stays visible behind it and the pointer only travels a short distance to reach it.
+	///
+	/// Placement is passed by value rather than by reference to the previous popup, because the
+	/// caller destroys that popup before this runs.
+	/// </summary>
+	private static void PositionPopupCascade(GameObject popup, Transform parent, Vector2 anchored,
+		Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot)
+	{
+		if ((Object)(object)popup == (Object)null) return;
+		try
+		{
+			RectTransform rt = popup.GetComponent<RectTransform>();
+			if ((Object)(object)rt == (Object)null) return;
+
+			// A nested Canvas left over from another placement path would re-sort this popup
+			// independently of its new parent.
+			try
+			{
+				var cv = popup.GetComponent<Canvas>();
+				if ((Object)(object)cv != (Object)null) Object.Destroy(cv);
+				var gr = popup.GetComponent<GraphicRaycaster>();
+				if ((Object)(object)gr != (Object)null) Object.Destroy(gr);
+			}
+			catch { }
+
+			if ((Object)(object)parent != (Object)null)
+				popup.transform.SetParent(parent, false);
+			popup.transform.SetAsLastSibling();
+
+			rt.localScale = Vector3.one;
+			rt.localRotation = Quaternion.identity;
+			rt.anchorMin = anchorMin;
+			rt.anchorMax = anchorMax;
+			rt.pivot = pivot;
+			rt.anchoredPosition = anchored + new Vector2(CascadeOffsetX, -CascadeOffsetY);
+		}
+		catch (Exception ex)
+		{
+			Plugin.Dbg("[Popup] cascade: " + ex.Message);
 		}
 	}
 
@@ -7110,8 +7224,21 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		if ((Object)(object)popup == (Object)null) return;
 		try
 		{
-			// Ensure a GraphicRaycaster on a parent canvas path
+			// Clicks only reach this popup if some canvas above it has a GraphicRaycaster.
+			// This used to be looked up and then ignored, so a parent without one produced a
+			// panel that looked interactive and silently swallowed nothing.
 			var canvas = popup.GetComponentInParent<Canvas>();
+			if (Plugin.DebugVerbose)
+			{
+				bool hasRaycaster = false;
+				try
+				{
+					hasRaycaster = (Object)(object)popup.GetComponentInParent<GraphicRaycaster>() != (Object)null;
+				}
+				catch { }
+				Plugin.Dbg($"[Popup] interaction: parent='{((Object)(object)canvas != (Object)null ? ((Object)canvas).name : "none")}' "
+					+ $"raycaster={hasRaycaster} popupParent='{((Object)(object)popup.transform.parent != (Object)null ? popup.transform.parent.name : "none")}'");
+			}
 			// Root image catches hover so leaving the grid cell doesn't instantly dismiss
 			var rootImg = popup.GetComponent<Image>();
 			if ((Object)(object)rootImg != (Object)null)
@@ -8062,12 +8189,67 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 	}
 
+	/// <summary>
+	/// Is the pointer on the character tooltip, or on a nested popup opened from one of its
+	/// evolution icons?
+	/// </summary>
+	private static bool IsPointerOverCharacterTooltip()
+	{
+		if (IsPointerOverObject(characterPopup)) return true;
+		// Clicking an evolution icon opens the collection-style detail popup; moving onto it
+		// must not read as "left the tooltip", or the parent would be torn out from under it.
+		if (IsPointerOverObject(collectionPopup)) return true;
+		for (int i = 0; i < popupStack.Count; i++)
+		{
+			if (IsPointerOverObject(popupStack[i])) return true;
+		}
+		return false;
+	}
+
+	private static float characterTooltipAwaySince = -1f;
+
+	/// <summary>
+	/// How long the pointer must be clear of the character tooltip cluster before a detail
+	/// panel opened from it is dismissed. Long enough to cross a card or two on the way back.
+	/// </summary>
+	private const float CharacterTooltipGrace = 0.6f;
+
 	private static void UpdateCharacterHover()
 	{
 		PruneDeadCharacterIcons();
 		if (characterIcons.Count == 0) return;
 
 		Vector2 mouse = Input.mousePosition;
+
+		// The character tooltip is interactive — its evolution icons open nested popups on
+		// click — so the pointer has to be able to rest on it. Hold everything while it does.
+		if (currentCharacterHoverId != -1 && IsPointerOverCharacterTooltip())
+		{
+			characterTooltipAwaySince = -1f;
+			pendingCharacterHoverId = -1;
+			return;
+		}
+
+		// Once a detail panel has been opened from the tooltip, the player is reading it, not
+		// browsing characters. Moving between the tooltip and the panel crosses other cards,
+		// and letting those swap the tooltip tears the panel away mid-read. Hold the whole
+		// cluster until the pointer has genuinely been elsewhere for a moment.
+		if (currentCharacterHoverId != -1 && (Object)(object)collectionPopup != (Object)null)
+		{
+			if (characterTooltipAwaySince < 0f) characterTooltipAwaySince = Time.unscaledTime;
+			if (Time.unscaledTime - characterTooltipAwaySince < CharacterTooltipGrace)
+			{
+				pendingCharacterHoverId = -1;
+				return;
+			}
+			HideCollectionPopup();
+			characterTooltipAwaySince = -1f;
+		}
+		else
+		{
+			characterTooltipAwaySince = -1f;
+		}
+
 		bool hit = false;
 		int hitId = -1;
 		MapIconInfo hitInfo = default;
@@ -8087,11 +8269,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			{
 				pendingCharacterHoverId = hitId;
 				characterHoverStartTime = Time.unscaledTime;
-				if (currentCharacterHoverId != -1 && currentCharacterHoverId != hitId)
-				{
-					currentCharacterHoverId = -1;
-					HideCharacterPopup();
-				}
+				// Deliberately does not hide the current popup. Reaching the popup means
+				// crossing neighbouring cards, and hiding on first touch destroyed it before
+				// its icons could ever be clicked. The swap happens below, once the new card
+				// has actually been dwelt on — by which point the pointer either reached the
+				// popup (handled above) or genuinely moved to another character.
 			}
 			else if (Time.unscaledTime - characterHoverStartTime >= Plugin.TooltipHoverDelay)
 			{
@@ -8317,7 +8499,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			float tx = 0f;
 			if ((Object)(object)data.StarterSprite != (Object)null)
 			{
-				AddUiIcon(wrow.transform, data.StarterSprite, 0f, -rowH * 0.5f, icon);
+				MakeIconClickable(AddUiIcon(wrow.transform, data.StarterSprite, 0f, -rowH * 0.5f, icon),
+					data.Starter, null);
 				tx = icon + 6f;
 			}
 			var wName = AddUiText(wrow.transform, "WName", data.StarterName, font, 14f, Color.white, false,
@@ -8357,7 +8540,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				Sprite baseSpr = data.StarterSprite;
 				if ((Object)(object)baseSpr != (Object)null)
 				{
-					AddUiIcon(erow.transform, baseSpr, x, -rowH * 0.5f, smallIcon);
+					MakeIconClickable(AddUiIcon(erow.transform, baseSpr, x, -rowH * 0.5f, smallIcon),
+						data.Starter, null);
 					x += smallIcon + 3f;
 				}
 				if (row.Passives != null)
@@ -8371,7 +8555,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 						Sprite ps = p.Sprite ?? GameData.GetSprite(p.Type);
 						if ((Object)(object)ps != (Object)null)
 						{
-							AddUiIcon(erow.transform, ps, x, -rowH * 0.5f, smallIcon);
+							MakeIconClickable(AddUiIcon(erow.transform, ps, x, -rowH * 0.5f, smallIcon),
+								p.Type, null);
 							x += smallIcon + 3f;
 						}
 						else
@@ -8391,7 +8576,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				Sprite es = row.EvolvedSprite ?? GameData.GetSprite(row.Evolved);
 				if ((Object)(object)es != (Object)null)
 				{
-					AddUiIcon(erow.transform, es, x, -rowH * 0.5f, smallIcon);
+					MakeIconClickable(AddUiIcon(erow.transform, es, x, -rowH * 0.5f, smallIcon),
+						row.Evolved, null);
 					x += smallIcon + 4f;
 				}
 				string en = string.IsNullOrEmpty(row.EvolvedName) ? row.Evolved.ToString() : row.EvolvedName;
@@ -8480,7 +8666,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 	private static Color SoftWhite() => new Color(0.85f, 0.85f, 0.9f, 1f);
 
-	private static void AddUiIcon(Transform parent, Sprite sprite, float x, float yCenter, float size)
+	private static GameObject AddUiIcon(Transform parent, Sprite sprite, float x, float yCenter, float size)
 	{
 		GameObject ic = new GameObject("Icon");
 		ic.transform.SetParent(parent, false);
@@ -8494,6 +8680,20 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		img.sprite = sprite;
 		img.preserveAspect = true;
 		((Graphic)img).raycastTarget = false;
+		return ic;
+	}
+
+	/// <summary>
+	/// Make a character-tooltip icon open the same nested formula popup the grimoire icons do.
+	/// DisablePopupRaycasts re-enables hit-testing for anything carrying an EventTrigger, so
+	/// the icon becomes clickable while the rest of the tooltip stays click-through.
+	/// </summary>
+	private static void MakeIconClickable(GameObject icon, WeaponType? weaponType, ItemType? itemType)
+	{
+		if ((Object)(object)icon == (Object)null) return;
+		if (!weaponType.HasValue && !itemType.HasValue) return;
+		try { AddHoverToGameObject(icon, weaponType, itemType, useClick: true); }
+		catch (Exception ex) { Plugin.Dbg("[Character] icon click: " + ex.Message); }
 	}
 
 	private static TextMeshProUGUI AddUiText(Transform parent, string name, string text, TMP_FontAsset font,
@@ -8611,6 +8811,15 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 	}
 
+	/// <summary>
+	/// Make a popup click-through so whatever it covers stays selectable — except for the
+	/// icons that are themselves interactive.
+	///
+	/// A blanket pass over every Graphic also silences the evolution icons wired for click,
+	/// which makes the tooltip look interactive while swallowing nothing: clicks land on the
+	/// card behind it and the nested formula popup can never open. Anything carrying an
+	/// EventTrigger is interactive by construction, so it opts back in.
+	/// </summary>
 	private static void DisablePopupRaycasts(GameObject popup)
 	{
 		if ((Object)(object)popup == (Object)null) return;
@@ -8620,6 +8829,12 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			{
 				if ((Object)(object)g != (Object)null)
 					((Graphic)g).raycastTarget = false;
+			}
+			foreach (var et in popup.GetComponentsInChildren<UnityEngine.EventSystems.EventTrigger>(true))
+			{
+				if ((Object)(object)et == (Object)null) continue;
+				Graphic g = ((Component)et).GetComponent<Graphic>();
+				if ((Object)(object)g != (Object)null) g.raycastTarget = true;
 			}
 		}
 		catch { }
@@ -9097,13 +9312,29 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			y = AdvancePastHeader(secHeader, contentW, y, 4f, 20f);
 
 			const float rowIcon = 30f;
-			const int maxRows = 10;
+			// Stat panels carry several labelled groups, so the old 10-row cap truncated them
+			// into a "+N more" that hid the very thing the panel exists to show.
+			const int maxRows = 20;
 			float nameX = Padding + rowIcon + 8f;
 			float nameW = contentW - rowIcon - 8f;
 			int shown = 0;
 			for (; shown < rows.Count && shown < maxRows; shown++)
 			{
 				var r = rows[shown];
+				if (r.IsHeader)
+				{
+					GameObject rowHdr = CreateTextElement(val.transform, "RowHeader", r.Label, font, 13f,
+						new Color(0.9f, 0.75f, 0.3f, 1f), (FontStyles)1);
+					RectTransform rhRt = rowHdr.GetComponent<RectTransform>();
+					rhRt.anchorMin = new Vector2(0f, 1f);
+					rhRt.anchorMax = new Vector2(0f, 1f);
+					rhRt.pivot = new Vector2(0f, 1f);
+					y -= 4f;
+					rhRt.anchoredPosition = new Vector2(Padding, y);
+					rhRt.sizeDelta = new Vector2(contentW, 18f);
+					y = AdvancePastHeader(rowHdr, contentW, y, 3f, 18f);
+					continue;
+				}
 				y = AddWareRow(val.transform, font, r.Sprite, r.Label, rowIcon, nameX, nameW, y, shown);
 			}
 			if (rows.Count > shown)
@@ -9183,36 +9414,39 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		return y - rowH - 4f;
 	}
 
-	private static GameObject secretPopup = null;
+	private static GameObject dockedPopup = null;
 
 	/// <summary>
-	/// Offset of the secrets popup from the centre of the Safe Area, in its 1920x1200
-	/// reference units. Positive is up and to the right; X places it in the middle of the
-	/// right half, clear of the secrets list.
+	/// Offset of a docked popup from the centre of the Safe Area, in its 1920x1200 reference
+	/// units. Positive is up and to the right; X places it in the middle of the right half,
+	/// clear of the list it describes.
 	/// </summary>
-	private const float SecretPopupOffsetX = 480f;
-	private const float SecretPopupOffsetY = 200f;
+	private const float DockedPopupOffsetX = 480f;
+	private const float DockedPopupOffsetY = 200f;
 
 	/// <summary>
-	/// Show a secret's rewards, centred in the top-right quadrant of the App Safe Area rather
-	/// than placed near the row: the Secrets list is a ScrollRect, and a popup parented inside
-	/// it gets clipped by the mask — the same trap the Collections tooltip fell into.
+	/// Show a popup docked to a fixed spot in the App Safe Area rather than placed next to the
+	/// row it describes. List pages (Secrets, Bestiary, Achievements, Power-ups) are all
+	/// ScrollRects, and a popup parented inside one gets clipped by the mask — the same trap
+	/// the Collections tooltip fell into.
 	/// </summary>
-	public static void ShowSecretRewardPopup(string title, List<GameData.IconRow> rows)
+	public static void ShowDockedPopup(string title, string description, Sprite sprite,
+		List<GameData.IconRow> rows, string sectionHeader, string logTag = "Tooltip",
+		Vector2? offset = null, Vector2? pivot = null)
 	{
-		HideSecretRewardPopup();
-		if (rows == null || rows.Count == 0) return;
+		HideDockedPopup();
+		if ((rows == null || rows.Count == 0) && string.IsNullOrEmpty(description)) return;
 		try
 		{
 			GameObject view = GameObject.Find("UI/Canvas - App/Safe Area");
 			if ((Object)(object)view == (Object)null) return;
 
-			secretPopup = CreateSimpleMapPopup(view.transform, title, null, null, rows, "Unlocks:");
-			if ((Object)(object)secretPopup == (Object)null) return;
+			dockedPopup = CreateSimpleMapPopup(view.transform, title, description, sprite, rows, sectionHeader);
+			if ((Object)(object)dockedPopup == (Object)null) return;
 
-			RectTransform rt = secretPopup.GetComponent<RectTransform>();
+			RectTransform rt = dockedPopup.GetComponent<RectTransform>();
 			if ((Object)(object)rt == (Object)null) return;
-			secretPopup.transform.SetAsLastSibling();
+			dockedPopup.transform.SetAsLastSibling();
 			rt.localScale = Vector3.one;
 			// Anchor to the centre and place with an explicit offset rather than an anchor
 			// fraction: changing anchorMin/anchorMax does not recompute the transform in the
@@ -9221,32 +9455,79 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			// canvas instead of being tied to a pixel resolution.
 			rt.anchorMin = new Vector2(0.5f, 0.5f);
 			rt.anchorMax = new Vector2(0.5f, 0.5f);
-			rt.pivot = new Vector2(0.5f, 0.5f);
-			rt.anchoredPosition = new Vector2(SecretPopupOffsetX, SecretPopupOffsetY);
+			rt.pivot = pivot ?? new Vector2(0.5f, 0.5f);
+			rt.anchoredPosition = offset ?? new Vector2(DockedPopupOffsetX, DockedPopupOffsetY);
 
 			if (Plugin.DebugVerbose)
 			{
 				RectTransform prt = view.GetComponent<RectTransform>();
 				// No world position here: RectTransform.position is not recomputed until the
 				// next layout pass, so reading it back in this frame reports the old value.
-				Plugin.Dbg($"[Secrets] popup rect={rt.rect} anchored={rt.anchoredPosition} "
+				Plugin.Dbg($"[{logTag}] popup rect={rt.rect} anchored={rt.anchoredPosition} "
 					+ $"parent='{view.name}' parentRect={((Object)(object)prt != (Object)null ? prt.rect.ToString() : "?")} "
 					+ $"screen={Screen.width}x{Screen.height}");
 			}
 		}
 		catch (Exception ex)
 		{
-			Plugin.Log.LogWarning("[Secrets] popup: " + ex.Message);
+			Plugin.Log.LogWarning($"[{logTag}] popup: " + ex.Message);
 		}
 	}
 
-	public static void HideSecretRewardPopup()
+	public static void HideDockedPopup()
 	{
-		if ((Object)(object)secretPopup != (Object)null)
+		if ((Object)(object)dockedPopup != (Object)null)
 		{
-			Object.Destroy((Object)(object)secretPopup);
-			secretPopup = null;
+			Object.Destroy((Object)(object)dockedPopup);
+			dockedPopup = null;
 		}
+	}
+
+	/// <summary>
+	/// Is a screen point inside every mask that clips this object?
+	///
+	/// Rect-contains hover fallbacks test a cell's own rect, which stays valid after the cell
+	/// has been scrolled out of its viewport — so hovering empty space above or below a list
+	/// matches a cell that is not on screen. An EventSystem raycast is clipped by masks
+	/// automatically; these fallbacks are not, so they have to ask.
+	///
+	/// Every enclosing mask is checked, not just the nearest, because nested scroll areas each
+	/// narrow the visible region further.
+	/// </summary>
+	public static bool IsInsideClip(GameObject go, Vector2 screenPos, Camera cam)
+	{
+		if ((Object)(object)go == (Object)null) return true;
+		try
+		{
+			Transform t = go.transform;
+			while ((Object)(object)t != (Object)null)
+			{
+				RectTransform clip = null;
+
+				RectMask2D rectMask = ((Component)t).GetComponent<RectMask2D>();
+				if ((Object)(object)rectMask != (Object)null && rectMask.enabled)
+				{
+					clip = ((Component)rectMask).GetComponent<RectTransform>();
+				}
+				else
+				{
+					Mask mask = ((Component)t).GetComponent<Mask>();
+					if ((Object)(object)mask != (Object)null && mask.enabled)
+						clip = ((Component)mask).GetComponent<RectTransform>();
+				}
+
+				if ((Object)(object)clip != (Object)null
+					&& !RectTransformUtility.RectangleContainsScreenPoint(clip, screenPos, cam)
+					&& !RectTransformUtility.RectangleContainsScreenPoint(clip, screenPos, null))
+				{
+					return false;
+				}
+
+				t = t.parent;
+			}
+		}
+		catch { }
+		return true;
 	}
 
 	public static Type GetCachedArcanaTypeEnum()
