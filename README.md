@@ -1,12 +1,12 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.11.1** - Evolution, arcana, grimoire, collection, map, stage, character, adventure, and secrets tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.13.0** - Evolution, arcana, grimoire, collection, map, stage, character, adventure, and secrets tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
 | | |
 |--|--|
-| **Latest release** | [v1.11.0](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.11.0) |
+| **Latest release** | [v1.13.0](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.13.0) |
 | **Game** | Vampire Survivors **1.15.x** (tested **1.15.114**), Unity **6000.0.62f1** |
 | **Loader** | [BepInEx 6 IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (BE / bleeding-edge) |
 
@@ -47,6 +47,7 @@ Please support the original authors. This port reuses their design with typed Il
 | **Stage selection - Music \| Guide** | Tabs above the song panel: **Music** keeps the track list; **Guide** reuses that space for stage help |
 | **Secrets** | Hover a secret → what it unlocks (character portrait, weapons, relic, arcana, power-up, skins, stage, gold). Renamed characters show both names. Turn off `SecretSpoilers` to reveal only secrets you have already found |
 | **Unlocks (achievements)** | Hover a row on the Unlocks page for what it grants (character portrait, weapons, relic, arcana, power-up, skins, stage, gold) and what it requires |
+| **Power Up** | Hover an upgrade → level owned, next price, and what the rest costs. Prices climb with every level bought anywhere on the page, so the game's single "next" figure says little about finishing an upgrade; levels beyond the next are projected and labelled as such |
 | **Bestiary** | Hover an enemy → HP, damage, speed, XP, knockback, plus **resistances**, skills and the stages it appears in - none of which the page itself shows. Stats read as ranges where one entry covers a family of enemies. Turn off `BestiarySpoilers` for killed enemies only |
 
 ### Stage Guide (right column)
@@ -204,7 +205,7 @@ Newer BE builds generally work too. If a very new BE build misbehaves, dropping 
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.11.1]
+Loading [VS Evolution Helper 1.13.0]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete

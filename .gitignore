@@ -35,3 +35,5 @@ installer/dist/
 installer/dist-trim/
 
 installer/release/
+
+*.env*

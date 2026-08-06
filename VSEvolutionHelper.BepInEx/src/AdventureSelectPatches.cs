@@ -125,7 +125,7 @@ public static class AdventureSelectPatches
 		public string StageSet;
 		public Sprite Icon;
 		public List<(string Name, Sprite Sprite)> Weapons = new List<(string, Sprite)>();
-		public List<string> Characters = new List<string>();
+		public List<(string Name, Sprite Sprite)> Characters = new List<(string, Sprite)>();
 		public int ProgressGoalCount;
 		public string BodyFallback;
 	}
@@ -177,7 +177,7 @@ public static class AdventureSelectPatches
 					td.Icon = ui._Icon.sprite;
 			}
 			catch { }
-			try { td.StageSet = data.StageSetType.ToString(); } catch { }
+			try { td.StageSet = StageSetName(data.StageSetType.ToString()); } catch { }
 
 			try
 			{
@@ -186,7 +186,10 @@ public static class AdventureSelectPatches
 				{
 					int n = Math.Min(chars.Count, 16);
 					for (int i = 0; i < n; i++)
-						td.Characters.Add(HumanizeEnum(chars[i].ToString()));
+					{
+						string id = chars[i].ToString();
+						td.Characters.Add((CharacterName(id), GameData.GetCharacterPortrait(id)));
+					}
 				}
 			}
 			catch { }
@@ -276,8 +279,8 @@ public static class AdventureSelectPatches
 			sb.AppendLine($"Adventure: {type}");
 			try
 			{
-				var sst = data.StageSetType;
-				sb.AppendLine($"Stage set: {sst}");
+				string sst = StageSetName(data.StageSetType.ToString());
+				if (!string.IsNullOrEmpty(sst)) sb.AppendLine($"Stage set: {sst}");
 			}
 			catch { }
 
@@ -292,7 +295,7 @@ public static class AdventureSelectPatches
 					int shown = 0;
 					for (int i = 0; i < chars.Count && shown < 12; i++)
 					{
-						sb.AppendLine("  • " + HumanizeEnum(chars[i].ToString()));
+						sb.AppendLine("  • " + CharacterName(chars[i].ToString()));
 						shown++;
 					}
 					if (chars.Count > shown)
@@ -345,6 +348,54 @@ public static class AdventureSelectPatches
 		if (string.IsNullOrEmpty(raw)) return raw;
 		raw = raw.Replace("ADV_", "").Replace("TP_", "").Replace('_', ' ');
 		return raw;
+	}
+
+	/// <summary>
+	/// A character's name as the game writes it, not the shouted enum id. The composed
+	/// prefix/name/surname is what the rest of the mod already shows for characters, so the
+	/// Adventures list agreeing with the Collections list is worth more than saving the lookup.
+	/// </summary>
+	private static string CharacterName(string id)
+	{
+		if (string.IsNullOrEmpty(id)) return id;
+		try
+		{
+			string n = GameData.DescribeRewardCharacter(id);
+			if (!string.IsNullOrWhiteSpace(n) && !GameData.LooksLikeLocKey(n)) return n.Trim();
+		}
+		catch { }
+		try
+		{
+			string loc = GameData.LocalizeTypedDescription(id, "name");
+			if (!string.IsNullOrWhiteSpace(loc) && !GameData.LooksLikeLocKey(loc)) return loc.Trim();
+		}
+		catch { }
+		return GameData.HumanizeId(id);
+	}
+
+	/// <summary>
+	/// The stage set as a readable name. The raw value is an enum id that the game localizes
+	/// through its own terms, so printing it verbatim leaks an I2 key into the tooltip.
+	/// </summary>
+	private static string StageSetName(string raw)
+	{
+		if (string.IsNullOrWhiteSpace(raw)) return null;
+		foreach (string kind in new[] { "name", "description" })
+		{
+			try
+			{
+				string t = GameData.LocalizeTypedDescription(raw, kind);
+				if (!string.IsNullOrWhiteSpace(t) && !GameData.LooksLikeLocKey(t)) return t.Trim();
+			}
+			catch { }
+		}
+		try
+		{
+			string d = GameData.LocalizeDisplayText(raw);
+			if (!string.IsNullOrWhiteSpace(d) && !GameData.LooksLikeLocKey(d)) return d.Trim();
+		}
+		catch { }
+		return GameData.HumanizeId(raw);
 	}
 
 	public static bool TryFindHovered(Vector2 screenPos, out int hitId, out GameObject hitGo)

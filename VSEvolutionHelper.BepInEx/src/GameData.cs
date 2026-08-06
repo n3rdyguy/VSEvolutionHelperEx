@@ -18,6 +18,7 @@ using Il2CppDictPowerUps = Il2CppSystem.Collections.Generic.Dictionary<VampireSu
 using Il2CppDictArcanas = Il2CppSystem.Collections.Generic.Dictionary<VampireSurvivors.Data.ArcanaType, VampireSurvivors.Data.ArcanaData>;
 using Il2CppDictItems = Il2CppSystem.Collections.Generic.Dictionary<VampireSurvivors.Data.ItemType, VampireSurvivors.Data.Items.ItemData>;
 using Il2CppListWeapons = Il2CppSystem.Collections.Generic.List<VampireSurvivors.Data.Weapons.WeaponData>;
+using Il2CppListPowerUps = Il2CppSystem.Collections.Generic.List<VampireSurvivors.Data.PowerUp.PowerUpData>;
 using Il2CppListWeaponType = Il2CppSystem.Collections.Generic.List<VampireSurvivors.Data.WeaponType>;
 using Il2CppListObject = Il2CppSystem.Collections.Generic.List<Il2CppSystem.Object>;
 
@@ -384,6 +385,120 @@ public static class GameData
             return null;
         }
         return list[0];
+    }
+
+    /// <summary>
+    /// What a Power Up costs from here on, as displayable rows.
+    ///
+    /// Prices are computed, not stored: a level costs its own number times the power up's base
+    /// price, plus a surcharge that grows with the total number of levels bought across every
+    /// power up. So the record's <c>price</c> is a base, the same upgrade costs more later than
+    /// it does now, and the page's single "next level" figure answers almost nothing about what
+    /// finishing it will cost.
+    ///
+    /// <paramref name="nextPrice"/> is the game's own answer for the next level, taken from
+    /// PlayerStats. Everything further ahead is projected from it rather than from a formula of
+    /// our own: the surcharge is measured by subtracting the base part from that live number,
+    /// then grown per purchase. If the two disagree about the next level - the one value we can
+    /// check - no projection is shown at all, because a confidently wrong total is worse than
+    /// no total.
+    /// </summary>
+    public static System.Collections.Generic.List<IconRow> GetPowerUpRows(
+        PowerUpType type, int currentLevel, int maxLevel, float nextPrice, out string description)
+    {
+        description = null;
+        EnsureLoaded();
+        var rows = new System.Collections.Generic.List<IconRow>();
+        if (_powerUps == null || !_powerUps.ContainsKey(type)) return rows;
+        var list = _powerUps[type];
+        if (list == null || list.Count == 0) return rows;
+
+        try
+        {
+            description = LocalizeMultilineDisplayText(list[0].description);
+            if (string.IsNullOrWhiteSpace(description)) description = null;
+        }
+        catch { }
+
+        int basePrice = 0;
+        try { basePrice = list[0].price; } catch { }
+
+        int max = maxLevel > 0 ? maxLevel : list.Count;
+        if (currentLevel < 0) currentLevel = 0;
+        if (currentLevel > max) currentLevel = max;
+
+        rows.Add(IconRow.Header("Levels:"));
+        rows.Add(new IconRow(null, $"Owned: {currentLevel} / {max}"));
+
+        if (currentLevel >= max)
+        {
+            rows.Add(new IconRow(null, "Maxed out"));
+            AddRankRow(rows, list);
+            return rows;
+        }
+
+        if (nextPrice > 0) rows.Add(new IconRow(null, $"Next level: {Gold(nextPrice)}"));
+
+        // The surcharge riding on this purchase, measured rather than assumed.
+        double surcharge = nextPrice - (double)(currentLevel + 1) * basePrice;
+        if (nextPrice > 0 && basePrice > 0 && surcharge >= 0)
+        {
+            double running = surcharge;
+            long remaining = 0;
+            var ladder = new System.Text.StringBuilder();
+            for (int lvl = currentLevel + 1; lvl <= max; lvl++)
+            {
+                long price = (long)((double)lvl * basePrice + Math.Floor(running));
+                remaining += price;
+                if (ladder.Length > 0) ladder.Append(", ");
+                ladder.Append(Gold(price));
+                // Each purchase anywhere pushes the surcharge up; buying these is what does it.
+                running = running > 0 ? running * PowerUpSurchargeGrowth : running;
+            }
+
+            rows.Add(new IconRow(null, $"Remaining to max: {Gold(remaining)}"));
+            if (ladder.Length > 0)
+            {
+                rows.Add(IconRow.Header("Projected per level:"));
+                rows.Add(new IconRow(null, ladder.ToString()));
+                rows.Add(new IconRow(null, "Assumes you buy these next; other purchases raise them."));
+            }
+        }
+        else if (Plugin.DebugVerbose)
+        {
+            Plugin.Dbg($"[GameData] {type}: no projection, next={nextPrice} base={basePrice} "
+                + $"level={currentLevel} surcharge={surcharge:0.##}");
+        }
+
+        AddRankRow(rows, list);
+        return rows;
+    }
+
+    /// <summary>
+    /// How fast the global surcharge grows per level bought. Community calculators put it at
+    /// <c>floor(20 * 1.1^n)</c>, and only the growth is taken from that here - the amount itself
+    /// is measured from the game's own price, so a changed constant shifts nothing.
+    /// </summary>
+    private const double PowerUpSurchargeGrowth = 1.1;
+
+    private static void AddRankRow(System.Collections.Generic.List<IconRow> rows, Il2CppListPowerUps list)
+    {
+        try
+        {
+            int rank = list[0].unlockedRank;
+            if (rank > 0)
+            {
+                rows.Add(IconRow.Header("Requires:"));
+                rows.Add(new IconRow(null, $"Rank {rank}"));
+            }
+        }
+        catch { }
+    }
+
+    /// <summary>Gold amounts read better grouped; the page writes them plain.</summary>
+    private static string Gold(double amount)
+    {
+        return amount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     public static string GetWeaponName(WeaponType type)
@@ -1269,6 +1384,8 @@ public static class GameData
         /// <summary>Stage ids the Bestiary lists under "Found in".</summary>
         public System.Collections.Generic.List<string> Places;
         public string Name, Desc;
+        /// <summary>Sprite frame/texture as shipped, for enemies whose typed record has none.</summary>
+        public string Frame, Texture;
     }
 
     private static System.Collections.Generic.Dictionary<string, EnemyRec> _enemyRecs;
@@ -1367,7 +1484,126 @@ public static class GameData
         r.Places = JsonStrList(rec, "bPlaces");
         r.Name = JsonStr(rec, "bName");
         r.Desc = JsonStr(rec, "bDesc");
+        r.Texture = JsonStr(rec, "textureName");
+        var frames = JsonStrList(rec, "frameNames");
+        if (frames != null && frames.Count > 0) r.Frame = frames[0];
         return r;
+    }
+
+    /// <summary>
+    /// An enemy's sprite, from its own record and then from its Bestiary siblings.
+    ///
+    /// A row whose own frame does not resolve is often a variant of one that does - the entry
+    /// covers a family - so the family is tried before giving up. The failure is logged with
+    /// the frame and texture names, because a whole block of enemies failing together points at
+    /// an atlas that is not loaded rather than at bad data.
+    /// </summary>
+    public static Sprite GetEnemySprite(string enemyId)
+    {
+        EnsureEnemyRecs();
+        if (_enemyRecs == null || string.IsNullOrEmpty(enemyId)) return null;
+        if (!_enemyRecs.TryGetValue(enemyId, out EnemyRec self) || self == null) return null;
+
+        Sprite s = TryFrame(self);
+        if ((Object)(object)s != (Object)null) return s;
+
+        if (self.Variants != null)
+        {
+            foreach (string vid in self.Variants)
+            {
+                if (string.Equals(vid, enemyId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!_enemyRecs.TryGetValue(vid, out EnemyRec v) || v == null) continue;
+                s = TryFrame(v);
+                if ((Object)(object)s != (Object)null) return s;
+            }
+        }
+
+        if (Plugin.DebugVerbose)
+            Plugin.Dbg($"[GameData] no sprite for {enemyId}: frame='{self.Frame}' texture='{self.Texture}'");
+        return null;
+    }
+
+    private static Sprite TryFrame(EnemyRec r)
+    {
+        if (r == null || string.IsNullOrEmpty(r.Frame)) return null;
+        try
+        {
+            Sprite s = LoadSprite(r.Frame, r.Texture);
+            if ((Object)(object)s != (Object)null) return s;
+            // Frame-only, in case the record names an atlas that is not the one holding it.
+            return LoadSprite(r.Frame, null);
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// An enemy's Bestiary icon, by the naming the info panel uses.
+    ///
+    /// The panel draws portraits called "<c>kappa_i01</c>" and "<c>ugul_i01</c>" while the
+    /// records name animation frames, "<c>kappa_0.png</c>". Those are two different sprites, and
+    /// on some pages only the icon's atlas is loaded - which is why an enemy can be drawn on
+    /// screen while its frame name resolves to nothing.
+    ///
+    /// The base is taken from the frame rather than the enemy id, because the two disagree
+    /// often enough to matter: FS_ROTGHOUL's icon is "ugul_i01". Variants are tried second on
+    /// the same reasoning as <see cref="GetEnemySprite"/>.
+    /// </summary>
+    public static Sprite GetEnemyIconSprite(string enemyId)
+    {
+        EnsureEnemyRecs();
+        if (_enemyRecs == null || string.IsNullOrEmpty(enemyId)) return null;
+        if (!_enemyRecs.TryGetValue(enemyId, out EnemyRec self) || self == null) return null;
+
+        Sprite s = TryIcon(self);
+        if ((Object)(object)s != (Object)null) return s;
+
+        if (self.Variants != null)
+        {
+            foreach (string vid in self.Variants)
+            {
+                if (string.Equals(vid, enemyId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!_enemyRecs.TryGetValue(vid, out EnemyRec v) || v == null) continue;
+                s = TryIcon(v);
+                if ((Object)(object)s != (Object)null) return s;
+            }
+        }
+        return null;
+    }
+
+    private static Sprite TryIcon(EnemyRec r)
+    {
+        if (r == null || string.IsNullOrEmpty(r.Frame)) return null;
+        try
+        {
+            string b = IconBase(r.Frame);
+            if (string.IsNullOrEmpty(b)) return null;
+            foreach (string cand in new[] { b + "_i01", b.ToLowerInvariant() + "_i01" })
+            {
+                Sprite s = LoadSprite(cand, r.Texture);
+                if ((Object)(object)s != (Object)null) return s;
+                s = LoadSprite(cand, null);
+                if ((Object)(object)s != (Object)null) return s;
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>"kappa_0.png" -> "kappa": drop the extension, then the frame number.</summary>
+    private static string IconBase(string frame)
+    {
+        string b = frame;
+        int dot = b.LastIndexOf('.');
+        if (dot > 0) b = b.Substring(0, dot);
+        int us = b.LastIndexOf('_');
+        if (us > 0)
+        {
+            bool digits = us + 1 < b.Length;
+            for (int i = us + 1; i < b.Length && digits; i++)
+                if (b[i] < '0' || b[i] > '9') digits = false;
+            if (digits) b = b.Substring(0, us);
+        }
+        return b;
     }
 
     /// <summary>The Bestiary name for an enemy, as shipped in its record.</summary>
@@ -2549,6 +2785,12 @@ public static class GameData
                 s = SpriteManager.GetSprite(frameName, atlas, true);
                 if (s != null) return s;
             }
+
+            // Anything already in memory, whatever atlas holds it. SpriteManager answers for
+            // the atlases it knows the names of; DLC content is demonstrably not among them -
+            // the Bestiary draws "kappa_i01" on screen while every lookup above returns null.
+            s = FindLoadedSprite(frameName);
+            if (s != null) return s;
         }
         catch (Exception ex)
         {
@@ -2557,6 +2799,155 @@ public static class GameData
         if (Plugin.DebugVerbose)
             Plugin.Dbg($"LoadSprite miss frame={frameName} tex={textureName}");
         return null;
+    }
+
+    /// <summary>
+    /// Bumped whenever the set of loaded sprites changes. Callers cache their misses against
+    /// it, so "there is no icon for this" stays cheap without becoming permanent.
+    /// </summary>
+    public static int SpriteGeneration { get; private set; }
+
+    public static void BumpSpriteGeneration()
+    {
+        SpriteGeneration++;
+    }
+
+    /// <summary>
+    /// Atlases we have asked the game to load, so each is only requested once.
+    ///
+    /// DLC art is loaded on demand - selecting a Bestiary enemy is what pulls its atlas in - so
+    /// an enemy that has only ever been hovered has no sprite anywhere in memory to find. This
+    /// asks for that one atlas rather than preloading everything the page could possibly show.
+    /// </summary>
+    private static readonly System.Collections.Generic.HashSet<string> _texturesRequested =
+        new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Ask for the atlas holding an enemy's art. The load is asynchronous and nothing waits on
+    /// it: the caller has already failed to find a sprite this time round, and the point is for
+    /// the next hover to succeed.
+    /// </summary>
+    public static void RequestEnemyTexture(string enemyId)
+    {
+        EnsureEnemyRecs();
+        if (_enemyRecs == null || string.IsNullOrEmpty(enemyId)) return;
+        if (!_enemyRecs.TryGetValue(enemyId, out EnemyRec r) || r == null) return;
+        if (string.IsNullOrEmpty(r.Texture)) return;
+        if (!_texturesRequested.Add(r.Texture)) return;
+
+        try
+        {
+            var dlc = DlcFor(enemyId);
+            string tex = r.Texture;
+            // A real delegate rather than null: an unguarded callback inside the loader would
+            // fault in IL2CPP, where a catch here cannot help.
+            var done = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<bool>>(
+                (Action<bool>)(ok =>
+                {
+                    // The index predates the atlas, so it has to be rebuilt before the next look.
+                    _spriteIndexBuiltAt = -999f;
+                    BumpSpriteGeneration();
+                    Plugin.Dbg($"[GameData] atlas '{tex}' load complete: {ok}");
+                }));
+            VampireSurvivors.Framework.Loading.SpriteLoader.LoadTextureAsync(
+                tex, SpriteCacheGroup, dlc, done);
+            Plugin.Dbg($"[GameData] requested atlas '{tex}' for {enemyId}"
+                + (dlc.HasValue ? $" (dlc {dlc.Value})" : ""));
+        }
+        catch (Exception ex)
+        {
+            Log.LogWarning($"[GameData.RequestEnemyTexture] {r.Texture}: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Our own cache group, not one of the game's. Loads land in a bucket the game does not
+    /// manage, so its own unloading cannot be surprised by an atlas it never asked for.
+    /// </summary>
+    private const string SpriteCacheGroup = "VSEvolutionHelper";
+
+    /// <summary>
+    /// Which DLC an enemy belongs to, by the prefix on its id. The loader needs this to find
+    /// the atlas at all; base game enemies pass no value.
+    /// </summary>
+    private static Il2CppSystem.Nullable<DlcType> DlcFor(string enemyId)
+    {
+        var none = new Il2CppSystem.Nullable<DlcType>();
+        if (string.IsNullOrEmpty(enemyId)) return none;
+        string id = enemyId.ToUpperInvariant();
+
+        DlcType? t = null;
+        if (id.StartsWith("MS_") || id.Contains("_MS_")) t = DlcType.Moonspell;
+        else if (id.StartsWith("FS_") || id.Contains("_FS_")) t = DlcType.Foscari;
+        else if (id.StartsWith("CHAL_") || id.Contains("_CHAL_")) t = DlcType.Chalcedony;
+        else if (id.StartsWith("FB_") || id.Contains("_FB_")) t = DlcType.FirstBlood;
+        else if (id.StartsWith("EME_") || id.Contains("_EME_")) t = DlcType.Emeralds;
+        else if (id.StartsWith("TP_") || id.Contains("_TP_")) t = DlcType.ThosePeople;
+        else if (id.StartsWith("LEM_") || id.Contains("_LEM_")) t = DlcType.Lemon;
+
+        return t.HasValue ? new Il2CppSystem.Nullable<DlcType>(t.Value) : none;
+    }
+
+    /// <summary>
+    /// Every sprite currently in memory, by name. Case-insensitive, because the same art ships
+    /// under both "AGaea_i01" and "agaea_i01".
+    /// </summary>
+    private static System.Collections.Generic.Dictionary<string, Sprite> _spriteIndex;
+    private static float _spriteIndexBuiltAt = -999f;
+
+    /// <summary>
+    /// A loaded sprite by name, regardless of which atlas holds it.
+    ///
+    /// Atlases load as pages need them, so a miss is not final: the index is rebuilt on a miss,
+    /// rate limited, because the sprite may simply not have existed when it was last built.
+    /// </summary>
+    public static Sprite FindLoadedSprite(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        string bare = name;
+        int dot = bare.LastIndexOf('.');
+        if (dot > 0) bare = bare.Substring(0, dot);
+
+        Sprite hit = LookupIndexed(name) ?? LookupIndexed(bare);
+        if ((Object)(object)hit != (Object)null) return hit;
+
+        if (Time.realtimeSinceStartup - _spriteIndexBuiltAt < 10f) return null;
+        BuildSpriteIndex();
+        return LookupIndexed(name) ?? LookupIndexed(bare);
+    }
+
+    private static Sprite LookupIndexed(string key)
+    {
+        if (_spriteIndex == null || string.IsNullOrEmpty(key)) return null;
+        if (!_spriteIndex.TryGetValue(key, out Sprite s)) return null;
+        // Destroyed sprites linger as keys; the null check is the Unity one, not a reference one.
+        return (Object)(object)s != (Object)null ? s : null;
+    }
+
+    private static void BuildSpriteIndex()
+    {
+        _spriteIndexBuiltAt = Time.realtimeSinceStartup;
+        try
+        {
+            var all = Resources.FindObjectsOfTypeAll<Sprite>();
+            if (all == null) return;
+            var map = new System.Collections.Generic.Dictionary<string, Sprite>(
+                StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < all.Count; i++)
+            {
+                var s = all[i];
+                if ((Object)(object)s == (Object)null) continue;
+                string n = ((Object)s).name;
+                if (string.IsNullOrEmpty(n) || map.ContainsKey(n)) continue;
+                map[n] = s;
+            }
+            _spriteIndex = map;
+            Plugin.Dbg($"[GameData] sprite index: {map.Count} names from {all.Count} sprites");
+        }
+        catch (Exception ex)
+        {
+            Log.LogWarning("[GameData.BuildSpriteIndex] " + ex.Message);
+        }
     }
 
     /// <summary>

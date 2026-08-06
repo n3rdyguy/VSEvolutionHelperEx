@@ -28,7 +28,19 @@ public sealed class RowTooltipRegistry
 		public string Title;
 		public string Description;
 		public Sprite Sprite;
+		/// <summary>
+		/// Asked for a sprite at hover time when <see cref="Sprite"/> is null. A row's own icon
+		/// is not necessarily assigned yet when the row is registered, so scraping it has to
+		/// wait until the row has actually been drawn. The answer is cached once it is real.
+		/// </summary>
+		public Func<Sprite> SpriteProvider;
 		public List<GameData.IconRow> Rows;
+		/// <summary>
+		/// Asked for the rows at hover time, in place of <see cref="Rows"/>. For anything whose
+		/// numbers move while the page is open - Power Up prices climb with every purchase
+		/// anywhere - rows worked out once at registration are wrong by the second purchase.
+		/// </summary>
+		public Func<List<GameData.IconRow>> RowsProvider;
 		public string SectionHeader;
 		/// <summary>Placement override in Safe Area reference units; null uses the default dock.</summary>
 		public Vector2? Offset;
@@ -96,6 +108,7 @@ public sealed class RowTooltipRegistry
 			exit.eventID = EventTriggerType.PointerExit;
 			exit.callback.AddListener((UnityEngine.Events.UnityAction<BaseEventData>)(Action<BaseEventData>)(delegate
 			{
+				_shownId = -1;
 				ItemTooltipsMod.HideDockedPopup();
 			}));
 			et.triggers.Add(exit);
@@ -106,10 +119,51 @@ public sealed class RowTooltipRegistry
 		}
 	}
 
+	/// <summary>The row a tooltip is currently open for, so it can be rebuilt in place.</summary>
+	private int _shownId = -1;
+
+	/// <summary>
+	/// Rebuild the open tooltip, if any. Buying on a page changes what the tooltip should say
+	/// while the pointer has not moved, so nothing would otherwise re-trigger it.
+	/// </summary>
+	public void Refresh()
+	{
+		if (_shownId == -1) return;
+		Show(_shownId);
+	}
+
 	private void Show(int id)
 	{
 		if (!_entries.TryGetValue(id, out Entry e) || e == null) return;
-		ItemTooltipsMod.ShowDockedPopup(e.Title, e.Description, e.Sprite, e.Rows, e.SectionHeader, _logTag,
+		_shownId = id;
+
+		List<GameData.IconRow> rows = e.Rows;
+		if (e.RowsProvider != null)
+		{
+			try
+			{
+				var live = e.RowsProvider();
+				if (live != null && live.Count > 0) rows = live;
+			}
+			catch (Exception ex)
+			{
+				Plugin.Dbg($"[{_logTag}] live rows: " + ex.Message);
+			}
+		}
+
+		if ((Object)(object)e.Sprite == (Object)null && e.SpriteProvider != null)
+		{
+			try
+			{
+				Sprite late = e.SpriteProvider();
+				if ((Object)(object)late != (Object)null) e.Sprite = late;
+			}
+			catch (Exception ex)
+			{
+				Plugin.Dbg($"[{_logTag}] late sprite: " + ex.Message);
+			}
+		}
+		ItemTooltipsMod.ShowDockedPopup(e.Title, e.Description, e.Sprite, rows, e.SectionHeader, _logTag,
 			e.Offset, e.Pivot);
 	}
 
@@ -117,6 +171,7 @@ public sealed class RowTooltipRegistry
 	{
 		_entries.Clear();
 		_wired.Clear();
+		_shownId = -1;
 		ItemTooltipsMod.HideDockedPopup();
 	}
 }

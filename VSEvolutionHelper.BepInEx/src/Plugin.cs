@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string PluginGuid = "com.nihil.vsevolutionhelper";
     public const string PluginName = "VS Evolution Helper";
-    public const string PluginVersion = "1.11.1";
+    public const string PluginVersion = "1.13.0";
 
     internal static new ManualLogSource Log;
     internal static Plugin Instance;
@@ -35,6 +35,7 @@ public class Plugin : BasePlugin
     internal static bool BestiaryTooltipsEnabled;
     internal static bool BestiarySpoilers;
     internal static bool AchievementTooltipsEnabled;
+    internal static bool PowerUpTooltipsEnabled;
 
     private ConfigEntry<bool> _debugVerbose;
     private ConfigEntry<float> _tooltipHoverDelay;
@@ -52,6 +53,7 @@ public class Plugin : BasePlugin
     private ConfigEntry<bool> _bestiaryTooltipsEnabled;
     private ConfigEntry<bool> _bestiarySpoilers;
     private ConfigEntry<bool> _achievementTooltipsEnabled;
+    private ConfigEntry<bool> _powerUpTooltipsEnabled;
 
     public override void Load()
     {
@@ -154,11 +156,17 @@ public class Plugin : BasePlugin
             true,
             "Show what each achievement unlocks when hovering rows on the Unlocks page.");
 
+        _powerUpTooltipsEnabled = Config.Bind(
+            "Features",
+            "PowerUpTooltips",
+            true,
+            "Show the full price ladder and remaining cost when hovering upgrades on the Power Up page.");
+
         ApplyConfigValues();
 
         Log.LogInfo($"{PluginName} {PluginVersion} loading (BepInEx port)...");
         Log.LogInfo($"Debug.VerboseLogging={DebugVerbose} Tooltips.HoverDelay={TooltipHoverDelay:0.##}s LevelUpHoverDelay={LevelUpHoverDelay:0.##}s");
-        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled} Character={CharacterTooltipsEnabled} Adventure={AdventureTooltipsEnabled} WeaponSelect={WeaponSelectionTooltipsEnabled} Secrets={SecretTooltipsEnabled} Bestiary={BestiaryTooltipsEnabled} Achievements={AchievementTooltipsEnabled}");
+        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled} Character={CharacterTooltipsEnabled} Adventure={AdventureTooltipsEnabled} WeaponSelect={WeaponSelectionTooltipsEnabled} Secrets={SecretTooltipsEnabled} Bestiary={BestiaryTooltipsEnabled} Achievements={AchievementTooltipsEnabled} PowerUps={PowerUpTooltipsEnabled}");
 
         ClassInjector.RegisterTypeInIl2Cpp<PluginBehaviour>();
         _behaviour = AddComponent<PluginBehaviour>();
@@ -185,6 +193,7 @@ public class Plugin : BasePlugin
         BestiaryTooltipsEnabled = _bestiaryTooltipsEnabled.Value;
         BestiarySpoilers = _bestiarySpoilers.Value;
         AchievementTooltipsEnabled = _achievementTooltipsEnabled.Value;
+        PowerUpTooltipsEnabled = _powerUpTooltipsEnabled.Value;
     }
 
     internal static void Dbg(string message)

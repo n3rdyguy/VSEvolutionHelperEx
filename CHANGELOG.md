@@ -2,6 +2,63 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.13.0] - 2026-08-06
+
+### Added
+- **Power Up page tooltips.** Hover an upgrade to see the level you own, the price of the next
+  one, and what the rest of it costs. Prices are not stored per level - a level costs its own
+  number times a base price, plus a surcharge that grows with every level bought across the
+  whole page - so the page's single "next" figure says almost nothing about finishing an
+  upgrade. The next price is the game's own, and the levels beyond it are projected from it by
+  measuring the surcharge rather than assuming a formula; if that measurement does not hold up,
+  no projection is shown at all. Config `PowerUpTooltips`.
+
+### Fixed
+- **No icon on Bestiary tooltips for DLC enemies.** Sprites were resolved by asking
+  `SpriteManager` for a frame name, which only answers for atlases whose names it knows - DLC
+  art is not among them. The Bestiary would draw `kappa_i01` on screen while every lookup for
+  it returned nothing. Three changes together fix it: the panel's portraits are cached as they
+  are drawn, keyed by the enemy id naming each one; any sprite already in memory can now be
+  found by name whatever atlas holds it; and an enemy whose art is not loaded at all has its
+  own atlas requested, one at a time, rather than preloading art nobody has looked at. That
+  request is asynchronous, so a DLC enemy shows its icon from the second hover onward.
+- **Bestiary tooltip named the wrong enemy.** A record's `bName` covers a whole Bestiary
+  family, so on a variant row it named the family instead of the row - "Spirit" where the game
+  itself prints "Calamity". The row's own label is now preferred, with `bName` kept for
+  undiscovered rows, which draw as dashes.
+- **Bestiary page was slow to open.** Every row resolved a sprite as the page built, and a miss
+  costs a chain of atlas lookups ending in a scan of every sprite in memory - 217 times over,
+  for icons all but one of which are never looked at. Only the hovered row resolves now, with
+  hits and misses both cached; the per-row logging that came with it is behind `DebugVerbose`.
+- **Adventures tooltip listed characters as shouted enum ids** - `PUGNALA` rather than
+  `Pugnala Provola`. Names are now composed the way the Collections and Secrets tooltips
+  already do it, so the pages agree with each other, and each character is shown with its
+  portrait.
+- **Adventures tooltip printed a raw I2 key for the stage set.** The enum id is now run through
+  the game's own terms, falling back to a humanized id rather than the key.
+- **Adventures tooltip text ran out of the bottom of the panel.** Section heights were clamped
+  to a maximum while TMP kept drawing past it, so the panel was measured shorter than its own
+  contents. The clamp no longer truncates the measurement.
+
+### Changed
+- The Bestiary tooltip is pinned by its top right corner, so it grows left and down into open
+  screen rather than spreading from its centre.
+- The Adventures tooltip is docked at a fixed box instead of following the hovered card. Left,
+  right and top are pinned and only the bottom moves, so it cannot creep sideways as content
+  grows.
+- Adventures tooltips show every weapon and character rather than the first few and a `+N`
+  count; icon rows wrap instead of running off the edge.
+- Adventures tooltips no longer wait out a hover delay, matching the Collections, Bestiary and
+  Unlocks lists they sit beside.
+- Tooltip rows can be worked out on hover rather than when the row is registered, so pages
+  whose numbers move while they are open - Power Up prices climb with every purchase anywhere
+  on the page - stay correct. Buying also rebuilds the tooltip already on screen, which the
+  pointer never leaves.
+- Long tooltip rows no longer overlap the row beneath. Row height was clamped while the text
+  kept drawing past the clamp, so anything wrapping past two lines was written over by whatever
+  followed it. Section headers also have room above them now, rather than sitting flush against
+  the previous row.
+
 ## [1.11.1] - 2026-08-06
 
 ### Added

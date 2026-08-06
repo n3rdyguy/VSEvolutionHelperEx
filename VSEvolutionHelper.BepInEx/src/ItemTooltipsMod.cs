@@ -402,6 +402,9 @@ public class ItemTooltipsMod
 			try {
 				AchievementPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("Achievement patches: " + ex.Message); }
+			try {
+				PowerUpPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("PowerUp patches: " + ex.Message); }
 			Plugin.Log.LogInfo("Patches applied successfully");
 		}
 		catch (Exception arg)
@@ -7700,6 +7703,10 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 		if (hit)
 		{
+			// No dwell time. The list pages this sits beside show on PointerEnter with nothing
+			// to wait through, and a card the pointer is already over reads as unresponsive by
+			// comparison. The cards are large and far apart, so there is no crossfire to guard
+			// against - which is what a hover delay is for.
 			if (hitId != pendingAdventureHoverId)
 			{
 				pendingAdventureHoverId = hitId;
@@ -7710,13 +7717,10 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 					HideAdventurePopup();
 				}
 			}
-			else if (Time.unscaledTime - adventureHoverStartTime >= Plugin.TooltipHoverDelay)
+			if (currentAdventureHoverId != hitId)
 			{
-				if (currentAdventureHoverId != hitId)
-				{
-					currentAdventureHoverId = hitId;
-					ShowAdventurePopup(hitInfo);
-				}
+				currentAdventureHoverId = hitId;
+				ShowAdventurePopup(hitInfo);
 			}
 		}
 		else
@@ -7760,9 +7764,98 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		if ((Object)(object)adventurePopup != (Object)null)
 		{
 			DisablePopupRaycasts(adventurePopup);
-			if ((Object)(object)info.Go != (Object)null)
-				PositionPopup(adventurePopup, info.Go.transform);
+			DockAdventurePopup(adventurePopup, info.Go);
 		}
+	}
+
+	/// <summary>
+	/// Fixed placement for the Adventures tooltip, in Safe Area reference units (1920x1200).
+	/// Measured from the screen box 1937,624 - 2497,704 at 2560x1600: left 0.757 ->
+	/// (0.757 - 0.5) * 1920 = 493, right 0.975 -> 912, top 0.390 -> (0.5 - 0.390) * 1200 = 132.
+	///
+	/// Three edges are fixed and only the bottom moves. The width comes from the box rather than
+	/// from the content, so the panel cannot creep sideways as names get longer; a centred pivot
+	/// on the box's midpoint holds both sides still while it grows down.
+	/// </summary>
+	private const float AdventurePopupCentreX = 703f;
+	private const float AdventurePopupTopY = 132f;
+	private const float AdventurePopupWidth = 419f;
+
+	/// <summary>
+	/// Park the popup at its fixed spot. Falls back to the card-relative placement when the
+	/// Safe Area is not the parent, since the offsets above only mean anything inside it.
+	/// </summary>
+	private static void DockAdventurePopup(GameObject popup, GameObject card)
+	{
+		try
+		{
+			RectTransform rt = popup.GetComponent<RectTransform>();
+			Transform safe = null;
+			try
+			{
+				GameObject go = GameObject.Find("UI/Canvas - App/Safe Area");
+				if ((Object)(object)go != (Object)null) safe = go.transform;
+			}
+			catch { }
+
+			if ((Object)(object)rt == (Object)null || (Object)(object)safe == (Object)null)
+			{
+				if ((Object)(object)card != (Object)null) PositionPopup(popup, card.transform);
+				return;
+			}
+
+			popup.transform.SetParent(safe, false);
+			popup.transform.SetAsLastSibling();
+			rt.localScale = Vector3.one;
+			// Explicit offset from centre, not a fractional anchor: changing anchorMin/anchorMax
+			// does not recompute the transform in the same frame.
+			rt.anchorMin = new Vector2(0.5f, 0.5f);
+			rt.anchorMax = new Vector2(0.5f, 0.5f);
+			rt.pivot = new Vector2(0.5f, 1f);
+			rt.anchoredPosition = new Vector2(AdventurePopupCentreX, AdventurePopupTopY);
+		}
+		catch (Exception ex)
+		{
+			Plugin.Dbg("[AdventureSelect] dock popup: " + ex.Message);
+		}
+	}
+
+	/// <summary>
+	/// Lay icons out left to right, wrapping onto further rows, and return the new y.
+	///
+	/// Every entry is drawn - a fixed-width panel that grows downward has room for all of them,
+	/// and a cast or arsenal silently cut off at twelve is worse than a taller tooltip. Entries
+	/// with no sprite are skipped here; they still appear in the name list below.
+	/// </summary>
+	private static float AddIconRows(Transform parent, string name,
+		List<(string Name, Sprite Sprite)> items, float y, float contentW, float iconSz)
+	{
+		if (items == null || items.Count == 0) return y;
+		float cell = iconSz + 4f;
+		int perRow = Mathf.Max(1, (int)(contentW / cell));
+		int drawn = 0;
+		Transform row = null;
+
+		foreach (var it in items)
+		{
+			if ((Object)(object)it.Sprite == (Object)null) continue;
+			if (drawn % perRow == 0)
+			{
+				if (row != null) y -= cell;
+				GameObject go = new GameObject(name);
+				go.transform.SetParent(parent, false);
+				RectTransform rt = go.AddComponent<RectTransform>();
+				rt.anchorMin = new Vector2(0f, 1f);
+				rt.anchorMax = new Vector2(0f, 1f);
+				rt.pivot = new Vector2(0f, 1f);
+				rt.anchoredPosition = new Vector2(Padding, y);
+				rt.sizeDelta = new Vector2(contentW, cell);
+				row = go.transform;
+			}
+			AddUiIcon(row, it.Sprite, (drawn % perRow) * cell, -cell * 0.5f, iconSz);
+			drawn++;
+		}
+		return row != null ? y - cell - 4f : y;
 	}
 
 	/// <summary>Adventure card tooltip with weapon icon strip + character list; TMP-sized.</summary>
@@ -7789,22 +7882,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			return null;
 		}
 
-		const float minW = 300f;
-		const float maxW = 440f;
 		const float iconSz = 32f;
-		float width = minW;
-		try
-		{
-			float need = MeasureTmpPreferredWidth(font, data.Title ?? "Adventure", 17f, true) + 56f + Padding * 2f;
-			width = Mathf.Clamp(need, minW, maxW);
-		}
-		catch { }
-		// Weapon strip may need more width
-		if (data.Weapons != null && data.Weapons.Count > 0)
-		{
-			float strip = data.Weapons.Count * (iconSz + 4f) + Padding * 2f;
-			width = Mathf.Clamp(Mathf.Max(width, strip), minW, maxW);
-		}
+		// Fixed, not measured. Three of the four edges are pinned, so the width is a property of
+		// the box rather than of the content: anything that would have widened the panel wraps
+		// or runs onto another row instead.
+		float width = AdventurePopupWidth;
 
 		float contentW = width - Padding * 2f;
 		float y = -Padding;
@@ -7847,45 +7929,19 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				Padding, y, contentW, 18f, (TextAlignmentOptions)257);
 			y -= 18f + 4f;
 
-			// Icon strip
-			float stripH = iconSz + 4f;
-			GameObject strip = new GameObject("WeaponStrip");
-			strip.transform.SetParent(root.transform, false);
-			RectTransform sr = strip.AddComponent<RectTransform>();
-			sr.anchorMin = new Vector2(0f, 1f);
-			sr.anchorMax = new Vector2(0f, 1f);
-			sr.pivot = new Vector2(0f, 1f);
-			sr.anchoredPosition = new Vector2(Padding, y);
-			sr.sizeDelta = new Vector2(contentW, stripH);
-			float x = 0f;
-			int iconCount = 0;
-			foreach (var w in data.Weapons)
-			{
-				if (iconCount >= 12) break;
-				if ((Object)(object)w.Sprite != (Object)null)
-				{
-					AddUiIcon(strip.transform, w.Sprite, x, -stripH * 0.5f, iconSz);
-					x += iconSz + 4f;
-					iconCount++;
-				}
-			}
-			y -= stripH + 4f;
+			y = AddIconRows(root.transform, "WeaponStrip", data.Weapons, y, contentW, iconSz);
 
-			// Name list (compact)
+			// Every name, no "+3 more". The panel is free to grow downward, so there is nothing
+			// for a cap to protect.
 			var names = new System.Text.StringBuilder();
-			int shown = 0;
 			foreach (var w in data.Weapons)
 			{
-				if (shown >= 10) break;
-				if (shown > 0) names.Append(", ");
+				if (names.Length > 0) names.Append(", ");
 				names.Append(w.Name);
-				shown++;
 			}
-			if (data.Weapons.Count > shown)
-				names.Append($" … +{data.Weapons.Count - shown}");
 			var namesTmp = AddUiText(root.transform, "WepNames", names.ToString(), font, 11f, soft, false,
 				Padding, y, contentW, 30f, (TextAlignmentOptions)257);
-			float nh = FitTmpHeight(namesTmp, contentW, 16f, 80f);
+			float nh = FitTmpHeight(namesTmp, contentW, 16f, 600f);
 			y -= nh + 6f;
 		}
 
@@ -7894,21 +7950,19 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		{
 			AddUiText(root.transform, "CharHdr", $"Characters ({data.Characters.Count})", font, 12f, gold, true,
 				Padding, y, contentW, 18f, (TextAlignmentOptions)257);
-			y -= 18f + 2f;
+			y -= 18f + 4f;
+
+			y = AddIconRows(root.transform, "CharStrip", data.Characters, y, contentW, iconSz);
+
 			var cb = new System.Text.StringBuilder();
-			int shown = 0;
 			foreach (var c in data.Characters)
 			{
-				if (shown >= 12) break;
-				if (shown > 0) cb.Append(", ");
-				cb.Append(c);
-				shown++;
+				if (cb.Length > 0) cb.Append(", ");
+				cb.Append(c.Name);
 			}
-			if (data.Characters.Count > shown)
-				cb.Append($" … +{data.Characters.Count - shown}");
 			var ct = AddUiText(root.transform, "Chars", cb.ToString(), font, 12f, soft, false,
 				Padding, y, contentW, 30f, (TextAlignmentOptions)257);
-			float ch = FitTmpHeight(ct, contentW, 16f, 100f);
+			float ch = FitTmpHeight(ct, contentW, 16f, 600f);
 			y -= ch + 6f;
 		}
 
@@ -9342,10 +9396,12 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 					rhRt.anchorMin = new Vector2(0f, 1f);
 					rhRt.anchorMax = new Vector2(0f, 1f);
 					rhRt.pivot = new Vector2(0f, 1f);
-					y -= 4f;
+					// Air above a section header as well as below it. Butted against the
+					// previous row it reads as part of that row rather than as a new group.
+					y -= 10f;
 					rhRt.anchoredPosition = new Vector2(Padding, y);
 					rhRt.sizeDelta = new Vector2(contentW, 18f);
-					y = AdvancePastHeader(rowHdr, contentW, y, 3f, 18f);
+					y = AdvancePastHeader(rowHdr, contentW, y, 5f, 18f);
 					continue;
 				}
 				y = AddWareRow(val.transform, font, r.Sprite, r.Label, rowIcon, nameX, nameW, y, shown);
@@ -9419,7 +9475,10 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		float nameH = 18f;
 		TextMeshProUGUI tmp = go.GetComponent<TextMeshProUGUI>();
 		if ((Object)(object)tmp != (Object)null)
-			nameH = FitTmpHeight(tmp, nameW, 16f, 48f);
+			// Generous ceiling on purpose: the clamp is what the next row is positioned from, so
+			// a row measured shorter than it draws is a row the following one is written over.
+			// A price ladder wraps to several lines and used to be measured as two.
+			nameH = FitTmpHeight(tmp, nameW, 16f, 400f);
 
 		// Centre the name against the icon when it is the shorter of the two
 		float rowH = Mathf.Max(iconSize, nameH);
