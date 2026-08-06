@@ -829,8 +829,6 @@ public class ItemTooltipsMod
 		{
 			HideMapPopup();
 		}
-		// Main menu: make the Achievements page reachable on Steam
-		MainMenuAchievements.Tick();
 		// Stage Selection: Guide tabs (LB/RB, focus) + relic hover
 		StageGuideUI.TickInput();
 		if (stageRelicIcons.Count > 0)
