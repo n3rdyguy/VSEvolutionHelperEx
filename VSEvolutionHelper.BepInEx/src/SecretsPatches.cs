@@ -104,6 +104,8 @@ public static class SecretsPatches
 				Title = achieved ? "Secret (found)" : "Secret (not found yet)",
 				Rows = rows,
 				SectionHeader = "Unlocks:",
+				Offset = new Vector2(ItemTooltipsMod.SecretPanelX, ItemTooltipsMod.SecretPanelTopY),
+				Pivot = ItemTooltipsMod.SecretPanelPivot,
 			});
 
 			Plugin.Dbg($"Secrets: registered {rows.Count} on "

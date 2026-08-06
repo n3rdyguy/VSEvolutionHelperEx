@@ -9524,6 +9524,18 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// centre line. Measured from the screen box 1917,154 - 2437,394 at 2560x1600: left edge
 	/// 0.749 -> (0.749 - 0.5) * 1920 = 478, top edge 0.097 -> (0.5 - 0.097) * 1200 = 484.
 	/// </summary>
+	/// <summary>
+	/// The Secrets page's free space, which sits further left than the other list pages': its
+	/// rows are wide and the open screen starts nearer the middle.
+	///
+	/// Pinned by its top left corner, so the panel grows right and down from a fixed point.
+	/// Measured from the screen box 1375,341 - 2039,765 at 2560x1600: left edge 0.537 ->
+	/// (0.537 - 0.5) * 1920 = 71, top edge 0.213 -> (0.5 - 0.213) * 1200 = 344.
+	/// </summary>
+	public const float SecretPanelX = 71f;
+	public const float SecretPanelTopY = 344f;
+	public static readonly Vector2 SecretPanelPivot = new Vector2(0f, 1f);
+
 	public const float MusicPanelX = 478f;
 	public const float MusicPanelTopY = 484f;
 	public static readonly Vector2 MusicPanelPivot = new Vector2(0f, 1f);

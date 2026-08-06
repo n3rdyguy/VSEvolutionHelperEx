@@ -49,6 +49,8 @@ Please support the original authors. This port reuses their design with typed Il
 | **Unlocks (achievements)** | Hover a row on the Unlocks page for what it grants (character portrait, weapons, relic, arcana, power-up, skins, stage, gold) and what it requires |
 | **Power Up** | Hover an upgrade → level owned, next price, and what the rest costs. Prices climb with every level bought anywhere on the page, so the game's single "next" figure says little about finishing an upgrade; levels beyond the next are projected and labelled as such |
 | **Bestiary** | Hover an enemy → HP, damage, speed, XP, knockback, plus **resistances**, skills and the stages it appears in - none of which the page itself shows. Stats read as ranges where one entry covers a family of enemies. Turn off `BestiarySpoilers` for killed enemies only |
+| **Music** | Hover a track → the composer, the game or DLC it came from, and how it is unlocked. The page itself shows only a title, and credits the music nowhere. Turn off `MusicSpoilers` to keep the dashes the game draws over locked track names |
+| **Arcana cards** | Hover any arcana card → its description and an **Affects** list of every weapon and passive it changes. Works on the **mid-run pick**, which is the only place an arcana has to be chosen against a timer. Face-down cards show nothing |
 
 ### Stage Guide (right column)
 
@@ -262,6 +264,10 @@ Created on first run:
 | Features | `BestiaryTooltips` | **true** | Bestiary enemy stat tooltips |
 | Features | `BestiarySpoilers` | **true** | Also show stats for enemies you have **not** killed yet |
 | Features | `AchievementTooltips` | **true** | Unlocks page tooltips |
+| Features | `PowerUpTooltips` | **true** | Power Up cost-to-max tooltips |
+| Features | `ArcanaCardTooltips` | **true** | Arcana card tooltips, including the mid-run pick |
+| Features | `MusicTooltips` | **true** | Music page credit / unlock tooltips |
+| Features | `MusicSpoilers` | **true** | Also name tracks you have **not** unlocked yet |
 
 Restart the game (or re-enter menus) after edits so values reload.
 
@@ -314,7 +320,8 @@ pointer and have no selection to move. Use the mouse for those.
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
 | [game-api/README.md](game-api/README.md) | Decompiled API notes (dev) |
 
-Planning notes, the smoke-test checklist and save tooling are kept outside this repo.
+Planning notes, the user guide, the UI specification, the smoke-test checklist and save tooling
+are kept outside this repo.
 
 ## License / attribution
 
