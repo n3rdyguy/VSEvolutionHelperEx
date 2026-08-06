@@ -68,7 +68,7 @@ internal static class Program
         while (true)
         {
             Console.WriteLine();
-            if (game == null) Warn("Vampire Survivors not found — choose [5] to set the folder.");
+            if (game == null) Warn("Vampire Survivors not found - choose [5] to set the folder.");
             else Ok("Game: " + game);
 
             bool installed = game != null
@@ -78,14 +78,14 @@ internal static class Program
                 + "    Mod: " + (installed ? "installed" : "not installed"));
 
             Console.WriteLine();
-            Console.WriteLine(Paint("   [1]", "1;37") + "  Install            BepInEx + the mod");
-            Console.WriteLine(Paint("   [2]", "1;37") + "  Update mod only    keep BepInEx and settings");
-            Console.WriteLine(Paint("   [3]", "1;37") + "  Remove mod         keep BepInEx");
-            Console.WriteLine(Paint("   [4]", "1;37") + "  Remove everything  mod + BepInEx");
-            Console.WriteLine(Paint("   [5]", "1;37") + "  Change game folder");
-            Console.WriteLine(Paint("   [Q]", "1;37") + "  Quit");
+            MenuLine("[1]", "Install            BepInEx + the mod");
+            MenuLine("[2]", "Update mod only    keep BepInEx and settings");
+            MenuLine("[3]", "Remove mod         keep BepInEx");
+            MenuLine("[4]", "Remove everything  mod + BepInEx");
+            MenuLine("[5]", "Change game folder");
+            MenuLine("[Q]", "Quit");
             Console.WriteLine();
-            Console.Write(Paint("   Press a key: ", "35"));
+            Paint("   Press a key: ", ConsoleColor.Magenta);
 
             char key;
             try { key = char.ToUpperInvariant(Console.ReadKey(true).KeyChar); }
@@ -142,7 +142,7 @@ internal static class Program
         try { action(); }
         catch (Exception ex) { Fail(ex.Message); }
         Console.WriteLine();
-        Info("Press any key to return to the menu…");
+        Info("Press any key to return to the menu...");
         try { Console.ReadKey(true); } catch { }
     }
 
@@ -162,7 +162,7 @@ internal static class Program
             if (IsGameRunning())
             {
                 Fail("Vampire Survivors appears to be running.");
-                Info("Close the game first — Windows keeps the mod DLL locked while it runs.");
+                Info("Close the game first - Windows keeps the mod DLL locked while it runs.");
                 return 4;
             }
 
@@ -182,7 +182,7 @@ internal static class Program
                     Info("Keeping the existing BepInEx.");
                 else
                 {
-                    Step("Installing BepInEx…");
+                    Step("Installing BepInEx...");
                     ExtractInto(bepInExZip, game);
                     Ok("BepInEx installed from " + Path.GetFileName(bepInExZip));
                     bepInExPresent = true;
@@ -216,7 +216,7 @@ internal static class Program
             string target = Path.Combine(game, "BepInEx", "plugins", ModFolder);
             Directory.CreateDirectory(target);
             string dest = Path.Combine(target, ModDll);
-            Step("Installing the mod…");
+            Step("Installing the mod...");
             File.Copy(dll, dest, true);
             Ok("Mod installed: " + dest);
 
@@ -226,11 +226,11 @@ internal static class Program
             Ok("Done.");
             Console.WriteLine();
             Info("Next: launch the game once and let it reach the main menu.");
-            Info("The first launch after installing BepInEx is slow — it generates the");
+            Info("The first launch after installing BepInEx is slow - it generates the");
             Info("IL2CPP interop assemblies. That is normal, not a hang.");
             Console.WriteLine();
             Info("To confirm, look in  BepInEx/LogOutput.log  for:");
-            Info("    Loading [VS Evolution Helper …]");
+            Info("    Loading [VS Evolution Helper ...]");
             return 0;
         }
         catch (Exception ex)
@@ -288,7 +288,7 @@ internal static class Program
 
         if (targets.Count == 0)
         {
-            Ok("Nothing to remove — no VS Evolution Helper install found here.");
+            Ok("Nothing to remove - no VS Evolution Helper install found here.");
             return 0;
         }
 
@@ -377,7 +377,7 @@ internal static class Program
     /// </summary>
     private static string FindGame()
     {
-        Step("Looking for Vampire Survivors…");
+        Step("Looking for Vampire Survivors...");
         foreach (string steam in SteamRoots())
         {
             foreach (string library in Libraries(steam))
@@ -521,7 +521,7 @@ internal static class Program
         {
             if (File.Exists(off)) File.Delete(off);
             File.Move(version, off);
-            Warn("MelonLoader found — disabled it by renaming version.dll to version.dll.melon.off");
+            Warn("MelonLoader found - disabled it by renaming version.dll to version.dll.melon.off");
             Warn("Rename it back to undo. Running both loaders crashes the game.");
         }
         catch (Exception ex)
@@ -583,9 +583,9 @@ internal static class Program
 
         Warn("No BepInEx loader found next to the game executable.");
         if (OperatingSystem.IsWindows())
-            Warn("Expected winhttp.dll — the archive may have been the Mono build, or extracted one level too deep.");
+            Warn("Expected winhttp.dll - the archive may have been the Mono build, or extracted one level too deep.");
         else
-            Warn("Expected run_bepinex.sh — on macOS/Linux the game is launched through that script.");
+            Warn("Expected run_bepinex.sh - on macOS/Linux the game is launched through that script.");
     }
 
     // ── BepInEx download ─────────────────────────────────────────────────────
@@ -604,7 +604,7 @@ internal static class Program
     /// <summary>
     /// Fetch BepInEx from the official CI.
     ///
-    /// Only win-x64 and linux-x64 IL2CPP artifacts are published — there is no macOS IL2CPP
+    /// Only win-x64 and linux-x64 IL2CPP artifacts are published - there is no macOS IL2CPP
     /// build, so macOS cannot be served this way at all.
     /// </summary>
     private static string DownloadBepInEx(string[] args)
@@ -626,7 +626,7 @@ internal static class Program
         url ??= $"{BuildsHost}/projects/bepinex_be/{PinnedBuild}"
               + $"/BepInEx-Unity.IL2CPP-{platform}-6.0.0-be.{PinnedBuild}%2B{PinnedCommit}.zip";
 
-        Step($"Downloading BepInEx ({platform})…");
+        Step($"Downloading BepInEx ({platform})...");
         Info(url);
 
         try
@@ -669,7 +669,7 @@ internal static class Program
     {
         if (OperatingSystem.IsWindows()) return "win-x64";
         // Under Proton the game is the Windows build and needs the Windows loader, which cannot
-        // be detected from here — hence --platform.
+        // be detected from here - hence --platform.
         if (OperatingSystem.IsLinux()) return "linux-x64";
         return null;
     }
@@ -711,7 +711,7 @@ internal static class Program
             ? $"https://api.github.com/repos/{Repo}/releases/latest"
             : $"https://api.github.com/repos/{Repo}/releases/tags/{tag}";
 
-        Step("Downloading VS Evolution Helper" + (tag == null ? " (latest)" : " " + tag) + "…");
+        Step("Downloading VS Evolution Helper" + (tag == null ? " (latest)" : " " + tag) + "...");
 
         try
         {
@@ -805,7 +805,7 @@ internal static class Program
     private static bool Confirm(string[] args, string question)
     {
         if (Array.IndexOf(args, "--yes") >= 0) return true;
-        Console.Write(Paint("  ?  ", "35") + question + " [y/N] ");
+        Paint("  ?  ", ConsoleColor.Magenta); Console.Write(question + " [y/N] ");
         string answer = Console.ReadLine();
         return answer != null && answer.Trim().StartsWith("y", StringComparison.OrdinalIgnoreCase);
     }
@@ -814,30 +814,67 @@ internal static class Program
 
     private static string Env(string name) => Environment.GetEnvironmentVariable(name);
 
-    private static string Paint(string text, string code) => _color ? "\u001b[" + code + "m" + text + "\u001b[0m" : text;
+    /// <summary>
+    /// Colour through the console API rather than raw ANSI escapes.
+    ///
+    /// Classic conhost does not enable virtual terminal processing by default, so escape codes
+    /// printed there appear literally as "ESC[31m" instead of colouring anything.
+    /// Console.ForegroundColor works on conhost, Windows Terminal and Unix alike, and does
+    /// nothing harmful when output is redirected to a file or a pipe.
+    /// </summary>
+    private static void Paint(string text, ConsoleColor color)
+    {
+        if (!_color) { Console.Write(text); return; }
+        ConsoleColor previous;
+        try { previous = Console.ForegroundColor; }
+        catch { Console.Write(text); return; }
+        try
+        {
+            Console.ForegroundColor = color;
+            Console.Write(text);
+        }
+        finally
+        {
+            try { Console.ForegroundColor = previous; } catch { }
+        }
+    }
 
-    private static void Step(string s) => Console.WriteLine(Paint("  >  ", "36") + s);
-    private static void Ok(string s) => Console.WriteLine(Paint("  +  ", "32") + s);
-    private static void Warn(string s) => Console.WriteLine(Paint("  !  ", "33") + s);
-    private static void Fail(string s) => Console.WriteLine(Paint("  x  ", "31") + s);
+    private static void PaintLine(string text, ConsoleColor color)
+    {
+        Paint(text, color);
+        Console.WriteLine();
+    }
+
+    private static void Tagged(string tag, ConsoleColor color, string message)
+    {
+        Paint(tag, color);
+        Console.WriteLine(message);
+    }
+
+    private static void MenuLine(string key, string label) => Tagged("   " + key, ConsoleColor.White, "  " + label);
+
+    private static void Step(string s) => Tagged("  >  ", ConsoleColor.Cyan, s);
+    private static void Ok(string s) => Tagged("  +  ", ConsoleColor.Green, s);
+    private static void Warn(string s) => Tagged("  !  ", ConsoleColor.Yellow, s);
+    private static void Fail(string s) => Tagged("  x  ", ConsoleColor.Red, s);
     private static void Info(string s) => Console.WriteLine("     " + s);
 
     private static void Banner()
     {
         string[] bat =
         {
-            @"        __       _,-""~^""-.                        ",
-            @"      _// )      _,'       `.                      ",
-            @"      "" ( ^ ~^~ /             )                     ",
-            @"       `.       (  )        ,'                      ",
-            @"         `-._  _)  ) ___,-'                        ",
-            @"             ``   ``                               ",
+            @"        __       _,-""~^""-.",
+            @"      _// )      _,'       `.",
+            @"      "" ( ^ ~^~ /             )",
+            @"       `.       (  )        ,'",
+            @"         `-._  _)  ) ___,-'",
+            @"             ``   ``",
         };
 
         Console.WriteLine();
-        foreach (string line in bat) Console.WriteLine(Paint(line, "31"));
-        Console.WriteLine(Paint(@"   V S   E V O L U T I O N   H E L P E R", "1;37"));
-        Console.WriteLine(Paint(@"   ~ it is a night of tooltips ~", "35"));
+        foreach (string line in bat) PaintLine(line, ConsoleColor.DarkRed);
+        PaintLine(@"   V S   E V O L U T I O N   H E L P E R", ConsoleColor.White);
+        PaintLine(@"   ~ it is a night of tooltips ~", ConsoleColor.Magenta);
         Console.WriteLine();
     }
 }
