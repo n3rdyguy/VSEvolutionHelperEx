@@ -34,6 +34,7 @@ public class Plugin : BasePlugin
     internal static bool SecretSpoilers;
     internal static bool BestiaryTooltipsEnabled;
     internal static bool BestiarySpoilers;
+    internal static bool AchievementTooltipsEnabled;
 
     private ConfigEntry<bool> _debugVerbose;
     private ConfigEntry<float> _tooltipHoverDelay;
@@ -50,6 +51,7 @@ public class Plugin : BasePlugin
     private ConfigEntry<bool> _secretSpoilers;
     private ConfigEntry<bool> _bestiaryTooltipsEnabled;
     private ConfigEntry<bool> _bestiarySpoilers;
+    private ConfigEntry<bool> _achievementTooltipsEnabled;
 
     public override void Load()
     {
@@ -66,19 +68,19 @@ public class Plugin : BasePlugin
             "Tooltips",
             "HoverDelay",
             0.4f,
-            "Seconds to hover collection / map / stage-relic icons before showing a tooltip (0–2).");
+            "Seconds to hover collection / map / stage-relic icons before showing a tooltip (0-2).");
 
         _levelUpHoverDelay = Config.Bind(
             "Tooltips",
             "LevelUpHoverDelay",
             0.15f,
-            "Seconds to hold over a Level Up icon after moving the mouse (0–1).");
+            "Seconds to hold over a Level Up icon after moving the mouse (0-1).");
 
         _controllerDwellDelay = Config.Bind(
             "Tooltips",
             "ControllerDwellDelay",
             0.5f,
-            "Seconds of controller focus dwell before showing a tooltip (0–2).");
+            "Seconds of controller focus dwell before showing a tooltip (0-2).");
 
         _mapTooltipsEnabled = Config.Bind(
             "Features",
@@ -146,11 +148,17 @@ public class Plugin : BasePlugin
             true,
             "Also show stats for enemies you have NOT killed yet. Set false to only show enemies you have already encountered.");
 
+        _achievementTooltipsEnabled = Config.Bind(
+            "Features",
+            "AchievementTooltips",
+            true,
+            "Show what each achievement unlocks when hovering rows on the Achievements page.");
+
         ApplyConfigValues();
 
         Log.LogInfo($"{PluginName} {PluginVersion} loading (BepInEx port)...");
         Log.LogInfo($"Debug.VerboseLogging={DebugVerbose} Tooltips.HoverDelay={TooltipHoverDelay:0.##}s LevelUpHoverDelay={LevelUpHoverDelay:0.##}s");
-        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled} Character={CharacterTooltipsEnabled} Adventure={AdventureTooltipsEnabled} WeaponSelect={WeaponSelectionTooltipsEnabled} Secrets={SecretTooltipsEnabled} Bestiary={BestiaryTooltipsEnabled}");
+        Log.LogInfo($"Features: Map={MapTooltipsEnabled} StageGuide={StageGuideEnabled} LevelUpTooltips={LevelUpTooltipsEnabled} Character={CharacterTooltipsEnabled} Adventure={AdventureTooltipsEnabled} WeaponSelect={WeaponSelectionTooltipsEnabled} Secrets={SecretTooltipsEnabled} Bestiary={BestiaryTooltipsEnabled} Achievements={AchievementTooltipsEnabled}");
 
         ClassInjector.RegisterTypeInIl2Cpp<PluginBehaviour>();
         _behaviour = AddComponent<PluginBehaviour>();
@@ -176,6 +184,7 @@ public class Plugin : BasePlugin
         SecretSpoilers = _secretSpoilers.Value;
         BestiaryTooltipsEnabled = _bestiaryTooltipsEnabled.Value;
         BestiarySpoilers = _bestiarySpoilers.Value;
+        AchievementTooltipsEnabled = _achievementTooltipsEnabled.Value;
     }
 
     internal static void Dbg(string message)

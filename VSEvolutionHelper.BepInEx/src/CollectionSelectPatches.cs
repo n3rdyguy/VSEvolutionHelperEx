@@ -197,7 +197,7 @@ public static class CollectionSelectPatches
 					string hint = GameData.GetItemUnlockHint(it);
 					string body = !string.IsNullOrEmpty(hint)
 						? "Unlock: " + hint
-						: "Locked — keep playing to unlock.";
+						: "Locked - keep playing to unlock.";
 					Sprite spr = null;
 					try
 					{

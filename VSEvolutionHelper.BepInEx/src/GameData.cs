@@ -1254,7 +1254,7 @@ public static class GameData
         public string Text(float scale = 1f)
         {
             float a = Min * scale, b = Max * scale;
-            return Math.Abs(a - b) < 0.005f ? Num(a) : $"{Num(a)}–{Num(b)}";
+            return Math.Abs(a - b) < 0.005f ? Num(a) : $"{Num(a)}-{Num(b)}";
         }
     }
 
@@ -1513,6 +1513,175 @@ public static class GameData
         }
 
         return rows.Count > 0 ? new EnemyInfo { Rows = rows } : null;
+    }
+
+    // ── Achievements ─────────────────────────────────────────────────────────
+
+    /// <summary>An achievement's rewards and requirements, from the raw achievements JSON.</summary>
+    private sealed class AchievementRec
+    {
+        public RewardIds Rewards;
+        public string Description;
+        public System.Collections.Generic.List<string> Requires;
+    }
+
+    private static System.Collections.Generic.Dictionary<string, AchievementRec> _achievements;
+    private static bool _achievementsParsed;
+
+    /// <summary>
+    /// Read achievements from JSON rather than the typed catalog.
+    ///
+    /// AchievementData's reward fields are plain strings, so the VOID problem that broke the
+    /// secrets does not apply — but its list fields are IL2CPP lists of enums, and iterating
+    /// those returned the same value for every element when the Bestiary tried it. The JSON
+    /// sidesteps both and covers every row without needing one selected first.
+    /// </summary>
+    private static void EnsureAchievements()
+    {
+        if (_achievementsParsed || _dataManager == null) return;
+        _achievementsParsed = true;
+
+        var map = new System.Collections.Generic.Dictionary<string, AchievementRec>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var json = _dataManager._allAchievementsJson;
+            if (json == null) { Plugin.Dbg("[GameData] _allAchievementsJson is null"); return; }
+            string raw = null;
+            try { raw = json.ToString(); } catch { }
+            if (string.IsNullOrEmpty(raw)) return;
+
+            using (var doc = System.Text.Json.JsonDocument.Parse(raw))
+            {
+                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    System.Text.Json.JsonElement rec = prop.Value;
+                    if (rec.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        bool any = false;
+                        foreach (var f in rec.EnumerateArray()) { rec = f; any = true; break; }
+                        if (!any) continue;
+                    }
+                    if (rec.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                    map[prop.Name] = ReadAchievementRec(rec);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] achievements JSON: " + ex.Message);
+        }
+
+        _achievements = map;
+        int withRewards = 0;
+        foreach (var kv in map)
+            if (kv.Value.Rewards != null && HasAnyReward(kv.Value.Rewards)) withRewards++;
+        Plugin.Dbg($"[GameData] achievements: {map.Count} entries, {withRewards} with rewards");
+    }
+
+    private static bool HasAnyReward(RewardIds r)
+    {
+        return !IsVoidValue(r.Character) || !IsVoidValue(r.Weapon) || !IsVoidValue(r.Relic)
+            || !IsVoidValue(r.Arcana) || !IsVoidValue(r.PowerUp) || !IsVoidValue(r.Stage)
+            || !IsVoidValue(r.Hyper) || r.Gold > 0
+            || (r.CharacterList != null && r.CharacterList.Count > 0)
+            || (r.WeaponList != null && r.WeaponList.Count > 0)
+            || (r.Skins != null && r.Skins.Count > 0);
+    }
+
+    private static AchievementRec ReadAchievementRec(System.Text.Json.JsonElement rec)
+    {
+        var r = new AchievementRec
+        {
+            Rewards = new RewardIds
+            {
+                Character = JsonStr(rec, "characterToUnlock"),
+                CharacterList = JsonStrList(rec, "charactersToUnlock"),
+                Weapon = JsonStr(rec, "weaponToUnlock"),
+                WeaponList = JsonStrList(rec, "weaponListToUnlock"),
+                Relic = JsonStr(rec, "relicToUnlock"),
+                Arcana = JsonStr(rec, "arcanaToUnlock"),
+                PowerUp = JsonStr(rec, "powerUpToUnlock") ?? JsonStr(rec, "unlock"),
+                Skins = JsonStrList(rec, "skinsToUnlock"),
+                Stage = JsonStr(rec, "stageToUnlock"),
+                Hyper = JsonStr(rec, "hyperToUnlock"),
+                Gold = JsonInt(rec, "goldPrize"),
+                CustomText = JsonStr(rec, "forcedUnlockTips"),
+                CustomFrame = JsonStr(rec, "forcedFrameName"),
+                CustomTexture = JsonStr(rec, "forcedTexture"),
+            },
+            Description = JsonStr(rec, "description"),
+            Requires = new System.Collections.Generic.List<string>(),
+        };
+
+        void requires(string label, string field)
+        {
+            string v = JsonStr(rec, field);
+            if (IsVoidValue(v)) return;
+            r.Requires.Add(label + ": " + HumanizeId(v));
+        }
+        requires("Character", "requiresChar");
+        requires("Item", "requiresItem");
+        requires("Stage", "requiresStage");
+        requires("Weapon", "requiresWeapon");
+
+        return r;
+    }
+
+    private static bool _dumpedAchievementJson;
+
+    /// <summary>
+    /// One-time dump of an achievement's raw JSON, to confirm the field names rather than
+    /// assume they match the typed record's. Assuming that on the Bestiary cost several builds.
+    /// </summary>
+    public static void DumpAchievementJsonOnce(string key)
+    {
+        if (_dumpedAchievementJson || _dataManager == null || !Plugin.DebugVerbose
+            || string.IsNullOrEmpty(key)) return;
+        try
+        {
+            var json = _dataManager._allAchievementsJson;
+            if (json == null) { _dumpedAchievementJson = true; return; }
+            string raw = json.ToString();
+            if (string.IsNullOrEmpty(raw)) { _dumpedAchievementJson = true; return; }
+            int at = raw.IndexOf("\"" + key + "\"", StringComparison.OrdinalIgnoreCase);
+            if (at < 0) return;
+            _dumpedAchievementJson = true;
+            Plugin.Dbg($"[GameData] achievement JSON '{key}': "
+                + raw.Substring(at, Math.Min(700, raw.Length - at)).Replace('\n', ' '));
+        }
+        catch (Exception ex) { Plugin.Dbg("[GameData] achievement dump: " + ex.Message); }
+    }
+
+    /// <summary>Rows describing what an achievement grants, and what it needs.</summary>
+    public static System.Collections.Generic.List<IconRow> GetAchievementRows(string id, out string description)
+    {
+        description = null;
+        var rows = new System.Collections.Generic.List<IconRow>();
+        EnsureAchievements();
+        if (_achievements == null || string.IsNullOrEmpty(id)) return rows;
+        if (!_achievements.TryGetValue(id, out AchievementRec rec) || rec == null) return rows;
+
+        if (!string.IsNullOrWhiteSpace(rec.Description))
+        {
+            string t = LocalizeDisplayText(rec.Description) ?? rec.Description;
+            if (!string.IsNullOrWhiteSpace(t) && !LooksLikeLocKey(t)) description = t.Trim();
+        }
+
+        var rewards = BuildRewardRows(rec.Rewards);
+        if (rewards.Count > 0)
+        {
+            rows.Add(IconRow.Header("Unlocks:"));
+            rows.AddRange(rewards);
+        }
+
+        if (rec.Requires != null && rec.Requires.Count > 0)
+        {
+            rows.Add(IconRow.Header("Requires:"));
+            foreach (string s in rec.Requires) rows.Add(new IconRow(null, s));
+        }
+
+        return rows;
     }
 
     // ── Character records (for secret reward rows) ───────────────────────────

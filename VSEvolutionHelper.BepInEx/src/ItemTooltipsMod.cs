@@ -399,6 +399,9 @@ public class ItemTooltipsMod
 			try {
 				BestiaryPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("Bestiary patches: " + ex.Message); }
+			try {
+				AchievementPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("Achievement patches: " + ex.Message); }
 			Plugin.Log.LogInfo("Patches applied successfully");
 		}
 		catch (Exception arg)
