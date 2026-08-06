@@ -829,6 +829,8 @@ public class ItemTooltipsMod
 		{
 			HideMapPopup();
 		}
+		// Main menu: make the Achievements page reachable on Steam
+		MainMenuAchievements.Tick();
 		// Stage Selection: Guide tabs (LB/RB, focus) + relic hover
 		StageGuideUI.TickInput();
 		if (stageRelicIcons.Count > 0)
@@ -6336,11 +6338,21 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				}
 				int num10 = 0;
 				int num11 = 0;
+				var skipped = new List<string>();
 				foreach (WeaponType item in allArcanaAffectedWeaponTypes)
 				{
-					float x = Padding + (float)num10 * (num6 + num7);
 					bool isOwned = PlayerOwnsWeapon(item);
 					Sprite spriteForWeapon = GameData.GetSprite(item) ?? GetSpriteForWeapon(item);
+					// An icon with no sprite still reserved its cell, leaving holes through the
+					// grid - around 40% of them on the broader arcanas. An unresolvable sprite
+					// is the same signal used for merchant wares: the content is not installed,
+					// so listing an empty square for it is noise.
+					if ((Object)(object)spriteForWeapon == (Object)null)
+					{
+						skipped.Add(item.ToString());
+						continue;
+					}
+					float x = Padding + (float)num10 * (num6 + num7);
 					GameObject go = CreateFormulaIcon(val.transform, $"AffectedWeapon{num11}", spriteForWeapon, isOwned, IsWeaponBanned(item), num6, x, num);
 					AddHoverToGameObject(go, item, null, useClick: true);
 					num10++;
@@ -6353,9 +6365,14 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				}
 				foreach (ItemType item2 in allArcanaAffectedItemTypes)
 				{
-					float x2 = Padding + (float)num10 * (num6 + num7);
 					bool isOwned2 = PlayerOwnsItem(item2);
 					Sprite spriteForItem = GetSpriteForItem(item2);
+					if ((Object)(object)spriteForItem == (Object)null)
+					{
+						skipped.Add(item2.ToString());
+						continue;
+					}
+					float x2 = Padding + (float)num10 * (num6 + num7);
 					GameObject go2 = CreateFormulaIcon(val.transform, $"AffectedItem{num11}", spriteForItem, isOwned2, IsItemBanned(item2), num6, x2, num);
 					AddHoverToGameObject(go2, null, item2, useClick: true);
 					num10++;
@@ -6370,6 +6387,9 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 				{
 					num -= num6 + num7;
 				}
+				if (Plugin.DebugVerbose && skipped.Count > 0)
+					Plugin.Dbg($"Arcana {arcanaType}: drew {num11} icons in {num9} columns, "
+						+ $"skipped {skipped.Count} with no sprite: {string.Join(", ", skipped)}");
 			}
 		}
 		num -= Padding;
@@ -7179,36 +7199,14 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			popupRt.localScale = Vector3.one;
 			popupRt.localRotation = Quaternion.identity;
 
-			// Anchor to right edge of Safe Area, top-ish - clears the center collection grid
-			// pivot top-left of tooltip so it grows left/down into the right margin
-			popupRt.anchorMin = new Vector2(1f, 0.5f);
-			popupRt.anchorMax = new Vector2(1f, 0.5f);
-			popupRt.pivot = new Vector2(1f, 0.5f);
-
-			float pw = popupRt.sizeDelta.x;
-			float ph = popupRt.sizeDelta.y;
-			if (pw < 40f) pw = 400f;
-			if (ph < 40f) ph = 280f;
-
-			// Inset from right edge; vertically slightly above center
-			// Negative X = left of the right edge (into the margin / over less of the grid)
-			float insetX = 24f;
-			float liftY = 40f;
-			popupRt.anchoredPosition = new Vector2(-insetX, liftY);
-
-			// If FilterPanel exists on the right, try to sit under/near it without covering the grid
-			try
-			{
-				GameObject filter = GameObject.Find("UI/Canvas - App/Safe Area/View - Collections/FilterPanel");
-				if ((Object)(object)filter == (Object)null)
-					filter = GameObject.Find("UI/Canvas - App/Safe Area/View - Collections/InfoPanel");
-				if ((Object)(object)filter != (Object)null)
-				{
-					// Still dock right; slight extra left inset so we don't sit under chrome
-					popupRt.anchoredPosition = new Vector2(-insetX - 8f, liftY);
-				}
-			}
-			catch { }
+			// Fixed panel slot to the right of the grid. Anchored to the centre and placed by
+			// offset rather than by an edge inset, so it does not shift with the panel's own
+			// size, and pivoted at the top so the top edge stays put while the bottom runs
+			// ragged as the content grows.
+			popupRt.anchorMin = new Vector2(0.5f, 0.5f);
+			popupRt.anchorMax = new Vector2(0.5f, 0.5f);
+			popupRt.pivot = SidePanelPivot;
+			popupRt.anchoredPosition = new Vector2(SidePanelX, SidePanelTopY);
 
 			// Do NOT disable raycasts here - docked panel must stay clickable
 		}
@@ -7342,6 +7340,12 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		{
 			return;
 		}
+		// Same reason as the item path: a VOID weapon is not a weapon, and registering one
+		// overwrites whatever real registration the cell already had.
+		if (((object)(*(WeaponType*)(&type))/*cast due to constrained. prefix*/).ToString() == "VOID")
+		{
+			return;
+		}
 		if (!IsUnderGameUI(go.transform))
 		{
 			collectionIcons[instanceId] = (go, type, null, null);
@@ -7404,6 +7408,14 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		//IL_00ac: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0091: Unknown result type (might be due to invalid IL or missing references)
 		if (((object)(*(ItemType*)(&type))/*cast due to constrained. prefix*/).ToString() == "DEFANG")
+		{
+			return;
+		}
+		// A VOID item is not an item. Arcana cells are also bound through the item path with
+		// VOID, and registering that overwrote the arcana registration that had already run on
+		// the same cell - so every Roman-numeral card resolved to nothing. It also broke the
+		// locked-cell hint, which only fires when neither weapon nor item has a value.
+		if (((object)(*(ItemType*)(&type))/*cast due to constrained. prefix*/).ToString() == "VOID")
 		{
 			return;
 		}
@@ -9426,6 +9438,18 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// </summary>
 	private const float DockedPopupOffsetX = 480f;
 	private const float DockedPopupOffsetY = 200f;
+
+	/// <summary>
+	/// Shared panel slot to the right of a list, in Safe Area reference units (1920x1200, so
+	/// +/-960 x +/-600). Measured from the screen box 1944,384 - 2396,716 at 2560x1600:
+	/// centre X 0.8475 -> (0.8475 - 0.5) * 1920 = 667, top edge 0.240 -> (0.5 - 0.240) * 1200 = 312.
+	///
+	/// The pivot is the top edge, so the panel hangs from a fixed line and only its bottom
+	/// moves as content grows. Collections and the Unlocks page both use it.
+	/// </summary>
+	public const float SidePanelX = 667f;
+	public const float SidePanelTopY = 312f;
+	public static readonly Vector2 SidePanelPivot = new Vector2(0.5f, 1f);
 
 	/// <summary>
 	/// Show a popup docked to a fixed spot in the App Safe Area rather than placed next to the

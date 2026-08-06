@@ -17,12 +17,7 @@ public static class AchievementPatches
 {
 	private static readonly RowTooltipRegistry Rows = new RowTooltipRegistry("Achievements");
 
-	/// <summary>
-	/// Placement in Safe Area reference units. Bottom-centre pivot, so the panel grows upward
-	/// and stays put as the reward list changes length.
-	/// </summary>
-	private const float PopupX = 560f;
-	private const float PopupY = -568f;
+	// Same panel slot Collections uses, so the two pages read the same way.
 
 	public static void Apply(Harmony harmony)
 	{
@@ -33,16 +28,19 @@ public static class AchievementPatches
 		}
 		try
 		{
+			// SetData bound but never fired: the page binds its rows through Init. Both are
+			// patched rather than swapping one for the other, since either may be the entry
+			// point depending on how a row is created.
 			int patched = 0;
 			foreach (var m in typeof(AchievementDataUI).GetMethods(
 				System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
 			{
-				if (m.Name != "SetData") continue;
+				if (m.Name != "SetData" && m.Name != "Init") continue;
 				harmony.Patch(m, postfix: new HarmonyMethod(typeof(AchievementPatches), nameof(SetData_Postfix)));
+				Plugin.Log.LogInfo($"[Achievements] Patched AchievementDataUI.{m.Name}({m.GetParameters().Length} args)");
 				patched++;
 			}
-			if (patched > 0) Plugin.Log.LogInfo($"[Achievements] Patched AchievementDataUI.SetData x{patched}");
-			else Plugin.Log.LogWarning("[Achievements] AchievementDataUI.SetData not found");
+			if (patched == 0) Plugin.Log.LogWarning("[Achievements] No AchievementDataUI bind method found");
 		}
 		catch (Exception ex)
 		{
@@ -61,8 +59,14 @@ public static class AchievementPatches
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 
+			// Init carries no AchievementType, so the id comes off the record itself when the
+			// field has not been set.
 			string id = null;
 			try { id = __instance._type.ToString(); } catch { }
+			if (string.IsNullOrEmpty(id) || id == "0" || id == "VOID")
+			{
+				try { id = __instance._data.Type.ToString(); } catch { }
+			}
 			if (string.IsNullOrEmpty(id)) return;
 
 			GameData.DumpAchievementJsonOnce(id);
@@ -82,8 +86,8 @@ public static class AchievementPatches
 				Description = description,
 				Sprite = IconSprite(__instance),
 				Rows = rows,
-				Offset = new Vector2(PopupX, PopupY),
-				Pivot = new Vector2(0.5f, 0f),
+				Offset = new Vector2(ItemTooltipsMod.SidePanelX, ItemTooltipsMod.SidePanelTopY),
+				Pivot = ItemTooltipsMod.SidePanelPivot,
 			});
 
 			if (Plugin.DebugVerbose)

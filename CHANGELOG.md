@@ -2,6 +2,32 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.11.1] - 2026-08-06
+
+### Added
+- **Unlocks page tooltips.** Hover a row on the Unlocks page (the game's achievements list) to
+  see what it grants - character with portrait, weapons, relic, arcana, power-up, skins, stage,
+  hyper and gold - plus any character, item, stage or weapon it requires. Config
+  `AchievementTooltips`.
+
+### Fixed
+- **Collections arcana cards showed no tooltip.** Arcana cells are also bound through the item
+  path with a `VOID` item, and that registration overwrote the arcana one on the same cell, so
+  every Roman-numeral card resolved to nothing. `VOID` weapons and items are now ignored the
+  way `DEFANG` already was. This also restores the locked-cell **Unlock:** hint, which only
+  fires when neither a weapon nor an item is present.
+- **Gaps through the Affects grid on arcana tooltips.** An affected weapon whose sprite could
+  not be resolved still reserved its cell, leaving around 40% of the grid empty on the broader
+  arcanas. Those entries are now skipped, on the same reasoning used for merchant wares: an
+  unresolvable sprite means the content is not installed.
+
+### Changed
+- Collections and Unlocks tooltips share one fixed panel position to the right of the list,
+  pinned by their **top** edge so the panel hangs from the same line whatever its height,
+  instead of drifting vertically as the content grows.
+- In-game text no longer uses em or en dashes: Stage Guide notes, the Collections locked hint,
+  Bestiary stat ranges and the config file descriptions.
+
 ## [1.11.0] - 2026-08-06
 
 Tested on Vampire Survivors **1.15.114** (no patches needed re-targeting from 1.15.113).

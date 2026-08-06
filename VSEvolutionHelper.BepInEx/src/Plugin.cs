@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string PluginGuid = "com.nihil.vsevolutionhelper";
     public const string PluginName = "VS Evolution Helper";
-    public const string PluginVersion = "1.11.0";
+    public const string PluginVersion = "1.11.1";
 
     internal static new ManualLogSource Log;
     internal static Plugin Instance;
@@ -35,6 +35,8 @@ public class Plugin : BasePlugin
     internal static bool BestiaryTooltipsEnabled;
     internal static bool BestiarySpoilers;
     internal static bool AchievementTooltipsEnabled;
+    internal static bool AchievementsMenuEnabled;
+    internal static KeyCode AchievementsMenuKey = KeyCode.F9;
 
     private ConfigEntry<bool> _debugVerbose;
     private ConfigEntry<float> _tooltipHoverDelay;
@@ -52,6 +54,8 @@ public class Plugin : BasePlugin
     private ConfigEntry<bool> _bestiaryTooltipsEnabled;
     private ConfigEntry<bool> _bestiarySpoilers;
     private ConfigEntry<bool> _achievementTooltipsEnabled;
+    private ConfigEntry<bool> _achievementsMenuEnabled;
+    private ConfigEntry<KeyCode> _achievementsMenuKey;
 
     public override void Load()
     {
@@ -154,6 +158,18 @@ public class Plugin : BasePlugin
             true,
             "Show what each achievement unlocks when hovering rows on the Achievements page.");
 
+        _achievementsMenuEnabled = Config.Bind(
+            "Features",
+            "AchievementsMenu",
+            true,
+            "Make the in-game Achievements page reachable. Steam tracks achievements itself, so the game appears not to surface its own list here. Re-enables the button if one is hidden, and adds a hotkey.");
+
+        _achievementsMenuKey = Config.Bind(
+            "Features",
+            "AchievementsMenuKey",
+            KeyCode.F9,
+            "Key that opens the Achievements page from the main menu.");
+
         ApplyConfigValues();
 
         Log.LogInfo($"{PluginName} {PluginVersion} loading (BepInEx port)...");
@@ -185,6 +201,8 @@ public class Plugin : BasePlugin
         BestiaryTooltipsEnabled = _bestiaryTooltipsEnabled.Value;
         BestiarySpoilers = _bestiarySpoilers.Value;
         AchievementTooltipsEnabled = _achievementTooltipsEnabled.Value;
+        AchievementsMenuEnabled = _achievementsMenuEnabled.Value;
+        AchievementsMenuKey = _achievementsMenuKey.Value;
     }
 
     internal static void Dbg(string message)
