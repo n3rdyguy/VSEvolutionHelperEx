@@ -33,10 +33,34 @@ Options (all optional; the binary and both scripts accept the same ones):
 | `--latest` | Download the newest BepInEx BE build instead of the pinned one |
 | `--no-download` | Never reach the network |
 | `--platform <rid>` | `win-x64` or `linux-x64`; needed for Proton |
+| `--uninstall` | Remove the mod |
+| `--all` | With `--uninstall`, remove BepInEx too |
+| `--keep-config` | With `--uninstall`, keep your settings file |
 | `--yes` | Answer prompts with yes |
 | `--no-color` | Plain output (binary only) |
 
-PowerShell uses `-Game`, `-BepInEx`, `-Mod`, `-Latest`, `-NoDownload`, `-Yes`.
+PowerShell uses the same names as switches: `-Game`, `-BepInEx`, `-Mod`, `-Latest`,
+`-NoDownload`, `-Uninstall`, `-All`, `-KeepConfig`, `-Yes`.
+
+## Uninstalling
+
+```bash
+./vsevolutionhelper-installer --uninstall           # mod only, BepInEx stays
+./vsevolutionhelper-installer --uninstall --all     # mod + BepInEx
+./install.ps1 -Uninstall -All
+./install.sh --uninstall --all
+```
+
+Everything to be deleted is listed and confirmed before anything is touched, because
+`BepInEx/plugins` is shared — **removing BepInEx takes any other mods with it**, and the
+installer names them first so that is a decision rather than a surprise.
+
+By default the config file is removed too; `--keep-config` keeps your settings for a later
+reinstall. `--all` also restores MelonLoader if the installer disabled it, renaming
+`version.dll.melon.off` back to `version.dll`.
+
+`changelog.txt` is deliberately never deleted: BepInEx ships one, but so might the game, and
+removing a game file to tidy up is a bad trade.
 
 ## BepInEx is downloaded for you
 

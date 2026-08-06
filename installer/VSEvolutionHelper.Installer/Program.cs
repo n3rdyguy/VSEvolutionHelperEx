@@ -41,6 +41,10 @@ internal static class Program
             }
 
             Ok("Game folder: " + game);
+
+            if (Array.IndexOf(args, "--uninstall") >= 0)
+                return Uninstall(game, args);
+
             if (!LooksLikeGameFolder(game))
             {
                 Warn("That folder does not look like a Vampire Survivors install.");
@@ -120,6 +124,135 @@ internal static class Program
             Fail(ex.Message);
             return 1;
         }
+    }
+
+    // ── Uninstall ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Remove the mod, and with <c>--all</c> the loader too.
+    ///
+    /// Everything to be deleted is listed and confirmed first, because BepInEx/plugins is
+    /// shared: removing the loader takes any other mods installed alongside this one with it.
+    /// </summary>
+    private static int Uninstall(string game, string[] args)
+    {
+        bool all = Array.IndexOf(args, "--all") >= 0;
+
+        if (IsGameRunning())
+        {
+            Fail("Vampire Survivors appears to be running. Close it first.");
+            return 4;
+        }
+
+        var targets = new List<string>();
+        string modDir = Path.Combine(game, "BepInEx", "plugins", ModFolder);
+        if (Directory.Exists(modDir)) targets.Add(modDir);
+
+        string config = Path.Combine(game, "BepInEx", "config", "com.nihil.vsevolutionhelper.cfg");
+        bool keepConfig = Array.IndexOf(args, "--keep-config") >= 0;
+        if (!keepConfig && File.Exists(config)) targets.Add(config);
+
+        if (all)
+        {
+            foreach (string name in new[] { "BepInEx", "dotnet" })
+            {
+                string d = Path.Combine(game, name);
+                if (Directory.Exists(d)) targets.Add(d);
+            }
+            foreach (string name in new[]
+            {
+                "winhttp.dll", "doorstop_config.ini", ".doorstop_version",
+                "run_bepinex.sh", "libdoorstop.so", "libdoorstop.dylib",
+            })
+            {
+                string f = Path.Combine(game, name);
+                if (File.Exists(f)) targets.Add(f);
+            }
+            // changelog.txt is deliberately left alone: BepInEx ships one, but so might the
+            // game, and deleting a game file to tidy up would be a poor trade.
+        }
+
+        if (targets.Count == 0)
+        {
+            Ok("Nothing to remove — no VS Evolution Helper install found here.");
+            return 0;
+        }
+
+        if (all)
+        {
+            var others = OtherPlugins(game);
+            if (others.Count > 0)
+            {
+                Warn("Removing BepInEx will also remove these other plugins:");
+                foreach (string o in others) Info("  - " + o);
+            }
+        }
+
+        Step("About to remove:");
+        foreach (string t in targets) Info("  " + t);
+        Console.WriteLine();
+        if (!Confirm(args, all ? "Remove the mod AND BepInEx?" : "Remove the mod?"))
+        {
+            Info("Cancelled.");
+            return 0;
+        }
+
+        int failures = 0;
+        foreach (string t in targets)
+        {
+            try
+            {
+                if (Directory.Exists(t)) Directory.Delete(t, true);
+                else File.Delete(t);
+                Ok("Removed " + t);
+            }
+            catch (Exception ex)
+            {
+                Fail("Could not remove " + t + " (" + ex.Message + ")");
+                failures++;
+            }
+        }
+
+        // If this installer disabled MelonLoader on the way in, put it back on the way out.
+        string melonOff = Path.Combine(game, "version.dll.melon.off");
+        if (all && File.Exists(melonOff))
+        {
+            string melon = Path.Combine(game, "version.dll");
+            if (!File.Exists(melon))
+            {
+                try
+                {
+                    File.Move(melonOff, melon);
+                    Ok("Restored MelonLoader (version.dll)");
+                }
+                catch (Exception ex) { Warn("Could not restore MelonLoader: " + ex.Message); }
+            }
+        }
+
+        Console.WriteLine();
+        if (failures > 0) { Fail($"{failures} item(s) could not be removed."); return 8; }
+        Ok(all ? "BepInEx and the mod removed." : "Mod removed. BepInEx is still installed.");
+        if (!all) Info("Pass --all to remove BepInEx as well.");
+        return 0;
+    }
+
+    /// <summary>Plugin folders and DLLs that are not ours.</summary>
+    private static List<string> OtherPlugins(string game)
+    {
+        var others = new List<string>();
+        string plugins = Path.Combine(game, "BepInEx", "plugins");
+        if (!Directory.Exists(plugins)) return others;
+        try
+        {
+            foreach (string entry in Directory.GetFileSystemEntries(plugins))
+            {
+                string name = Path.GetFileName(entry);
+                if (string.Equals(name, ModFolder, StringComparison.OrdinalIgnoreCase)) continue;
+                others.Add(name);
+            }
+        }
+        catch { }
+        return others;
     }
 
     // ── Steam discovery ──────────────────────────────────────────────────────

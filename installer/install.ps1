@@ -28,7 +28,10 @@ param(
     [string]$Mod,
     [switch]$Yes,
     [switch]$Latest,
-    [switch]$NoDownload
+    [switch]$NoDownload,
+    [switch]$Uninstall,
+    [switch]$All,
+    [switch]$KeepConfig
 )
 
 $ErrorActionPreference = 'Stop'
@@ -162,6 +165,76 @@ if (-not $Game) {
     exit 2
 }
 Ok "Game folder: $Game"
+
+if ($Uninstall) {
+    if (Get-Process -Name 'VampireSurvivors' -ErrorAction SilentlyContinue) {
+        Fail 'Vampire Survivors is running. Close it first.'
+        exit 4
+    }
+
+    $targets = @()
+    $modDir = Join-Path $Game 'BepInEx\plugins\VSEvolutionHelper'
+    if (Test-Path $modDir) { $targets += $modDir }
+    $cfg = Join-Path $Game 'BepInEx\config\com.nihil.vsevolutionhelper.cfg'
+    if (-not $KeepConfig -and (Test-Path $cfg)) { $targets += $cfg }
+
+    if ($All) {
+        foreach ($n in 'BepInEx', 'dotnet') {
+            $p = Join-Path $Game $n
+            if (Test-Path $p) { $targets += $p }
+        }
+        foreach ($n in 'winhttp.dll', 'doorstop_config.ini', '.doorstop_version') {
+            $p = Join-Path $Game $n
+            if (Test-Path $p) { $targets += $p }
+        }
+        # changelog.txt is left alone: BepInEx ships one, but so might the game.
+    }
+
+    if ($targets.Count -eq 0) {
+        Ok 'Nothing to remove - no VS Evolution Helper install found here.'
+        exit 0
+    }
+
+    if ($All) {
+        # BepInEx/plugins is shared; removing the loader takes other mods with it.
+        $plugins = Join-Path $Game 'BepInEx\plugins'
+        if (Test-Path $plugins) {
+            $others = Get-ChildItem $plugins -Force | Where-Object { $_.Name -ne 'VSEvolutionHelper' }
+            if ($others) {
+                Warn 'Removing BepInEx will also remove these other plugins:'
+                foreach ($o in $others) { Info "  - $($o.Name)" }
+            }
+        }
+    }
+
+    Step 'About to remove:'
+    foreach ($t in $targets) { Info "  $t" }
+    Write-Host ''
+    if (-not $Yes) {
+        $q = if ($All) { 'Remove the mod AND BepInEx?' } else { 'Remove the mod?' }
+        $answer = Read-Host "  ?  $q [y/N]"
+        if ($answer -notmatch '^[Yy]') { Info 'Cancelled.'; exit 0 }
+    }
+
+    $failures = 0
+    foreach ($t in $targets) {
+        try { Remove-Item $t -Recurse -Force -ErrorAction Stop; Ok "Removed $t" }
+        catch { Fail "Could not remove $t ($($_.Exception.Message))"; $failures++ }
+    }
+
+    # If this script disabled MelonLoader on the way in, put it back on the way out.
+    $melonOff = Join-Path $Game 'version.dll.melon.off'
+    if ($All -and (Test-Path $melonOff) -and -not (Test-Path (Join-Path $Game 'version.dll'))) {
+        try { Move-Item $melonOff (Join-Path $Game 'version.dll'); Ok 'Restored MelonLoader (version.dll)' }
+        catch { Warn "Could not restore MelonLoader: $($_.Exception.Message)" }
+    }
+
+    Write-Host ''
+    if ($failures -gt 0) { Fail "$failures item(s) could not be removed."; exit 8 }
+    if ($All) { Ok 'BepInEx and the mod removed.' }
+    else { Ok 'Mod removed. BepInEx is still installed.'; Info 'Pass -All to remove BepInEx as well.' }
+    exit 0
+}
 
 if (-not (Test-Path (Join-Path $Game 'VampireSurvivors.exe')) -and
     -not (Test-Path (Join-Path $Game 'GameAssembly.dll'))) {

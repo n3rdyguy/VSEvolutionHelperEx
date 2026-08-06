@@ -20,6 +20,9 @@ MOD=""
 ASSUME_YES=0
 USE_LATEST=0
 NO_DOWNLOAD=0
+UNINSTALL=0
+REMOVE_ALL=0
+KEEP_CONFIG=0
 PLATFORM=""
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -39,6 +42,9 @@ while [ $# -gt 0 ]; do
     --platform)    PLATFORM="$2"; shift 2 ;;
     --latest)      USE_LATEST=1; shift ;;
     --no-download) NO_DOWNLOAD=1; shift ;;
+    --uninstall)   UNINSTALL=1; shift ;;
+    --all)         REMOVE_ALL=1; shift ;;
+    --keep-config) KEEP_CONFIG=1; shift ;;
     --yes|-y)      ASSUME_YES=1; shift ;;
     -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 64 ;;
@@ -195,6 +201,72 @@ if [ -z "$GAME" ]; then
   exit 2
 fi
 ok "Game folder: $GAME"
+
+if [ "$UNINSTALL" -eq 1 ]; then
+  if pgrep -i "VampireSurvivors" >/dev/null 2>&1; then
+    fail "Vampire Survivors is running. Close it first."
+    exit 4
+  fi
+
+  TARGETS=()
+  [ -d "$GAME/BepInEx/plugins/VSEvolutionHelper" ] && TARGETS+=("$GAME/BepInEx/plugins/VSEvolutionHelper")
+  if [ "$KEEP_CONFIG" -eq 0 ] && [ -f "$GAME/BepInEx/config/com.nihil.vsevolutionhelper.cfg" ]; then
+    TARGETS+=("$GAME/BepInEx/config/com.nihil.vsevolutionhelper.cfg")
+  fi
+
+  if [ "$REMOVE_ALL" -eq 1 ]; then
+    for n in BepInEx dotnet; do
+      [ -d "$GAME/$n" ] && TARGETS+=("$GAME/$n")
+    done
+    for n in winhttp.dll doorstop_config.ini .doorstop_version run_bepinex.sh libdoorstop.so libdoorstop.dylib; do
+      [ -f "$GAME/$n" ] && TARGETS+=("$GAME/$n")
+    done
+    # changelog.txt is left alone: BepInEx ships one, but so might the game.
+  fi
+
+  if [ ${#TARGETS[@]} -eq 0 ]; then
+    ok "Nothing to remove - no VS Evolution Helper install found here."
+    exit 0
+  fi
+
+  if [ "$REMOVE_ALL" -eq 1 ] && [ -d "$GAME/BepInEx/plugins" ]; then
+    # BepInEx/plugins is shared; removing the loader takes other mods with it.
+    others=$(find "$GAME/BepInEx/plugins" -maxdepth 1 -mindepth 1 ! -name 'VSEvolutionHelper' 2>/dev/null || true)
+    if [ -n "$others" ]; then
+      warn "Removing BepInEx will also remove these other plugins:"
+      while IFS= read -r o; do info "  - $(basename "$o")"; done <<< "$others"
+    fi
+  fi
+
+  step "About to remove:"
+  for t in "${TARGETS[@]}"; do info "  $t"; done
+  printf '\n'
+  if [ "$REMOVE_ALL" -eq 1 ]; then
+    confirm "Remove the mod AND BepInEx?" || { info "Cancelled."; exit 0; }
+  else
+    confirm "Remove the mod?" || { info "Cancelled."; exit 0; }
+  fi
+
+  FAILURES=0
+  for t in "${TARGETS[@]}"; do
+    if rm -rf "$t"; then ok "Removed $t"; else fail "Could not remove $t"; FAILURES=$((FAILURES+1)); fi
+  done
+
+  # If this script disabled MelonLoader on the way in, put it back on the way out.
+  if [ "$REMOVE_ALL" -eq 1 ] && [ -f "$GAME/version.dll.melon.off" ] && [ ! -f "$GAME/version.dll" ]; then
+    mv "$GAME/version.dll.melon.off" "$GAME/version.dll" && ok "Restored MelonLoader (version.dll)"
+  fi
+
+  printf '\n'
+  if [ "$FAILURES" -gt 0 ]; then fail "$FAILURES item(s) could not be removed."; exit 8; fi
+  if [ "$REMOVE_ALL" -eq 1 ]; then
+    ok "BepInEx and the mod removed."
+  else
+    ok "Mod removed. BepInEx is still installed."
+    info "Pass --all to remove BepInEx as well."
+  fi
+  exit 0
+fi
 
 if [ ! -e "$GAME/VampireSurvivors.exe" ] && [ ! -e "$GAME/GameAssembly.dll" ] \
    && [ ! -e "$GAME/VampireSurvivors.app" ]; then
