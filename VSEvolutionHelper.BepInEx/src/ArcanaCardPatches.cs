@@ -72,9 +72,16 @@ public static class ArcanaCardPatches
 
 			var rows = GameData.GetArcanaAffectRows(type);
 			string description = GameData.GetArcanaDescription(type);
+
+			// The A group (ids 201+, e.g. A011_CRACKEDMIRROR) are adventure arcanas. They change a
+			// global rule rather than naming weapons, so an empty Affects list is correct for them
+			// and is not a lookup failure - the description is the whole tooltip, and the section
+			// header is already suppressed when there are no rows.
 			if ((rows == null || rows.Count == 0) && string.IsNullOrWhiteSpace(description))
 			{
-				if (Plugin.DebugVerbose) Plugin.Dbg("ArcanaCards: nothing to show for " + type);
+				if (Plugin.DebugVerbose)
+					Plugin.Dbg($"ArcanaCards: nothing to show for {type} "
+						+ $"(name='{GameData.GetArcanaName(type)}' desc=empty)");
 				return;
 			}
 
@@ -87,17 +94,54 @@ public static class ArcanaCardPatches
 				Sprite = ResolveSprite(__instance, type),
 				Rows = rows,
 				SectionHeader = (rows != null && rows.Count > 0) ? "Affects:" : null,
+				// Arcana cards are picked, not just read - and the card's own click handling sits
+				// above the card, so our hover trigger ended the event walk before it got there.
+				// Calling the card's own OnClick puts the selection back.
+				OnClick = () =>
+				{
+					try
+					{
+						if ((Object)(object)__instance != (Object)null) __instance.OnClick();
+					}
+					catch (Exception ex) { Plugin.Dbg("[ArcanaCards] click: " + ex.Message); }
+				},
 				Offset = new Vector2(ItemTooltipsMod.SidePanelX, ItemTooltipsMod.SidePanelTopY),
 				Pivot = ItemTooltipsMod.SidePanelPivot,
 			});
 
 			if (Plugin.DebugVerbose)
-				Plugin.Dbg($"ArcanaCards: registered {(rows == null ? 0 : rows.Count)} rows for {type}");
+				Plugin.Dbg($"ArcanaCards: registered {(rows == null ? 0 : rows.Count)} rows for {type} "
+					+ $"desc={(string.IsNullOrWhiteSpace(description) ? 0 : description.Length)}ch "
+					+ $"under '{RootPath(root)}'");
 		}
 		catch (Exception ex)
 		{
 			Plugin.Log.LogWarning("[ArcanaCards] SetData postfix: " + ex.Message);
 		}
+	}
+
+	/// <summary>
+	/// Which screen a card was dealt on, as a short ancestor path.
+	///
+	/// Cards from the mid-run pick, the pre-run loadout and the Collections grid are the same
+	/// component, so a log line naming only the arcana cannot tell them apart - and "works in
+	/// Collections, not in the run" is exactly the distinction that matters when one of them
+	/// shows nothing.
+	/// </summary>
+	private static string RootPath(GameObject go)
+	{
+		try
+		{
+			var parts = new System.Collections.Generic.List<string>();
+			Transform t = go.transform;
+			for (int i = 0; i < 4 && (Object)(object)t != (Object)null; i++)
+			{
+				parts.Insert(0, ((Object)t).name);
+				t = t.parent;
+			}
+			return string.Join("/", parts.ToArray());
+		}
+		catch { return "?"; }
 	}
 
 	private static string ResolveTitle(ArcanaType type)

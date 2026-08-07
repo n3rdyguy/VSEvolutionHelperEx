@@ -9596,17 +9596,45 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			// Nothing to sort against, so nothing to fix - and overriding blind is what broke it.
 			if ((Object)(object)parent == (Object)null) return;
 
+			// The topmost canvas anywhere, not just the ones sharing the parent's layer. A modal
+			// view can put its own canvas on a HIGHER sorting layer, and layer beats order
+			// outright - so matching only the parent's layer leaves the popup underneath that
+			// view no matter how large its order is.
+			Canvas top = TopmostCanvas(go);
+
 			Canvas c = go.GetComponent<Canvas>();
 			if ((Object)(object)c == (Object)null) c = go.AddComponent<Canvas>();
 			c.overrideSorting = true;
-			c.sortingLayerID = parent.sortingLayerID;
-			c.sortingOrder = TopOrderOnLayer(parent, go) + DockedPopupSortingBoost;
-			if ((Object)(object)go.GetComponent<UnityEngine.UI.GraphicRaycaster>() == (Object)null)
-				go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+			if ((Object)(object)top != (Object)null)
+			{
+				c.sortingLayerID = top.sortingLayerID;
+				c.sortingOrder = top.sortingOrder + DockedPopupSortingBoost;
+			}
+			else
+			{
+				c.sortingLayerID = parent.sortingLayerID;
+				c.sortingOrder = parent.sortingOrder + DockedPopupSortingBoost;
+			}
+			// Deliberately NO GraphicRaycaster, and every graphic opted out of raycasting.
+			//
+			// This panel is now the topmost canvas in the scene by construction, which is what
+			// lets it clear the dimmer - and a raycaster on the topmost canvas swallows every
+			// click that lands on it. On the arcana screens the panel overlaps the card layout,
+			// so the cards stopped being clickable at all: the tooltip was eating the pointer
+			// before the game saw it.
+			//
+			// It never needs pointer input. It is docked away from the row it describes, and it
+			// is hidden by PointerExit on that row rather than by anything happening on the panel
+			// itself. Interactive popups - the Collections one with clickable formula icons - are
+			// a different path and keep their own wiring.
+			MakeClickThrough(go);
 
 			if (Plugin.DebugVerbose)
 				Plugin.Dbg($"[Tooltip] sorting: layer={c.sortingLayerName} order={c.sortingOrder} "
-					+ $"(parent '{((Object)parent).name}' layer={parent.sortingLayerName} order={parent.sortingOrder})");
+					+ $"(parent '{((Object)parent).name}' layer={parent.sortingLayerName} order={parent.sortingOrder}"
+					+ $"; top '{((Object)(object)top != (Object)null ? ((Object)top).name : "-")}' "
+					+ $"layer={((Object)(object)top != (Object)null ? top.sortingLayerName : "-")} "
+					+ $"order={((Object)(object)top != (Object)null ? top.sortingOrder.ToString() : "-")})");
 		}
 		catch (Exception ex)
 		{
@@ -9615,38 +9643,81 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	}
 
 	/// <summary>
-	/// The highest sorting order currently drawn on this layer.
+	/// Stop a panel taking pointer input, so whatever it covers stays clickable.
+	///
+	/// Every graphic is opted out, not just the root: one background image left with
+	/// <c>raycastTarget</c> on is enough to absorb a click, and the popup has several.
+	/// </summary>
+	private static void MakeClickThrough(GameObject go)
+	{
+		try
+		{
+			var raycaster = go.GetComponent<UnityEngine.UI.GraphicRaycaster>();
+			if ((Object)(object)raycaster != (Object)null) Object.Destroy(raycaster);
+
+			var graphics = go.GetComponentsInChildren<Graphic>(true);
+			if (graphics == null) return;
+			for (int i = 0; i < graphics.Length; i++)
+			{
+				if ((Object)(object)graphics[i] == (Object)null) continue;
+				graphics[i].raycastTarget = false;
+			}
+		}
+		catch (Exception ex)
+		{
+			Plugin.Dbg("[Tooltip] click-through: " + ex.Message);
+		}
+	}
+
+	/// <summary>
+	/// The canvas currently drawn above every other, anywhere in the scene.
 	///
 	/// Sitting a fixed step above the parent canvas is not enough: the dimmer is not a child of
 	/// the canvas it darkens, it is its own root canvas at whatever order the page gave it, and
 	/// on the Music page that was above parent+100. Asking the scene what is actually there
 	/// removes the guess - the answer moves with the page rather than with a constant here.
 	///
-	/// Only canvases on the same sorting layer count; ones on another layer are settled by layer
-	/// and their orders are not comparable. The popup itself is skipped, so a re-show does not
-	/// ratchet its own order upward every hover.
+	/// Comparing sorting order alone is also not enough, which is what hid the in-run arcana
+	/// tooltip. Canvases are settled by **sorting layer first**, and a modal view is free to put
+	/// itself on a higher layer than the Safe Area it hangs under; matching only the parent's
+	/// layer then leaves the popup beneath that view at any order. So the comparison is on the
+	/// pair (layer value, order), and the popup adopts the winner's layer as well as its order.
+	///
+	/// The popup itself is skipped so a re-show does not ratchet its own order upward every
+	/// hover. Note that <see cref="HideDockedPopup"/> also deactivates the outgoing popup before
+	/// destroying it, because Destroy is deferred and the old one would otherwise still be here.
 	/// </summary>
-	private static int TopOrderOnLayer(Canvas parent, GameObject self)
+	private static Canvas TopmostCanvas(GameObject self)
 	{
-		int top = parent.sortingOrder;
+		Canvas best = null;
+		int bestLayer = int.MinValue, bestOrder = int.MinValue;
 		try
 		{
 			Canvas[] all = Object.FindObjectsOfType<Canvas>();
-			if (all == null) return top;
+			if (all == null) return null;
 			foreach (Canvas c in all)
 			{
 				if ((Object)(object)c == (Object)null) continue;
 				if (((Component)c).gameObject == self) continue;
 				if (!((Component)c).gameObject.activeInHierarchy) continue;
-				if (c.sortingLayerID != parent.sortingLayerID) continue;
-				if (c.sortingOrder > top) top = c.sortingOrder;
+
+				int layer;
+				try { layer = SortingLayer.GetLayerValueFromID(c.sortingLayerID); }
+				catch { layer = 0; }
+
+				if (layer > bestLayer || (layer == bestLayer && c.sortingOrder > bestOrder))
+				{
+					best = c;
+					bestLayer = layer;
+					bestOrder = c.sortingOrder;
+				}
 			}
 		}
 		catch (Exception ex)
 		{
-			Plugin.Dbg("[Tooltip] top order: " + ex.Message);
+			Plugin.Dbg("[Tooltip] topmost canvas: " + ex.Message);
 		}
-		return top;
+		return best;
 	}
 
 	/// <summary>

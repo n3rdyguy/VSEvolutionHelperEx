@@ -3671,45 +3671,83 @@ public static class GameData
             {
             }
         }
-        // T21_BLOODY -> Bloody, D01_SAPPHIRE_MIST -> Sapphire Mist
-        string raw = type.ToString();
-        if (raw.Length > 4 && raw[0] == 'T' && char.IsDigit(raw[1]))
-        {
-            int us = raw.IndexOf('_');
-            if (us > 0) raw = raw.Substring(us + 1);
-        }
-        else if (raw.Length > 4 && raw[0] == 'D' && char.IsDigit(raw[1]))
-        {
-            int us = raw.IndexOf('_');
-            if (us > 0) raw = raw.Substring(us + 1);
-        }
-        return HumanizeEnum(raw);
+        // T21_BLOODY -> Bloody, D01_SAPPHIRE_MIST -> Sapphire Mist, B004_GENNARO -> Gennaro,
+        // A011_CRACKEDMIRROR -> Crackedmirror.
+        //
+        // The strip used to name T and D explicitly, which was right when they were the only two
+        // groups. 1.16 has five - T, D, B (character arcanas), A (adventure arcanas) and SUB -
+        // and the unnamed ones fell through to the raw id, so a card with no localized name read
+        // "B004 GENNARO". Any letter-then-digits prefix is an id, whatever the group is called.
+        return HumanizeEnum(StripArcanaGroupPrefix(type.ToString()));
+    }
+
+    /// <summary>
+    /// Drop the group-and-id prefix from an arcana enum name: <c>B004_GENNARO</c> -> <c>GENNARO</c>.
+    /// Anything that is not letters followed by digits followed by an underscore is left alone.
+    /// </summary>
+    private static string StripArcanaGroupPrefix(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return raw;
+        int i = 0;
+        while (i < raw.Length && char.IsLetter(raw[i])) i++;
+        if (i == 0) return raw;
+        int digits = i;
+        while (digits < raw.Length && char.IsDigit(raw[digits])) digits++;
+        if (digits == i) return raw;
+        if (digits >= raw.Length || raw[digits] != '_') return raw;
+        string rest = raw.Substring(digits + 1);
+        return string.IsNullOrEmpty(rest) ? raw : rest;
     }
 
     private static string ResolveArcanaDescription(ArcanaData data, ArcanaType type)
     {
         if (data != null)
         {
+            string term = null, rawDesc = null;
+            try { term = data.GetLocalizedDescriptionTerm(type); } catch { }
+            try { rawDesc = data.description; } catch { }
+
             try
             {
-                string t = LocalizeDisplayText(data.GetLocalizedDescriptionTerm(type));
-                if (!string.IsNullOrEmpty(t))
-                    return t;
+                string t = LocalizeDisplayText(term);
+                if (!IsPlaceholderText(t)) return t;
             }
             catch
             {
             }
             try
             {
-                string t = LocalizeDisplayText(data.description);
-                if (!string.IsNullOrEmpty(t))
-                    return t;
+                string t = LocalizeDisplayText(rawDesc);
+                if (!IsPlaceholderText(t)) return t;
             }
             catch
             {
+            }
+
+            // 1.16's character (B) and adventure (A) arcanas answer both lookups with a single
+            // placeholder character rather than nothing, so an emptiness check passed it straight
+            // through and the tooltip rendered a title above one glyph. Log what the game
+            // actually returned, so a missing description is distinguishable from a broken term.
+            if (Plugin.DebugVerbose)
+            {
+                string prefix = null;
+                try { prefix = data.GetLocalPrefix(type); } catch { }
+                Plugin.Dbg($"[GameData] arcana desc miss {type}: term='{term}' raw='{rawDesc}' "
+                    + $"prefix='{prefix}'");
             }
         }
         return "";
+    }
+
+    /// <summary>
+    /// Is this text too short to be a description? A single glyph is a placeholder, not a
+    /// sentence - the game uses one where it has nothing to say, and an IsNullOrEmpty check
+    /// treats it as real.
+    /// </summary>
+    private static bool IsPlaceholderText(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return true;
+        return s.Trim().Length < 2;
     }
 
     /// <summary>All arcanas whose weapons/items list includes this weapon.</summary>

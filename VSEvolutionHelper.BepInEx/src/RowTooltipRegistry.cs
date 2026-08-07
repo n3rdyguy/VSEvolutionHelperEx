@@ -42,6 +42,15 @@ public sealed class RowTooltipRegistry
 		/// </summary>
 		public Func<List<GameData.IconRow>> RowsProvider;
 		public string SectionHeader;
+		/// <summary>
+		/// What clicking this row should do, for rows that are meant to be clickable.
+		///
+		/// Our EventTrigger implements IPointerClickHandler whether we want it to or not, which
+		/// ends EventSystem's walk up the hierarchy at this row - so a handler living on an
+		/// ancestor never runs. Pages whose rows do something on click say so here; list pages
+		/// whose rows are inert leave it null and nothing changes.
+		/// </summary>
+		public Action OnClick;
 		/// <summary>Placement override in Safe Area reference units; null uses the default dock.</summary>
 		public Vector2? Offset;
 		public Vector2? Pivot;
@@ -82,15 +91,20 @@ public sealed class RowTooltipRegistry
 		if (!_wired.Add(id)) return;
 		try
 		{
-			Graphic g = go.GetComponent<Graphic>();
-			if ((Object)(object)g == (Object)null)
-			{
-				Image img = go.AddComponent<Image>();
-				img.color = new Color(1f, 1f, 1f, 0.01f);
-				g = img;
-			}
-			g.raycastTarget = true;
-
+			// Nothing is added to the object's own graphics, and no raycast target is created.
+			//
+			// Two versions of this cost the arcana cards their clicks. Forcing raycastTarget on a
+			// graphic the game had switched off, and adding a transparent Image to a row root that
+			// had none, both turn the object into a raycast hit - and EventTrigger implements
+			// EVERY pointer interface, IPointerClickHandler included. So the moment the raycast
+			// lands on an object carrying our trigger, the click is consumed there. If the card's
+			// own handler lives on a child or a sibling it never sees the click at all, because
+			// pointer events travel up to ancestors and never sideways or down.
+			//
+			// Hover still reaches us without any of that: PointerEnter and PointerExit propagate
+			// up the hierarchy, so a trigger on the root fires when any child is hovered - which
+			// is the whole reason the root is registered alongside the icon. It works because the
+			// row's existing art is the raycast target, not because we added one.
 			EventTrigger et = go.GetComponent<EventTrigger>();
 			if ((Object)(object)et == (Object)null) et = go.AddComponent<EventTrigger>();
 
@@ -112,10 +126,51 @@ public sealed class RowTooltipRegistry
 				ItemTooltipsMod.HideDockedPopup();
 			}));
 			et.triggers.Add(exit);
+
+			// Hand the click back to whatever would have received it.
+			//
+			// EventTrigger implements every pointer interface, IPointerClickHandler included, so
+			// EventSystem's walk up the hierarchy STOPS at the first object carrying one - ours.
+			// Where a card's own handler sits on an ancestor rather than on the card, as the
+			// arcana selection screens do, that handler simply never runs and the card is dead to
+			// clicks. No amount of adjusting what the raycast hits changes this; the trigger only
+			// has to be somewhere on the chain.
+			//
+			// Re-dispatching from the PARENT continues the walk from where it was cut off. Our own
+			// object is skipped deliberately: if the game's handler is on the same object,
+			// EventSystem already ran it alongside ours, and forwarding again would fire it twice.
+			var click = new EventTrigger.Entry();
+			click.eventID = EventTriggerType.PointerClick;
+			click.callback.AddListener((UnityEngine.Events.UnityAction<BaseEventData>)(Action<BaseEventData>)(delegate
+			{
+				ForwardClick(captured);
+			}));
+			et.triggers.Add(click);
 		}
 		catch (Exception ex)
 		{
 			Plugin.Dbg($"[{_logTag}] hover: " + ex.Message);
+		}
+	}
+
+	/// <summary>
+	/// Run the row's own click action, which our EventTrigger would otherwise have swallowed.
+	///
+	/// Re-dispatching through <c>ExecuteEvents.ExecuteHierarchy</c> would be the general answer,
+	/// but its generic EventFunction does not survive the IL2CPP interop boundary. Letting the
+	/// page hand over a typed action is smaller and cannot mis-target: only pages whose rows are
+	/// actually clickable set one.
+	/// </summary>
+	private void ForwardClick(int id)
+	{
+		if (!_entries.TryGetValue(id, out Entry e) || e == null || e.OnClick == null) return;
+		try
+		{
+			e.OnClick();
+		}
+		catch (Exception ex)
+		{
+			Plugin.Dbg($"[{_logTag}] forward click: " + ex.Message);
 		}
 	}
 
