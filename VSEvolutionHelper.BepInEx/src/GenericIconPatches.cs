@@ -10,6 +10,17 @@ namespace VSItemTooltips;
 
 public static class GenericIconPatches
 {
+	/// <summary>
+	/// The blanket Set*/Add* patch registers __instance.gameObject, which for
+	/// EvolutionItemUI.AddWeaponIcon is the entire formula row - so the big + and = symbols
+	/// between the icons opened a tooltip too. GrimoirePatches registers the icon that
+	/// AddWeaponIcon actually returns, so the row registration is both wrong and redundant.
+	/// </summary>
+	private static bool HandledByGrimoirePatches(MethodBase originalMethod)
+	{
+		return originalMethod?.DeclaringType?.Name == "EvolutionItemUI";
+	}
+
 	public static void SetWeapon_Postfix(object __instance, WeaponType __0, MethodBase __originalMethod)
 	{
 		//IL_002a: Unknown result type (might be due to invalid IL or missing references)
@@ -20,6 +31,7 @@ public static class GenericIconPatches
 			{
 				ItemTooltipsMod.CaptureArcanaAffectedWeapon(__instance, __0);
 			}
+			if (HandledByGrimoirePatches(__originalMethod)) return;
 			GameObject gameObject = GetGameObject(__instance);
 			if ((Object)(object)gameObject != (Object)null)
 			{
@@ -43,6 +55,7 @@ public static class GenericIconPatches
 			{
 				ItemTooltipsMod.CaptureArcanaAffectedItem(__instance, __0);
 			}
+			if (HandledByGrimoirePatches(__originalMethod)) return;
 			GameObject gameObject = GetGameObject(__instance);
 			if ((Object)(object)gameObject != (Object)null)
 			{
@@ -71,6 +84,7 @@ public static class GenericIconPatches
 					}
 				}
 			}
+			if (HandledByGrimoirePatches(__originalMethod)) return;
 			GameObject gameObject = GetGameObject(__instance);
 			if ((Object)(object)gameObject != (Object)null)
 			{
@@ -99,6 +113,7 @@ public static class GenericIconPatches
 					}
 				}
 			}
+			if (HandledByGrimoirePatches(__originalMethod)) return;
 			GameObject gameObject = GetGameObject(__instance);
 			if ((Object)(object)gameObject != (Object)null)
 			{
@@ -120,6 +135,7 @@ public static class GenericIconPatches
 		//IL_0093: Unknown result type (might be due to invalid IL or missing references)
 		try
 		{
+			if (HandledByGrimoirePatches(__originalMethod)) return;
 			GameObject gameObject = GetGameObject(__instance);
 			if ((Object)(object)gameObject == (Object)null)
 			{
@@ -160,6 +176,7 @@ public static class GenericIconPatches
 		//IL_0093: Unknown result type (might be due to invalid IL or missing references)
 		try
 		{
+			if (HandledByGrimoirePatches(__originalMethod)) return;
 			GameObject gameObject = GetGameObject(__instance);
 			if ((Object)(object)gameObject == (Object)null)
 			{

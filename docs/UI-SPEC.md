@@ -484,6 +484,35 @@ Log the count, and warn when it is zero - a renamed method otherwise fails silen
 on the row plus `Purchase` / `RefundPowerUps` / `ResetAll` on the page, the latter calling
 `Registry.Refresh()`.
 
+### The blanket patch registers the method's GameObject, which is often too big
+
+`ItemTooltipsMod.Apply` patches *every* `Set*` / `Add*` / `Init*` / `Create*` method that takes a
+`WeaponType`, `ItemType` or `ArcanaType`, and registers `__instance.gameObject` as the hover
+target. That is right for a cell UI, where the instance *is* the cell. It is wrong wherever the
+instance is a container that draws several things.
+
+`EvolutionItemUI.AddWeaponIcon(WeaponType)` is the case that bit: the instance is a whole
+evolution row - base icon, big `+`, passive icon, big `=`, result icon - so the entire row became
+one hover target, and the symbols between the icons opened a tooltip for whichever weapon had
+written to that row last. Meanwhile `GrimoirePatches` was already registering the icon
+`AddWeaponIcon` *returns*, correctly, so the row registration was redundant as well as wrong.
+
+When a dedicated patch class handles a type properly, exclude that type from the blanket patch:
+
+```csharp
+private static bool HandledByGrimoirePatches(MethodBase originalMethod)
+    => originalMethod?.DeclaringType?.Name == "EvolutionItemUI";
+```
+
+Guard **every** entry point - the generic postfixes come in `_Postfix`, `_Arg1` and `_ArgN`
+variants for both weapons and items, six in all, and which one fires depends on where the enum
+sits in the signature. Put the guard *after* any data capture the postfix also does (arcana
+affected-lists, `DataManager` caching); only the registration is unwanted.
+
+The symptom to recognise: hovering dead space between icons opens a tooltip, and the log shows
+**two** hover targets per icon - one naming a real icon (`sprite=1 tmp=0`) and one naming a
+container (`sprite=3 tmp=2`, several sprites and the symbol texts).
+
 ### Do not patch `CharacterItemUI.SetData`
 
 It broke character select in 1.9.1. See CHANGELOG.
@@ -653,6 +682,21 @@ In order, because each step rules out the one below it.
 measures.** Every wrong turn in this session came from acting on the most plausible cause rather
 than the one the log named; every fix came from a build whose only job was to separate two
 causes that looked identical from outside.
+
+### The inverse: a tooltip that appears where nothing should be hoverable
+
+Log what the pointer *entered*, not what the popup then showed. Three fields settle it in one
+round: the target's full hierarchy path, how many sprites it draws, and how many `TMP_Text`
+children it has. A genuine icon reads `sprite=1 tmp=0`; anything reading `sprite=3 tmp=2` is a
+container that swallowed its row (see §7).
+
+**Probe both registration paths, or the log will be empty and say nothing.** `RegisterWeaponUI`
+forks on `IsUnderGameUI`: the App-canvas branch stores into `collectionIcons` and is polled by a
+rect scan, while the GAME UI branch installs an `EventTrigger`. Which branch a page uses depends
+on *where it was opened from*, not on what page it is - the grimoire reached from the pause menu
+lives at `GAME UI/Canvas - Game UI/Safe Area/View - Paused/Grimoire/…` and never touches the
+collections path, so a probe on the collections scan alone logged nothing at all while 854
+registrations were happening.
 
 ---
 

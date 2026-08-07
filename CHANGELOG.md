@@ -2,6 +2,19 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.14.2] - 2026-08-08
+
+### Fixed
+- **The big `+` and `=` between grimoire evolution icons opened tooltips.** The blanket patch
+  that binds any `Set*`/`Add*` method taking a weapon type registered the method's own
+  GameObject, which for the grimoire's `AddWeaponIcon` is the entire formula row - base,
+  passive, symbols and result together. Hovering a symbol therefore showed whichever weapon
+  had written to that row last. The row is no longer registered; the icons it draws already
+  were, individually.
+
+### Changed
+- The tooltip opens 4px further up and left.
+
 ## [1.14.1] - 2026-08-08
 
 ### Changed

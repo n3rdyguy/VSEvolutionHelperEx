@@ -6518,8 +6518,8 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// player is reading against it. Nested tooltips are left alone - they already step down-right
 	/// from their parent, and moving them too would double the step.
 	/// </summary>
-	private const float OpenPopupOffsetX = 40f;
-	private const float OpenPopupOffsetY = 55f;
+	private const float OpenPopupOffsetX = 36f;
+	private const float OpenPopupOffsetY = 51f;
 
 	private const float LargeCellPopupOffsetX = 36f;
 
