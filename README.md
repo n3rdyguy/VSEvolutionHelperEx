@@ -319,10 +319,12 @@ pointer and have no selection to move. Use the mouse for those.
 | Doc | Purpose |
 |-----|---------|
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
-| [game-api/README.md](game-api/README.md) | Decompiled API notes (dev) |
+| [docs/USER-GUIDE.md](docs/USER-GUIDE.md) | Every feature and every config key, in detail |
+| [docs/UI-SPEC.md](docs/UI-SPEC.md) | How the tooltips are built - canvases, sorting, positioning, sprites (dev) |
+| [docs/SMOKE-TEST.md](docs/SMOKE-TEST.md) | Pre-release checklist |
+| [game-api/README.md](game-api/README.md) | Decompiled game API notes (dev) |
 
-Planning notes, the user guide, the UI specification, the smoke-test checklist and save tooling
-are kept outside this repo.
+Planning notes, the roadmap and save tooling are kept outside this repo.
 
 ## License / attribution
 
