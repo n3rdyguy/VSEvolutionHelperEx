@@ -34,8 +34,75 @@ Two root canvases matter, and only one of them exists at a time.
 
 **A popup parented to a canvas that is not in the scene is never drawn.** It is created, it is
 positioned, it logs correctly, and nothing appears. This is the failure mode for anything shown
-mid-run: the menu canvas simply is not there. `ItemTooltipsMod.FindDockParent()` prefers the menu
-Safe Area when it is active and falls back to the Game UI one.
+mid-run: the menu canvas simply is not there.
+
+### Mid-run, no game canvas can draw a popup at all
+
+The Game UI Safe Area is **`activeInHierarchy` and scaled to zero** during a run, as is the
+`AspectMask` canvas above it. A popup parented there inherits that zero scale and renders
+nothing while its position, rect, alpha and sorting order all read perfectly correct. Setting
+our own `localScale` to one does not help: lossy scale is parent x local, and nothing undoes a
+zero above you.
+
+So `FindDockParent()` offers exactly two answers - the menu Safe Area when it is in the scene,
+and otherwise `OwnDock()`, a `DontDestroyOnLoad` Screen Space Overlay canvas we build once. Its
+inner rect is fixed at exactly **1920x1200**, matching the reference space every dock constant
+is written in, so placement is identical either way. It carries **no `GraphicRaycaster`**, by
+omission rather than by removal, so it cannot swallow clicks on what it covers.
+
+> ### `lossyScale` is stale until the canvas updates
+>
+> Checking a container's scale *before* building the popup reads whatever the last canvas pass
+> left there. Building the popup triggers a canvas update, the scaler recomputes, and only then
+> is the number real.
+>
+> This cost two build cycles and looked like a contradiction in the log: `IsUsableDock` approved
+> the Game UI Safe Area, and the diagnostic three lines later reported `parentScale=(0,0,0)` for
+> that same object. Call `Canvas.ForceUpdateCanvases()` before reading, and re-check once the
+> popup is really in the hierarchy - that is the only honest moment to measure. A popup that
+> lands somewhere unable to draw it should relocate itself rather than trust a prior verdict.
+
+Diagnosing this class of bug: **`active` is not the same as `visible`.** Log `activeInHierarchy`,
+`CanvasGroup.alpha`, ancestor masks, **and `lossyScale`** together, plus the parent's name and
+scale. Any one of them alone reads fine while the tooltip is invisible.
+
+### Hovering the game's own objects: check the canvas before anything else
+
+A `GraphicRaycaster` only tests graphics registered to **its own canvas**, and a graphic registers
+to the **nearest enabled `Canvas` above it**. So a nested canvas with no raycaster makes its whole
+subtree unhittable - by us and by the game alike.
+
+`ArcanaInfoGroup` is exactly that: `overrideSorting`, `sortingOrder 10`, **no `GraphicRaycaster`**.
+Nothing in the arcana info panel had ever been hoverable. Eight build cycles went into the wiring
+before the canvas was questioned, because every obvious check passes while this is wrong:
+
+```
+icon rect size=(45.50, 30.00)  containsProbePoint=True   cull=False
+graphic canvas='.../View - ArcanaMainSelection/ArcanaInfoGroup'
+raycasterCanvas='View - ArcanaMainSelection'             sameCanvas=False
+```
+
+`sameCanvas=False` is the whole diagnosis. Fix: `AddComponent<GraphicRaycaster>()` on the owning
+canvas. It cannot steal clicks from what is behind, because that canvas already draws above it.
+
+**So when a hover never fires on a game object, ask in this order** - each step is one log line and
+rules out everything below it:
+
+1. `Graphic.canvas` vs the raycaster's own canvas. If they differ, stop; nothing else matters.
+2. `EventSystem.RaycastAll` at the object's own screen point, printing the full hit list. Whatever
+   is at `hit[0]` and is not the object is a lid - on the arcana screen, a full-view `BlackFader`
+   at `alpha 0.5` that is a raycast target with no handler of its own.
+3. `RectangleContainsScreenPoint`, ancestor `Mask` / `RectMask2D` / `CanvasGroup.blocksRaycasts`,
+   then `raycastTarget`, `enabled`, `color.a`, `lossyScale`.
+
+> **Convert through the right camera.** `RectTransformUtility.WorldToScreenPoint(null, pos)` on a
+> `ScreenSpaceCamera` canvas silently returns world units as pixels, aiming the probe at the corner
+> of the screen; its "0 hits" measures nothing but that mistake. Pass `canvas.worldCamera` for any
+> canvas that is not `ScreenSpaceOverlay`.
+>
+> And print scale to **four** decimals. `Canvas - Game UI` runs at `lossyScale 0.0038`, which
+> `Vector3.ToString()` renders as `(0.00, 0.00, 0.00)` - indistinguishable from a hidden object,
+> and read as one for two build cycles.
 
 Known in-run modal views, all under `GAME UI/Canvas - Game UI/Safe Area`:
 
@@ -258,9 +325,36 @@ paid for the hard way and must survive any refactor:
    fires, because pointer events bubble to the first ancestor handling them.
 2. **Append to `EventTrigger.triggers`, never clear them.** Clearing entries on a row that owns
    its own wiring is how a similar patch broke character select in 1.9.1.
+3. **Add nothing to the row's graphics.** No transparent `Image`, and never force `raycastTarget`
+   back on where the game switched it off. See below - both make rows unclickable.
 
 Rows are recycled, so listeners are attached once per `GameObject` (tracked by instance ID) while
 the entry behind that ID is replaced freely.
+
+### `EventTrigger` eats clicks
+
+`EventTrigger` implements **every** pointer interface, `IPointerClickHandler` included. There is
+no way to attach only hover. `ExecuteEvents.ExecuteHierarchy` stops at the first object handling
+a click, so the moment a raycast lands on an object carrying our trigger, the click is consumed
+there - and a handler living on an **ancestor** never runs.
+
+That is exactly the arcana screens, whose click handling sits above the card. It made every
+arcana and Darkana unclickable, and took three wrong fixes before the cause was found. Adjusting
+what the raycast hits does not help; the trigger only has to be somewhere on the chain.
+
+Two rules follow:
+
+- **Hover needs no raycast target of its own.** `PointerEnter`/`PointerExit` propagate up, so a
+  trigger on the row root fires when any child is hovered. That is why the root is registered
+  alongside the icon. It works off the row's existing art.
+- **Clickable rows hand back a typed `Entry.OnClick`.** Re-dispatching through
+  `ExecuteEvents.ExecuteHierarchy` is the general answer but its generic `EventFunction` does not
+  survive the IL2CPP interop boundary (`CS1503`). A typed action cannot mis-target, and inert
+  list pages simply leave it null.
+
+The control test that isolated this: **turn the tooltip config off.** If the game's own
+interaction returns, the tooltip is the cause; no amount of reading the log proves that as
+quickly.
 
 ### Deferred content
 
@@ -370,6 +464,28 @@ It broke character select in 1.9.1. See CHANGELOG.
 Every patch body is wrapped; a throw inside a postfix on a UI method can take the page down.
 Warn once, show nothing, let the game carry on.
 
+### `__instance` is only trustworthy in the postfix that was handed it
+
+Do not stash an instance, and do not read fields off `__instance` in a per-frame patch such as
+`LateUpdate`. `ArcanaInfoPanel.LateUpdate` runs on something that is not the live panel:
+`_affectedWeapons.Count` read back as `-1595577652`, and `_AffectedWeaponGroup.transform` threw
+`The component is not attached to any game object!` as a **native** exception. The `catch` logged
+it and the process still died - a `try` around interop does not contain everything.
+
+Where state is needed later, capture plain values in the good postfix and navigate the scene
+afterwards (`GameObject.Find` on a landmark, then walk down).
+
+### Find what is drawn, not what was built
+
+A panel may build into one container and draw from another. `ArcanaInfoPanel` keeps a fixed row
+and a dynamic grid and switches past `_MaxWeaponsBeforeGrid`, which is **3** - so the grid is the
+normal case. The unused container stays `activeInHierarchy` at `scale=(0,0,0)` with its graphics
+disabled, and a disabled `Graphic` is neither drawn nor raycast against.
+
+Prune inactive and zero-scaled branches whole - scale is inherited - then group the enabled
+`Image`s by parent and take the group whose count matches what was queued. That answers "which
+container won" without naming either one, and survives the panel being rearranged.
+
 ---
 
 ## 8. Data quirks
@@ -383,6 +499,34 @@ fallback behind that. Same shape for the custom-merchant catalog.
 `AchievementData` is the opposite: its reward fields are **plain strings**
 (`characterToUnlock`, `weaponToUnlock`, …), so they feed `GameData.BuildRewardRows` directly with
 no fallback needed.
+
+### The enum runs ahead of the data table
+
+An enum value existing does **not** mean the game ships a record for it. On 1.15 `ArcanaType`
+declares 22 Darkanas while `DataManager.AllArcanas` holds records for 12 - matching the 22 cards
+in the deck against 12 officially released. The ten without records are a later version's
+content, one of them still named `D07_tbd_bouncy`:
+
+```
+D02  D04  D07  D09  D11  D14  D15  D16  D17  D20
+```
+
+`Enum.IsDefined` therefore proves nothing about whether anything can be shown. Check
+`GameData.HasArcanaRecord` (i.e. `GetArcanaData(type) != null`) and **say so in the panel** -
+these render their name, their art and *"Not in this version of the game yet."* A panel holding
+a bare name reads as a broken tooltip, which is the wrong thing to tell the player when the
+tooltip is working and the game has nothing to say.
+
+Distinguish three causes before concluding anything, because they are identical from the UI:
+
+| Reading | Means |
+|---------|-------|
+| `no record in AllArcanas` | The game never ships it. Nothing to fix |
+| `record present, weapons=0 items=0` | Blank record. Nothing to show |
+| `record present, weapons=12 …` | We hold the data and misread it. **Our bug** |
+
+Empty is not automatically a lookup failure, and a table that never grows is not an async
+problem - check whether it grows before building a retry for it.
 
 ### `VOID` and other sentinels
 
@@ -463,13 +607,23 @@ In order, because each step rules out the one below it.
 
 1. **Is the patch applied?** `LogOutput.log` should have `[Page] Patched X.SetData(N args)`.
    Zero patched means the method was renamed by a game update.
-2. **Is the row registered?** With `VerboseLogging`, `Page: registered N rows for X`. `0 rows`
-   and no description means the data lookup failed, not the UI.
-3. **Is the popup created?** `[Page] popup rect=… anchored=…`. If this prints and nothing is on
-   screen, the problem is sorting or parenting - check the `[Tooltip] sorting:` line next to it.
-4. **Is it on the right canvas?** `parent='Safe Area'` - during a run this must be the Game UI
-   one, and a popup on the menu canvas mid-run will never draw.
-5. **Is it off screen?** Compare `anchored=` against +/-960 x +/-600.
+2. **Is the deployed DLL the one you built?** Compare md5s on both sides, and check the log's
+   own mtime against the deploy. Two rounds of this session were spent reading a log written
+   before the build under test existed.
+3. **Did the hover arrive?** `[Page] hover title='…' desc=…ch rows=…`. Nothing here means the
+   pointer never reached the row - a different bug entirely from a panel that declined to draw.
+4. **Is the row registered?** `Page: registered N rows for X`. `0 rows` and no description means
+   the data lookup failed, not the UI - and see §8 on why that may be correct.
+5. **Is the popup created?** `[Page] popup rect=… anchored=…`. If this prints and nothing is on
+   screen, the problem is sorting, parenting or scale.
+6. **Can the parent draw?** `visibility: active=… alpha=… maskedByAncestor=… scale=… parentScale=…`.
+   A `scale=(0,0,0)` is the mid-run Safe Area; see §1. Active is not visible.
+7. **Is it off screen?** Compare `anchored=` against +/-960 x +/-600.
+
+**When three rounds have not fixed it, stop changing behaviour and ship a build that only
+measures.** Every wrong turn in this session came from acting on the most plausible cause rather
+than the one the log named; every fix came from a build whose only job was to separate two
+causes that looked identical from outside.
 
 ---
 

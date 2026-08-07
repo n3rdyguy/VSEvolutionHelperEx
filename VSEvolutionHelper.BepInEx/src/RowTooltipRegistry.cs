@@ -34,6 +34,12 @@ public sealed class RowTooltipRegistry
 		/// wait until the row has actually been drawn. The answer is cached once it is real.
 		/// </summary>
 		public Func<Sprite> SpriteProvider;
+		/// <summary>
+		/// Asked for the description at hover time, in place of <see cref="Description"/>. Text
+		/// scraped from a game panel does not exist until that panel has drawn the thing once, so
+		/// a description resolved at registration is empty for anything not yet browsed.
+		/// </summary>
+		public Func<string> DescriptionProvider;
 		public List<GameData.IconRow> Rows;
 		/// <summary>
 		/// Asked for the rows at hover time, in place of <see cref="Rows"/>. For anything whose
@@ -51,9 +57,24 @@ public sealed class RowTooltipRegistry
 		/// whose rows are inert leave it null and nothing changes.
 		/// </summary>
 		public Action OnClick;
+		/// <summary>
+		/// Draw the panel even when there is nothing but a title and art.
+		///
+		/// Normally an empty panel is worse than none, so it is suppressed. Arcana cards are the
+		/// exception: the game ships no description for the character and adventure groups, and a
+		/// card that never responds to the pointer reads as broken rather than as empty. A name
+		/// and its art are honest - they are what is actually known.
+		/// </summary>
+		public bool AllowTitleOnly;
 		/// <summary>Placement override in Safe Area reference units; null uses the default dock.</summary>
 		public Vector2? Offset;
 		public Vector2? Pivot;
+		/// <summary>
+		/// Where a list too long for one panel continues. Null means it truncates instead, which
+		/// is right for pages with no second free margin to continue into.
+		/// </summary>
+		public Vector2? SpillOffset;
+		public Vector2? SpillPivot;
 	}
 
 	private readonly Dictionary<int, Entry> _entries = new Dictionary<int, Entry>();
@@ -189,7 +210,14 @@ public sealed class RowTooltipRegistry
 
 	private void Show(int id)
 	{
-		if (!_entries.TryGetValue(id, out Entry e) || e == null) return;
+		if (!_entries.TryGetValue(id, out Entry e) || e == null)
+		{
+			// A hover that lands on nothing is worth saying out loud: it is the difference between
+			// "the panel refused to draw" and "the pointer never got here", which look identical
+			// from the outside and have nothing in common as bugs.
+			Plugin.Dbg($"[{_logTag}] hover on unregistered object {id}");
+			return;
+		}
 		_shownId = id;
 
 		List<GameData.IconRow> rows = e.Rows;
@@ -206,6 +234,20 @@ public sealed class RowTooltipRegistry
 			}
 		}
 
+		string description = e.Description;
+		if (e.DescriptionProvider != null)
+		{
+			try
+			{
+				string live = e.DescriptionProvider();
+				if (!string.IsNullOrWhiteSpace(live)) description = live;
+			}
+			catch (Exception ex)
+			{
+				Plugin.Dbg($"[{_logTag}] live description: " + ex.Message);
+			}
+		}
+
 		if ((Object)(object)e.Sprite == (Object)null && e.SpriteProvider != null)
 		{
 			try
@@ -218,8 +260,14 @@ public sealed class RowTooltipRegistry
 				Plugin.Dbg($"[{_logTag}] late sprite: " + ex.Message);
 			}
 		}
-		ItemTooltipsMod.ShowDockedPopup(e.Title, e.Description, e.Sprite, rows, e.SectionHeader, _logTag,
-			e.Offset, e.Pivot);
+		if (Plugin.DebugVerbose)
+			Plugin.Dbg($"[{_logTag}] hover title='{e.Title}' "
+				+ $"desc={(string.IsNullOrEmpty(description) ? 0 : description.Length)}ch "
+				+ $"rows={(rows == null ? 0 : rows.Count)} "
+				+ $"sprite={((Object)(object)e.Sprite != (Object)null)} titleOnly={e.AllowTitleOnly}");
+
+		ItemTooltipsMod.ShowDockedPopup(e.Title, description, e.Sprite, rows, e.SectionHeader, _logTag,
+			e.Offset, e.Pivot, e.AllowTitleOnly, e.SpillOffset, e.SpillPivot);
 	}
 
 	public void Clear()

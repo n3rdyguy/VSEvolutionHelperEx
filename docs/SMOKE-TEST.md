@@ -84,6 +84,14 @@ Same shape on all five: hover a row, a docked panel appears in the free space be
       nothing if parenting regresses)
 - [ ] A **face-down** card shows nothing
 - [ ] Clicking a card still selects it
+- [ ] **Heart of Fire** (49 affected): the list continues in a **second panel** on the opposite
+      margin, with art and title, and no "+N more"
+- [ ] An **unreleased Darkana** reads "Not in this version of the game yet." rather than a bare name
+- [ ] **Affected-weapon icons:** hover an icon along the bottom of the info panel → its evolutions
+      and unions. Try an arcana affecting **three or fewer** as well as a long one - the panel keeps
+      two containers and draws from either
+- [ ] The arcana screen still looks **dimmed as before** behind the panel (the fade overlay is left
+      drawn; only its raycast blocking is cleared)
 
 ## Character & adventure select
 

@@ -1,7 +1,7 @@
 # VS Evolution Helper — User guide
 
 **Plugin:** VS Evolution Helper (BepInEx)  
-**Current version:** 1.13.0 (plus Music and arcana-card tooltips, unreleased)  
+**Current version:** 1.14.0  
 **Game:** Vampire Survivors 1.15 / Unity 6  
 
 This guide describes **every player-facing feature**. For install steps, see the root [README](../README.md). For release history, see [CHANGELOG](../CHANGELOG.md).
@@ -138,7 +138,17 @@ actually modifies - so the choice is otherwise made from memory.
 
 A **face-down** card shows nothing. The tooltip cannot reveal a pick the game has not flipped yet.
 
-Kill switch: `Features.ArcanaCardTooltips`.
+An arcana affecting more than about two dozen things continues in a **second panel** on the
+opposite margin rather than truncating - Heart of Fire touches 49.
+
+Ten of the twenty-two Darkana cards in the deck have **no data in this version of the game**. They
+say so rather than opening an empty panel.
+
+**The weapon icons along the bottom of the info panel answer separately.** Hover one and it shows
+what that weapon evolves or unions into. Arcanas are left out of that list on purpose: which one is
+in play is the one thing already on screen.
+
+Kill switch: `Features.ArcanaCardTooltips` (covers the weapon icons too).
 
 ### 3.7 Keyboard / controller navigation
 

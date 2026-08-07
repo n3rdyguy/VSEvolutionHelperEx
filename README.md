@@ -1,12 +1,12 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.13.0** - Evolution, arcana, grimoire, collection, map, stage, character, adventure, and secrets tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.14.0** - Evolution, arcana, grimoire, collection, map, stage, character, adventure, secrets, bestiary, power-up and music tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
 | | |
 |--|--|
-| **Latest release** | [v1.13.0](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.13.0) |
+| **Latest release** | [v1.14.0](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.14.0) |
 | **Nexus Mods** | [VS Evolution Helper (BepInEx port)](https://www.nexusmods.com/vampiresurvivors/mods/105) |
 | **Game** | Vampire Survivors **1.15.x** (tested **1.15.114**) and the **1.16 public beta**, Unity **6000.0.62f1** |
 | **Loader** | [BepInEx 6 IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (BE / bleeding-edge) |
@@ -51,7 +51,8 @@ Please support the original authors. This port reuses their design with typed Il
 | **Power Up** | Hover an upgrade → level owned, next price, and what the rest costs. Prices climb with every level bought anywhere on the page, so the game's single "next" figure says little about finishing an upgrade; levels beyond the next are projected and labelled as such |
 | **Bestiary** | Hover an enemy → HP, damage, speed, XP, knockback, plus **resistances**, skills and the stages it appears in - none of which the page itself shows. Stats read as ranges where one entry covers a family of enemies. Turn off `BestiarySpoilers` for killed enemies only |
 | **Music** | Hover a track → the composer, the game or DLC it came from, and how it is unlocked. The page itself shows only a title, and credits the music nowhere. Turn off `MusicSpoilers` to keep the dashes the game draws over locked track names |
-| **Arcana cards** | Hover any arcana card → its description and an **Affects** list of every weapon and passive it changes. Works on the **mid-run pick**, which is the only place an arcana has to be chosen against a timer. Face-down cards show nothing |
+| **Arcana cards** | Hover any arcana card → its description and an **Affects** list of every weapon and passive it changes. Works on the **mid-run pick**, which is the only place an arcana has to be chosen against a timer. Face-down cards show nothing. A list too long for one panel continues on the opposite margin instead of truncating |
+| **Affected weapons** | Hover an individual weapon icon along the bottom of the arcana info panel → what that weapon **evolves or unions into**. The panel already names the weapons an arcana touches; the evolution is the part it never says |
 
 ### Stage Guide (right column)
 
@@ -208,7 +209,7 @@ Newer BE builds generally work too. If a very new BE build misbehaves, dropping 
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.13.0]
+Loading [VS Evolution Helper 1.14.0]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete

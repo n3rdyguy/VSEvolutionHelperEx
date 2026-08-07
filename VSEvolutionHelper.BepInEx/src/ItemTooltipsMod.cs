@@ -409,6 +409,9 @@ public class ItemTooltipsMod
 				ArcanaCardPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("ArcanaCard patches: " + ex.Message); }
 			try {
+				ArcanaWeaponPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("ArcanaWeapon patches: " + ex.Message); }
+			try {
 				MusicPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("Music patches: " + ex.Message); }
 			Plugin.Log.LogInfo("Patches applied successfully");
@@ -9387,7 +9390,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			const float rowIcon = 30f;
 			// Stat panels carry several labelled groups, so the old 10-row cap truncated them
 			// into a "+N more" that hid the very thing the panel exists to show.
-			const int maxRows = 20;
+			//
+			// Raised to 26 alongside the two-column split: half of the longest real list (Heart of
+			// Fire's 49 weapons) is 25, and a cap below that would truncate a column that had just
+			// been split precisely to avoid truncating.
+			const int maxRows = 26;
 			float nameX = Padding + rowIcon + 8f;
 			float nameW = contentW - rowIcon - 8f;
 			int shown = 0;
@@ -9494,6 +9501,12 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 	private static GameObject dockedPopup = null;
 
+	/// <summary>The second column of a list too long for one panel. Lives and dies with it.</summary>
+	private static GameObject dockedSpill = null;
+
+	/// <summary>The frame the current docked popup was created on, for lifetime diagnostics.</summary>
+	private static int dockedPopupFrame = -1;
+
 	/// <summary>
 	/// Offset of a docked popup from the centre of the Safe Area, in its 1920x1200 reference
 	/// units. Positive is up and to the right; X places it in the middle of the right half,
@@ -9541,6 +9554,42 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	public static readonly Vector2 MusicPanelPivot = new Vector2(0f, 1f);
 
 	/// <summary>
+	/// Arcana cards: the left margin, pinned by the panel's RIGHT edge at the vertical centre.
+	///
+	/// The cards are dealt across the middle of the screen and the pick is timed, so the panel has
+	/// to be somewhere the eye can find without hunting and nowhere it can cover a card. The left
+	/// margin is the only such space, and it is free on the mid-run pick and the Collections grid
+	/// alike.
+	///
+	/// Pinned by the right edge rather than the left, so the panel's inner edge stays on a fixed
+	/// line beside the cards and a wide title grows away from them into the margin instead of
+	/// towards them. Vertically centred, so a tall panel spreads evenly up and down rather than
+	/// running off the bottom - an arcana with fifty affected weapons is a tall panel.
+	///
+	/// Measured from the screen box 9,59 - 605,1547 at 2560x1600: right edge 0.236 ->
+	/// (0.236 - 0.5) * 1920 = -507, box centre 0.502 -> (0.5 - 0.502) * 1200 = 0.
+	/// </summary>
+	public const float ArcanaPanelX = -507f;
+	public const float ArcanaPanelY = 0f;
+	public static readonly Vector2 ArcanaPanelPivot = new Vector2(1f, 0.5f);
+
+	/// <summary>
+	/// Where a long Affects list continues, mirroring the main arcana panel across the screen.
+	///
+	/// Heart of Fire supports 49 weapons. One column cannot hold that at a readable size, and
+	/// truncating it to "+29 more" hides the very thing the panel exists to show - which weapons
+	/// an arcana actually touches. The margin on the other side is equally empty, so the list runs
+	/// down one side and continues down the other.
+	///
+	/// Pinned by its LEFT edge at the vertical centre, growing right, up and down - the mirror of
+	/// the main panel. Measured from the screen box 1945,61 - 2549,1549 at 2560x1600: left edge
+	/// 0.760 -> (0.760 - 0.5) * 1920 = 499, box centre 0.503 -> 0.
+	/// </summary>
+	public const float ArcanaSpillX = 499f;
+	public const float ArcanaSpillY = 0f;
+	public static readonly Vector2 ArcanaSpillPivot = new Vector2(0f, 0.5f);
+
+	/// <summary>
 	/// Show a popup docked to a fixed spot in the App Safe Area rather than placed next to the
 	/// row it describes. List pages (Secrets, Bestiary, Achievements, Power-ups) are all
 	/// ScrollRects, and a popup parented inside one gets clipped by the mask - the same trap
@@ -9556,11 +9605,103 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// </summary>
 	private static GameObject FindDockParent()
 	{
+		// GameObject.Find only returns active objects, so finding this at all is the test. It is
+		// the menu canvas: present on every page the list tooltips live on, and simply not in the
+		// scene during a run.
 		GameObject app = GameObject.Find("UI/Canvas - App/Safe Area");
-		if ((Object)(object)app != (Object)null && app.activeInHierarchy) return app;
-		GameObject game = GameObject.Find("GAME UI/Canvas - Game UI/Safe Area");
-		if ((Object)(object)game != (Object)null && game.activeInHierarchy) return game;
-		return app ?? game;
+		if (IsUsableDock(app)) return app;
+
+		// Everything else the game offers mid-run has been measured and cannot draw: the Game UI
+		// Safe Area and the AspectMask canvas above it both report lossyScale zero once the canvas
+		// has actually updated. Neither is tried any more - see IsUsableDock for why asking them
+		// was worse than not asking.
+		return OwnDock();
+	}
+
+	/// <summary>Our own canvas, built once, used only when the game has no usable container.</summary>
+	private static GameObject ownDock = null;
+
+	/// <summary>
+	/// A dock the game cannot take away.
+	///
+	/// Deliberately shaped to be interchangeable with the game's Safe Area, so every caller's
+	/// placement maths keeps working unchanged: an inner rect fixed at exactly 1920x1200 centred
+	/// on the screen, which is the reference space all the dock constants are written in. The
+	/// scaler uses Expand so that rect is never cropped on an aspect ratio wider or taller than
+	/// 16:10 - it letterboxes the same way the game's own Safe Area does.
+	///
+	/// No GraphicRaycaster, by omission rather than by removal: a canvas without one takes no
+	/// pointer input at all, so this can sit over the arcana cards without eating their clicks.
+	/// </summary>
+	private static GameObject OwnDock()
+	{
+		if ((Object)(object)ownDock != (Object)null) return ownDock;
+		try
+		{
+			GameObject root = new GameObject("VSEvo Tooltip Dock");
+			Object.DontDestroyOnLoad(root);
+
+			Canvas c = root.AddComponent<Canvas>();
+			c.renderMode = RenderMode.ScreenSpaceOverlay;
+			// Left at the bottom on purpose. The popup adds its own canvas with overrideSorting and
+			// lifts itself above whatever is topmost; a high order here would make this container
+			// the thing TopmostCanvas finds, and the popup would then sort against itself.
+			c.sortingOrder = 0;
+
+			var scaler = root.AddComponent<UnityEngine.UI.CanvasScaler>();
+			scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+			scaler.referenceResolution = new Vector2(1920f, 1200f);
+			scaler.screenMatchMode = UnityEngine.UI.CanvasScaler.ScreenMatchMode.Expand;
+
+			GameObject area = new GameObject("Safe Area");
+			area.transform.SetParent(root.transform, false);
+			RectTransform rt = area.AddComponent<RectTransform>();
+			rt.anchorMin = new Vector2(0.5f, 0.5f);
+			rt.anchorMax = new Vector2(0.5f, 0.5f);
+			rt.pivot = new Vector2(0.5f, 0.5f);
+			rt.anchoredPosition = Vector2.zero;
+			rt.sizeDelta = new Vector2(1920f, 1200f);
+
+			ownDock = area;
+			Plugin.Dbg("[Tooltip] dock: game has none usable, built our own canvas");
+			return ownDock;
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("[Tooltip] own dock: " + ex.Message);
+			return null;
+		}
+	}
+
+	/// <summary>
+	/// Can a popup parented here actually be seen?
+	///
+	/// Active is not enough: a container scaled to zero renders nothing while reporting a sane
+	/// rect, a sane position and full alpha. But the scale cannot simply be read either, because
+	/// <c>lossyScale</c> is STALE until the canvas has updated - it still holds whatever the last
+	/// canvas pass left there.
+	///
+	/// That staleness cost a whole build. Asked before the popup was built, the Game UI Safe Area
+	/// answered with a leftover non-zero scale and was accepted; building the popup then triggered
+	/// a canvas update, the scaler recomputed the real value of zero, and the very next log line
+	/// reported <c>parentScale=(0,0,0)</c> for the container just approved. The check was reading
+	/// a number that had not been calculated yet.
+	///
+	/// So the canvas is forced to update first, and the answer is taken after. Only on hover, and
+	/// only against the one container that is ever a candidate.
+	/// </summary>
+	private static bool IsUsableDock(GameObject go)
+	{
+		if ((Object)(object)go == (Object)null) return false;
+		if (!go.activeInHierarchy) return false;
+		try
+		{
+			Canvas.ForceUpdateCanvases();
+			Vector3 s = go.transform.lossyScale;
+			if (Mathf.Abs(s.x) < 0.0001f || Mathf.Abs(s.y) < 0.0001f) return false;
+		}
+		catch { return false; }
+		return true;
 	}
 
 	/// <summary>
@@ -9726,24 +9867,110 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// </summary>
 	private const int DockedPopupSortingBoost = 10;
 
+	/// <summary>
+	/// Row count past which the list continues in a second panel instead of being truncated.
+	///
+	/// Set so the worst real case splits evenly and neither column then hits the per-panel cap:
+	/// Heart of Fire's 49 rows become 25 and 24. Lists longer than twice the cap still truncate,
+	/// and say so.
+	/// </summary>
+	private const int RowSpillThreshold = 26;
+
 	public static void ShowDockedPopup(string title, string description, Sprite sprite,
 		List<GameData.IconRow> rows, string sectionHeader, string logTag = "Tooltip",
-		Vector2? offset = null, Vector2? pivot = null)
+		Vector2? offset = null, Vector2? pivot = null, bool allowTitleOnly = false,
+		Vector2? spillOffset = null, Vector2? spillPivot = null)
 	{
 		HideDockedPopup();
-		if ((rows == null || rows.Count == 0) && string.IsNullOrEmpty(description)) return;
+		// An empty panel is worse than none - except where the caller says a name and its art are
+		// all that will ever be known, which is the arcana groups the game ships no text for.
+		if ((rows == null || rows.Count == 0) && string.IsNullOrEmpty(description)
+			&& !(allowTitleOnly && !string.IsNullOrWhiteSpace(title)))
+		{
+			Plugin.Dbg($"[{logTag}] nothing to show for title='{title}' (titleOnly={allowTitleOnly})");
+			return;
+		}
+		try
+		{
+			List<GameData.IconRow> primary = rows;
+			List<GameData.IconRow> spill = null;
+			if (rows != null && rows.Count > RowSpillThreshold && spillOffset.HasValue)
+			{
+				int half = (rows.Count + 1) / 2;
+				// Never end a column on a group header: it would introduce a group whose contents
+				// are all in the other panel.
+				while (half > 1 && rows[half - 1].IsHeader) half--;
+				primary = rows.GetRange(0, half);
+				spill = rows.GetRange(half, rows.Count - half);
+			}
+
+			dockedPopup = BuildDockedPanel(title, description, sprite, primary, sectionHeader,
+				logTag, offset, pivot);
+			if ((Object)(object)dockedPopup == (Object)null) return;
+			dockedPopupFrame = Time.frameCount;
+
+			if (spill != null)
+			{
+				// Carries the same title and art, so the second column reads as the same tooltip
+				// rather than as an unrelated list that happened to appear. Only the description is
+				// left off - it belongs to the panel being continued, not repeated beside it.
+				string contHeader = string.IsNullOrEmpty(sectionHeader)
+					? null
+					: sectionHeader.TrimEnd(':') + ", continued:";
+				dockedSpill = BuildDockedPanel(title, null, sprite, spill, contHeader,
+					logTag, spillOffset, spillPivot);
+				if (Plugin.DebugVerbose)
+					Plugin.Dbg($"[{logTag}] split {rows.Count} rows into {primary.Count} + {spill.Count}");
+			}
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning($"[{logTag}] popup: " + ex.Message);
+		}
+	}
+
+	/// <summary>
+	/// Build one docked panel: create it, make sure it landed somewhere that can draw it, lift it
+	/// above the dimmer and place it. Shared by the main panel and its continuation.
+	/// </summary>
+	private static GameObject BuildDockedPanel(string title, string description, Sprite sprite,
+		List<GameData.IconRow> rows, string sectionHeader, string logTag,
+		Vector2? offset, Vector2? pivot)
+	{
 		try
 		{
 			GameObject view = FindDockParent();
-			if ((Object)(object)view == (Object)null) return;
+			if ((Object)(object)view == (Object)null) return null;
 
-			dockedPopup = CreateSimpleMapPopup(view.transform, title, description, sprite, rows, sectionHeader);
-			if ((Object)(object)dockedPopup == (Object)null) return;
+			GameObject panel = CreateSimpleMapPopup(view.transform, title, description, sprite, rows, sectionHeader);
+			if ((Object)(object)panel == (Object)null) return null;
 
-			RectTransform rt = dockedPopup.GetComponent<RectTransform>();
-			if ((Object)(object)rt == (Object)null) return;
-			dockedPopup.transform.SetAsLastSibling();
-			LiftAboveDimmer(dockedPopup);
+			RectTransform rt = panel.GetComponent<RectTransform>();
+			if ((Object)(object)rt == (Object)null) return null;
+			panel.transform.SetAsLastSibling();
+
+			// Measure again now the popup is really in the hierarchy, and move it if the container
+			// turned out to be unable to draw after all.
+			//
+			// This is the only honest moment to ask. Building the popup forces the canvas update
+			// that computes the scales, so a container that read fine beforehand can read zero
+			// here - which is exactly how the in-run tooltip stayed invisible across two builds.
+			// Nothing is assumed about which containers lie; the popup simply checks whether it
+			// can be seen where it landed, and leaves if it cannot.
+			if (!IsUsableDock(panel))
+			{
+				GameObject own = OwnDock();
+				if ((Object)(object)own != (Object)null && (Object)(object)own != (Object)(object)view)
+				{
+					Plugin.Dbg($"[{logTag}] dock: '{((Object)view).name}' cannot draw "
+						+ $"(scale={panel.transform.lossyScale}), moving to our own canvas");
+					panel.transform.SetParent(own.transform, false);
+					panel.transform.SetAsLastSibling();
+					view = own;
+				}
+			}
+
+			LiftAboveDimmer(panel);
 			rt.localScale = Vector3.one;
 			// Anchor to the centre and place with an explicit offset rather than an anchor
 			// fraction: changing anchorMin/anchorMax does not recompute the transform in the
@@ -9757,6 +9984,25 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 
 			if (Plugin.DebugVerbose)
 			{
+				// Whether the popup is actually visible, as opposed to merely existing at sane
+				// coordinates. A mask anywhere above it clips it regardless of sorting order, and
+				// a canvas group at zero alpha hides it while every number still reads correctly.
+				float alpha = 1f;
+				bool masked = false;
+				try
+				{
+					var cg = panel.GetComponentInParent<CanvasGroup>();
+					if ((Object)(object)cg != (Object)null) alpha = cg.alpha;
+					var mask = panel.GetComponentInParent<UnityEngine.UI.RectMask2D>();
+					var mask1 = panel.GetComponentInParent<UnityEngine.UI.Mask>();
+					masked = (Object)(object)mask != (Object)null || (Object)(object)mask1 != (Object)null;
+				}
+				catch { }
+				Plugin.Dbg($"[{logTag}] visibility: active={panel.activeInHierarchy} "
+					+ $"alpha={alpha} maskedByAncestor={masked} scale={panel.transform.lossyScale} "
+					+ $"parent='{((Object)view).name}' parentScale={view.transform.lossyScale} "
+					+ $"frame={Time.frameCount}");
+
 				RectTransform prt = view.GetComponent<RectTransform>();
 				// No world position here: RectTransform.position is not recomputed until the
 				// next layout pass, so reading it back in this frame reports the old value.
@@ -9764,10 +10010,12 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 					+ $"parent='{view.name}' parentRect={((Object)(object)prt != (Object)null ? prt.rect.ToString() : "?")} "
 					+ $"screen={Screen.width}x{Screen.height}");
 			}
+			return panel;
 		}
 		catch (Exception ex)
 		{
-			Plugin.Log.LogWarning($"[{logTag}] popup: " + ex.Message);
+			Plugin.Log.LogWarning($"[{logTag}] panel: " + ex.Message);
+			return null;
 		}
 	}
 
@@ -9775,6 +10023,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	{
 		if ((Object)(object)dockedPopup != (Object)null)
 		{
+			// A popup destroyed in the same frame it was created looks exactly like a popup that
+			// was never created - except in here. Frame numbers make the difference visible.
+			if (Plugin.DebugVerbose)
+				Plugin.Dbg($"[Tooltip] hide (frame {Time.frameCount}, shown frame {dockedPopupFrame})");
+
 			// Deactivate before destroying. Object.Destroy is deferred to the end of the frame,
 			// so the outgoing popup is still alive - and still carrying its sorting canvas - when
 			// the incoming one measures the highest order on the layer. Each show then stepped
@@ -9786,6 +10039,15 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			try { dockedPopup.SetActive(false); } catch { }
 			Object.Destroy((Object)(object)dockedPopup);
 			dockedPopup = null;
+		}
+
+		// The continuation column is part of the same tooltip and must never outlive it: left
+		// behind, it would sit on the far side of the screen listing an arcana no longer hovered.
+		if ((Object)(object)dockedSpill != (Object)null)
+		{
+			try { dockedSpill.SetActive(false); } catch { }
+			Object.Destroy((Object)(object)dockedSpill);
+			dockedSpill = null;
 		}
 	}
 

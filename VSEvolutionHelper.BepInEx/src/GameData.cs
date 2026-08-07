@@ -2951,6 +2951,52 @@ public static class GameData
     }
 
     /// <summary>
+    /// A weapon's evolutions and unions as icon rows, for the shared docked popup.
+    ///
+    /// <see cref="BuildEvoRowsFor"/> already answers both questions - Path A follows the weapon's
+    /// own <c>evoInto</c>, Path B scans every recipe listing it in <c>evolvesFrom</c> or
+    /// <c>requires</c>, which is what a union is - so this only reshapes the answer. Each result
+    /// reads as the evolved weapon followed by what it needs alongside this one:
+    ///
+    /// <code>
+    /// [icon] Bloody Tear
+    ///   + Hollow Heart (max level)
+    /// </code>
+    ///
+    /// Deliberately no arcana rows. This tooltip is shown from inside the arcana screen, where
+    /// which arcana is in play is the one thing already on screen.
+    /// </summary>
+    public static System.Collections.Generic.List<IconRow> GetWeaponEvoIconRows(WeaponType weapon)
+    {
+        var rows = new System.Collections.Generic.List<IconRow>();
+        try
+        {
+            var evos = BuildEvoRowsFor(weapon);
+            if (evos == null) return rows;
+            foreach (var e in evos)
+            {
+                if (e == null) continue;
+                string name = string.IsNullOrEmpty(e.EvolvedName)
+                    ? HumanizeEnum(e.Evolved.ToString())
+                    : e.EvolvedName;
+                rows.Add(new IconRow(e.EvolvedSprite, name));
+                if (e.Passives == null) continue;
+                foreach (var p in e.Passives)
+                {
+                    if (p == null) continue;
+                    string pn = string.IsNullOrEmpty(p.Name) ? HumanizeEnum(p.Type.ToString()) : p.Name;
+                    rows.Add(new IconRow(p.Sprite, "+ " + pn + (p.RequiresMax ? " (max level)" : "")));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] GetWeaponEvoIconRows: " + ex.Message);
+        }
+        return rows;
+    }
+
+    /// <summary>
     /// Build evolution display rows for a base/passive weapon using typed requires/evolvesFrom.
     /// </summary>
     public static System.Collections.Generic.List<EvoDisplayRow> BuildEvoRowsFor(WeaponType weapon)
@@ -3482,11 +3528,25 @@ public static class GameData
                 continue;
             }
 
+            // alwaysHidden is not the noise flag it was taken for.
+            //
+            // It is set on the Darkanas the player has not unlocked, and skipping them dropped
+            // exactly those nine from the name table, the description table and the reverse weapon
+            // index alike - which is why they hovered with a humanized enum for a title and nothing
+            // else, while every arcana beside them resolved fully.
+            //
+            // Whether their records actually carry weapons and text is what this reports; the entry
+            // is indexed either way, so a record that holds something now shows it.
             try
             {
-                if (data.alwaysHidden)
+                if (data.alwaysHidden && Plugin.DebugVerbose)
                 {
-                    continue;
+                    int nWeapons = 0, nItems = 0;
+                    try { if (data.weapons != null) nWeapons = data.weapons.Count; } catch { }
+                    try { if (data.items != null) nItems = data.items.Count; } catch { }
+                    Plugin.Dbg($"[GameData] hidden arcana {type}: weapons={nWeapons} items={nItems} "
+                        + $"name='{ResolveArcanaName(data, type)}' "
+                        + $"desc={(ResolveArcanaDescription(data, type) ?? string.Empty).Length}ch");
                 }
             }
             catch
@@ -3573,11 +3633,109 @@ public static class GameData
         }
 
         _arcanaBuilt = indexed > 0;
+        _arcanaSourceCount = SourceArcanaCount();
         if (_arcanaBuilt && !_loggedArcana)
         {
             _loggedArcana = true;
             Log.LogInfo($"[GameData] Arcanas: {indexed} entries, {WeaponToArcanas.Count} weapon links, {ItemToArcanas.Count} item links");
         }
+    }
+
+    /// <summary>How many arcanas the index was built from, to notice the game adding more.</summary>
+    private static int _arcanaSourceCount = -1;
+
+    private static int SourceArcanaCount()
+    {
+        try
+        {
+            if (_dataManager == null) return -1;
+            var all = _dataManager.AllArcanas;
+            return all == null ? -1 : all.Count;
+        }
+        catch { return -1; }
+    }
+
+    /// <summary>
+    /// Rebuild the arcana index if the game's own table has grown since we read it.
+    ///
+    /// The index is built once and cached forever, which is right only if the table is complete
+    /// when we first see it. Sprites already taught this lesson - an atlas that has not finished
+    /// loading answers with a miss that is then cached as though it were an answer - and the same
+    /// shape is possible here if the game merges content in later.
+    ///
+    /// Cheap enough to ask on a miss: it compares two counts and does nothing unless they differ.
+    /// </summary>
+    public static bool RefreshArcanasIfGrown()
+    {
+        try
+        {
+            EnsureLoaded();
+            int now = SourceArcanaCount();
+            if (now < 0 || now == _arcanaSourceCount) return false;
+
+            Plugin.Dbg($"[GameData] arcana table grew {_arcanaSourceCount} -> {now}, rebuilding index");
+            ArcanaNames.Clear();
+            ArcanaDescriptions.Clear();
+            BuildArcanaCaches();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] refresh arcanas: " + ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>Arcanas already reported as empty, so a hover does not repeat itself.</summary>
+    private static readonly System.Collections.Generic.HashSet<ArcanaType> ReportedEmpty =
+        new System.Collections.Generic.HashSet<ArcanaType>();
+
+    /// <summary>
+    /// Say what an arcana's record actually holds when it resolves to nothing.
+    ///
+    /// "No rows" has two very different causes: a record the game never filled in, and a record
+    /// we failed to read. They are indistinguishable from the tooltip, and only one of them is a
+    /// bug on this side.
+    /// </summary>
+    private static void ReportEmptyArcana(ArcanaType type)
+    {
+        if (!Plugin.DebugVerbose) return;
+        if (!ReportedEmpty.Add(type)) return;
+        try
+        {
+            ArcanaData data = GetArcanaData(type);
+            if (data == null)
+            {
+                Plugin.Dbg($"[GameData] empty arcana {type}: no record in AllArcanas "
+                    + $"(table holds {SourceArcanaCount()})");
+                return;
+            }
+            int nWeapons = -1, nItems = -1;
+            try { nWeapons = data.weapons == null ? -1 : data.weapons.Count; } catch { }
+            try { nItems = data.items == null ? -1 : data.items.Count; } catch { }
+            bool hidden = false;
+            try { hidden = data.alwaysHidden; } catch { }
+            Plugin.Dbg($"[GameData] empty arcana {type}: record present, weapons={nWeapons} "
+                + $"items={nItems} hidden={hidden} name='{ResolveArcanaName(data, type)}' "
+                + $"desc={(ResolveArcanaDescription(data, type) ?? string.Empty).Length}ch");
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] empty arcana " + type + ": " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Does the game actually ship a record for this arcana?
+    ///
+    /// The <c>ArcanaType</c> enum runs ahead of the data table - 1.15 declares ten Darkanas it
+    /// holds no record for, one of them still named <c>D07_tbd_bouncy</c>. They are a later
+    /// version's content, and nothing about them can be shown because nothing about them exists.
+    /// </summary>
+    public static bool HasArcanaRecord(ArcanaType type)
+    {
+        try { return GetArcanaData(type) != null; }
+        catch { return false; }
     }
 
     public static ArcanaData GetArcanaData(ArcanaType type)
@@ -3603,9 +3761,38 @@ public static class GameData
         return name;
     }
 
+    /// <summary>
+    /// Description text scraped off the game's own arcana info panel, keyed by arcana.
+    ///
+    /// The data lookup finds nothing for most of the B and A groups - the term still carries its
+    /// placeholder and the record holds a single full stop - yet the game plainly renders text
+    /// for them. Whatever it composes that from, the rendered string is the truth, so it is taken
+    /// from the panel as the player browses. Same rule as the Bestiary row labels and the Music
+    /// titles: prefer what the game drew.
+    /// </summary>
+    private static readonly System.Collections.Generic.Dictionary<ArcanaType, string> ArcanaPanelText =
+        new System.Collections.Generic.Dictionary<ArcanaType, string>();
+
+    /// <summary>Remember what the info panel rendered for this arcana.</summary>
+    public static void CaptureArcanaDescription(ArcanaType type, string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        if (LooksLikeLocKey(text)) return;
+        if (IsPlaceholderText(text)) return;
+        ArcanaPanelText[type] = text.Trim();
+        if (Plugin.DebugVerbose)
+            Plugin.Dbg($"[GameData] arcana panel text {type}: {text.Trim().Length}ch");
+    }
+
     public static string GetArcanaDescription(ArcanaType type)
     {
         EnsureLoaded();
+        // The panel wins over the data lookup, not the other way round: where both answer they
+        // agree, and where they differ it is because the data has nothing.
+        if (ArcanaPanelText.TryGetValue(type, out string drawn) && !string.IsNullOrEmpty(drawn))
+        {
+            return drawn;
+        }
         if (ArcanaDescriptions.TryGetValue(type, out string cached) && !string.IsNullOrEmpty(cached))
         {
             return cached;
@@ -3707,13 +3894,25 @@ public static class GameData
             try { term = data.GetLocalizedDescriptionTerm(type); } catch { }
             try { rawDesc = data.description; } catch { }
 
-            try
+            // The term the game hands back for the B and A groups still has its placeholder in
+            // it - arcanaLang/{201}description - so the lookup cannot hit. Whether the braces are
+            // literal in the string table or were meant to be substituted is not knowable from
+            // here, so both readings are tried. Costs one dictionary miss when it is wrong.
+            foreach (string candidate in TermVariants(term))
             {
-                string t = LocalizeDisplayText(term);
-                if (!IsPlaceholderText(t)) return t;
-            }
-            catch
-            {
+                try
+                {
+                    string t = LocalizeDisplayText(candidate);
+                    if (!IsPlaceholderText(t))
+                    {
+                        if (Plugin.DebugVerbose && candidate != term)
+                            Plugin.Dbg($"[GameData] arcana desc {type} via variant '{candidate}'");
+                        return t;
+                    }
+                }
+                catch
+                {
+                }
             }
             try
             {
@@ -3737,6 +3936,23 @@ public static class GameData
             }
         }
         return "";
+    }
+
+    /// <summary>
+    /// The term as given, then the same with its braces removed and with a space where the
+    /// placeholder ended. Duplicates and empties are skipped.
+    /// </summary>
+    private static System.Collections.Generic.IEnumerable<string> TermVariants(string term)
+    {
+        if (string.IsNullOrEmpty(term)) yield break;
+        yield return term;
+        if (term.IndexOf('{') < 0) yield break;
+
+        string bare = term.Replace("{", "").Replace("}", "");
+        if (bare != term) yield return bare;
+
+        string spaced = term.Replace("{", "").Replace("}", " ");
+        if (spaced != term && spaced != bare) yield return spaced;
     }
 
     /// <summary>
@@ -3869,7 +4085,10 @@ public static class GameData
             var weapons = GetWeaponsAffectedByArcana(type);
             var items = GetItemsAffectedByArcana(type);
             if ((weapons == null || weapons.Count == 0) && (items == null || items.Count == 0))
-                return rows;
+            {
+                ReportEmptyArcana(type);
+                return AddArcanaCharacterRow(rows, type);
+            }
 
             if (weapons != null)
             {
@@ -3891,6 +4110,40 @@ public static class GameData
         catch (Exception ex)
         {
             Plugin.Dbg("[GameData] GetArcanaAffectRows: " + ex.Message);
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// Name the character a B-group arcana belongs to.
+    ///
+    /// The B group is one arcana per character - <c>B004_GENNARO</c>, <c>B012_CHRISTINE</c> - and
+    /// they list no weapons, so the Affects lookup finds nothing and 1.16 ships no description
+    /// text for them either. Whose arcana it is is then the only thing left worth saying, and it
+    /// is a real answer rather than a blank panel: the id already carries it.
+    ///
+    /// Anything that does not resolve to a character is left alone, so the A group and any future
+    /// prefix simply get no row.
+    /// </summary>
+    private static System.Collections.Generic.List<IconRow> AddArcanaCharacterRow(
+        System.Collections.Generic.List<IconRow> rows, ArcanaType type)
+    {
+        try
+        {
+            string raw = type.ToString();
+            if (string.IsNullOrEmpty(raw) || raw[0] != 'B') return rows;
+
+            string id = StripArcanaGroupPrefix(raw);
+            if (string.IsNullOrEmpty(id) || id == raw) return rows;
+
+            string label = DescribeRewardCharacter(id);
+            if (string.IsNullOrWhiteSpace(label) || LooksLikeLocKey(label)) return rows;
+
+            rows.Add(new IconRow(GetCharacterPortrait(id), label));
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] arcana character row: " + ex.Message);
         }
         return rows;
     }

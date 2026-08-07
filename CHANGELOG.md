@@ -2,6 +2,36 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.14.0] - 2026-08-07
+
+### Added
+- **In-run arcana tooltips.** The arcana pick during a run now answers the same questions the
+  collection screen does: what the card says, and every weapon and passive it affects. Config
+  `ArcanaCardTooltips`.
+- **Affected-weapon tooltips on the arcana info panel.** The panel already lists the weapons an
+  arcana touches, but a name is only half the question - an arcana is worth taking for what
+  those weapons *become*, and the evolution is exactly what the screen does not say. Hovering
+  an icon shows its evolutions and unions without leaving the pick. Arcanas are deliberately
+  left out of that list: which one is in play is the one thing already on screen.
+- **Music tooltips.** Composer, source, and how a track is unlocked. Config `MusicTooltips`.
+- **A long Affects list continues in a second panel** on the opposite margin rather than
+  truncating. Heart of Fire affects 49 things; it used to show about twenty and then "+29 more".
+  The split never strands a group header at the foot of a column.
+
+### Fixed
+- **Nothing rendered for the in-run arcana tooltip.** Every canvas the game offers mid-run is
+  either absent or scaled to zero, and a popup parented under one is created, positioned and
+  logged correctly while drawing nothing. The mod now brings its own overlay canvas when the
+  game has no dock that can draw, and re-checks after parenting rather than trusting a reading
+  taken before the canvas updated.
+- **Unreleased Darkanas showed a bare name.** Ten of the twenty-two Darkana cards in the deck
+  have no record in the game's own data - they are a future version's content. They now say so
+  instead of opening an empty panel.
+- **Wrong card art in the arcana tooltip.** The art was taken from the card's own image, which
+  can be the card back or a placeholder. It comes from the data first now, with the card image
+  kept only as a fallback.
+- **Tooltip sorting order climbed on every hover**, eventually outrunning the layers above it.
+
 ## [1.13.0] - 2026-08-06
 
 ### Added
