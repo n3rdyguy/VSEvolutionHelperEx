@@ -4,7 +4,10 @@ How this mod draws things into Vampire Survivors' UI, and what the game does tha
 decision. Everything here was paid for by a bug; the rationale is kept because the rules look
 arbitrary without it.
 
-Game: **VS 1.15.x** (tested 1.15.114), Unity **6000.0.62f1**, BepInEx 6 BE IL2CPP.
+Game: **VS 1.15.x** (tested 1.15.114) and the **1.16 public beta**, Unity **6000.0.62f1**,
+BepInEx 6 BE IL2CPP. Every surface here was re-confirmed on 1.16 with no source changes; the
+only thing that moved was the game's own canvas sorting orders, which is exactly what
+[§2](#2-sorting-and-the-dimmer) measures rather than assumes.
 
 | Section | Covers |
 |---------|--------|
@@ -26,7 +29,7 @@ Two root canvases matter, and only one of them exists at a time.
 
 | Path | When | Notes |
 |------|------|-------|
-| `UI/Canvas - App/Safe Area` | Menus | Canvas `Canvas - App`, sorting layer **UI**, order **60** |
+| `UI/Canvas - App/Safe Area` | Menus | Canvas `Canvas - App`, sorting layer **UI**; order **60** on 1.15, ~**10000** on 1.16 |
 | `GAME UI/Canvas - Game UI/Safe Area` | During a run | Modal views hang off here |
 
 **A popup parented to a canvas that is not in the scene is never drawn.** It is created, it is
@@ -72,19 +75,34 @@ popup needs its own `Canvas` with `overrideSorting = true` to enter the same con
 |------|---------|------|
 | A fresh `Canvas` starts on the **Default** sorting layer | Tooltip vanished completely - it was behind the entire UI layer, not merely dimmed | Copy `sortingLayerID` from the parent canvas |
 | A fixed order (`parent + 100`) still lost | Tooltip drew but stayed dimmed | Scan active canvases on that layer, take the highest order, sit `+10` above it |
+| `Object.Destroy` is deferred to end of frame | Order climbed +10 on every hover and never reset | **Deactivate the outgoing popup before destroying it** |
+
+That third one is worth stating in full, because measuring the top order is what makes it
+possible. The old popup is still alive - and still carrying its own sorting canvas - when the new
+one measures, so each show stepped above the one it was replacing. Observed on 1.16: `10010` to
+`10620` across one session, with nothing to reset it. `sortingOrder` clamps at **32767**, so a
+long enough session walks the tooltip back under the dimmer it was raised above. `SetActive(false)`
+before `Destroy` makes the existing `activeInHierarchy` filter exclude it in the same frame.
+
+**Do not hardcode an order.** The game's own numbers move between versions - the menu canvas was
+order **60** on 1.15 and roughly **10000** on 1.16, with the in-run canvas resolving against a top
+of ~**16959**. Measuring is why the popups survived that jump untouched; a fixed `parent + 100`
+would have gone straight back to invisible.
 
 A child `Canvas` does **not** inherit the parent's `GraphicRaycaster`. Without one, the popup's
 own graphics stop taking pointer events, so a tooltip the cursor moves onto would flicker off.
 Add a raycaster alongside the canvas.
 
-Implementation: `ItemTooltipsMod.LiftAboveDimmer()` and `TopOrderOnLayer()`. With
-`VerboseLogging` it prints the resolved values:
+Implementation: `ItemTooltipsMod.LiftAboveDimmer()`, `TopOrderOnLayer()` and
+`HideDockedPopup()`. With `VerboseLogging` it prints the resolved values:
 
 ```
-[Tooltip] sorting: layer=UI order=160 (parent 'Canvas - App' layer=UI order=60)
+[Tooltip] sorting: layer=UI order=10010 (parent 'Canvas - App' layer=UI order=10000)
 ```
 
-If a popup is invisible, that line is the first thing to read.
+If a popup is invisible, that line is the first thing to read. If the order **climbs across
+hovers** rather than landing on the same number each time, the deactivate-before-destroy above
+has regressed.
 
 ---
 

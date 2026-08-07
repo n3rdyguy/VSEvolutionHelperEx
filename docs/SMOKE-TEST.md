@@ -65,6 +65,8 @@ Same shape on all five: hover a row, a docked panel appears in the free space be
       the case that failed first on Secrets
 - [ ] Panel is **not clipped** by the list's scroll mask, and does not follow the cursor
 - [ ] Panel is **not dimmed** by the page's own overlay
+- [ ] With `VerboseLogging`, `[Tooltip] sorting: … order=` lands on the **same** number every
+      hover. A number climbing +10 per hover is the deactivate-before-destroy regression
 - [ ] Scroll the list, then hover again — recycled rows still respond
 - [ ] **Power Up:** buy a level; the open panel updates in place without moving the mouse
 - [ ] **Power Up:** where a projection cannot be trusted, no projection is shown (never a wrong total)

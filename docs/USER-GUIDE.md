@@ -387,7 +387,7 @@ There is **no** separate kill switch for pause evolution tooltips or grimoire (c
 | Topic | Notes |
 |-------|--------|
 | **Loader** | BepInEx 6 IL2CPP only; MelonLoader CTDs on Unity 6 |
-| **Game updates** | Interop may break on major VS patches; retest after updates |
+| **Game updates** | Interop may break on major VS patches; retest after updates. Every feature was re-confirmed on the **1.16 public beta** with no changes needed |
 | **Co-op / online** | Not specially tested; UI hooks are client-side |
 | **Mod conflicts** | Other UI mods that replace Stage Select / Collections may fight hooks |
 | **Official vs curated tips** | Guide notes are unofficial; Features are derived from stage data fields |

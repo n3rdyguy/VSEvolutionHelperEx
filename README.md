@@ -8,7 +8,7 @@ Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` /
 |--|--|
 | **Latest release** | [v1.13.0](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.13.0) |
 | **Nexus Mods** | [VS Evolution Helper (BepInEx port)](https://www.nexusmods.com/vampiresurvivors/mods/105) |
-| **Game** | Vampire Survivors **1.15.x** (tested **1.15.114**), Unity **6000.0.62f1** |
+| **Game** | Vampire Survivors **1.15.x** (tested **1.15.114**) and the **1.16 public beta**, Unity **6000.0.62f1** |
 | **Loader** | [BepInEx 6 IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (BE / bleeding-edge) |
 
 ## Credits / original creators
@@ -94,7 +94,7 @@ Everything below is the manual route, and is also what to read when something go
 
 ## Requirements
 
-- Vampire Survivors (Steam) - **1.15.x**, Unity **6000.x**
+- Vampire Survivors (Steam) - **1.15.x** or the **1.16 public beta**, Unity **6000.x**
 - **[BepInEx 6 bleeding-edge (BE)](https://builds.bepinex.dev/projects/bepinex_be)**, **Unity.IL2CPP**, **win-x64**
 - **Do not** run MelonLoader and BepInEx at the same time
 

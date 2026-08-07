@@ -9704,6 +9704,15 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	{
 		if ((Object)(object)dockedPopup != (Object)null)
 		{
+			// Deactivate before destroying. Object.Destroy is deferred to the end of the frame,
+			// so the outgoing popup is still alive - and still carrying its sorting canvas - when
+			// the incoming one measures the highest order on the layer. Each show then stepped
+			// above the one it was replacing: orders climbed +10 per hover, 10010 to 10620 over
+			// one session on 1.16, with nothing to reset them. Unity clamps sortingOrder at
+			// 32767, so a long enough session would have walked the tooltip back under the
+			// dimmer it was raised above. Deactivating makes the existing activeInHierarchy
+			// filter in TopOrderOnLayer exclude it in the same frame.
+			try { dockedPopup.SetActive(false); } catch { }
 			Object.Destroy((Object)(object)dockedPopup);
 			dockedPopup = null;
 		}

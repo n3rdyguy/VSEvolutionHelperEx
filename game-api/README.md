@@ -1,5 +1,8 @@
 # Vampire Survivors game API notes (1.15.113 / Unity 6000.0.62f1)
 
+Re-checked against the **1.16 public beta**: every type, field and method below still resolves,
+and all patches bind. Two behaviour notes for 1.16 are marked inline.
+
 Decompiled from BepInEx Il2Cpp interop via `ilspycmd`.
 
 Two assemblies matter, and which one holds a type is not obvious:
@@ -127,8 +130,10 @@ enemy. Key any tracking off the re-init hook and drop it on `IsDead`, never on o
 - `AchievementData` reward fields are **plain strings**, not nullable enums, so they need no
   fallback.
 - An unset typed id reads back as `"VOID"`, sometimes `"0"`, sometimes empty — check all three.
-- `PowerUpItemUI._currentLevel` reads `0` for every upgrade; use
-  `PlayerStats.GetOwnedPowerUps()[type]._Level`.
+- `PowerUpItemUI._currentLevel` reads `0` for every upgrade on 1.15; use
+  `PlayerStats.GetOwnedPowerUps()[type]._Level`. **1.16 appears to have fixed it** - the two now
+  agree (`rowLevel=5 statsLevel=5`) - but keep reading PlayerStats, since pricing keys off the
+  player's stats anyway and the workaround costs nothing.
 
 ## Localization
 
