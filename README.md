@@ -1,12 +1,12 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.14.0** - Evolution, arcana, grimoire, collection, map, stage, character, adventure, secrets, bestiary, power-up and music tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.14.1** - Evolution, arcana, grimoire, collection, map, stage, character, adventure, secrets, bestiary, power-up and music tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
 | | |
 |--|--|
-| **Latest release** | [v1.14.0](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.14.0) |
+| **Latest release** | [v1.14.1](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.14.1) |
 | **Nexus Mods** | [VS Evolution Helper (BepInEx port)](https://www.nexusmods.com/vampiresurvivors/mods/105) |
 | **Game** | Vampire Survivors **1.15.x** (tested **1.15.114**) and the **1.16 public beta**, Unity **6000.0.62f1** |
 | **Loader** | [BepInEx 6 IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (BE / bleeding-edge) |
@@ -209,7 +209,7 @@ Newer BE builds generally work too. If a very new BE build misbehaves, dropping 
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.14.0]
+Loading [VS Evolution Helper 1.14.1]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete

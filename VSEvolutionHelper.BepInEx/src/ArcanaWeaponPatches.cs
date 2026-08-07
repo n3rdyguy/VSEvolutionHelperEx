@@ -120,7 +120,7 @@ public static class ArcanaWeaponPatches
 				Title = GameData.GetWeaponName(weaponType),
 				Description = GameData.GetWeaponDescription(weaponType),
 				Sprite = GameData.GetSprite(weaponType),
-				Rows = GameData.GetWeaponEvoIconRows(weaponType),
+				Rows = GameData.GetWeaponEvoFormulaRows(weaponType),
 			});
 		}
 		catch (Exception ex)
@@ -138,7 +138,7 @@ public static class ArcanaWeaponPatches
 			// passive, since its evolutions are what it contributes to.
 			List<GameData.IconRow> rows = null;
 			if (GameData.TryParseWeaponType(itemType.ToString(), out WeaponType asWeapon))
-				rows = GameData.GetWeaponEvoIconRows(asWeapon);
+				rows = GameData.GetWeaponEvoFormulaRows(asWeapon);
 
 			Enqueue(new Pending
 			{
@@ -483,7 +483,7 @@ public static class ArcanaWeaponPatches
 			Description = p.Description,
 			Sprite = p.Sprite,
 			Rows = p.Rows,
-			SectionHeader = (p.Rows != null && p.Rows.Count > 0) ? "Evolves into:" : null,
+			SectionHeader = (p.Rows != null && p.Rows.Count > 0) ? "Evolutions:" : null,
 			// A weapon with no evolution still answers the pointer. Silence on half the icons
 			// reads as a broken tooltip rather than as "this one does not evolve".
 			AllowTitleOnly = true,

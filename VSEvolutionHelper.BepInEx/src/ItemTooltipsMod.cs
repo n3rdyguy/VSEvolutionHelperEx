@@ -269,6 +269,15 @@ public class ItemTooltipsMod
 
 	private static readonly float Spacing = 8f;
 
+	/// <summary>
+	/// How far to lift a "+" or an arrow off the centre of the icon row it sits in.
+	///
+	/// Centring them on the row is arithmetically right and reads as bottom-aligned. A weapon
+	/// sprite does not fill its own box - the art sits high in it, trailing empty pixels below - so
+	/// a glyph on the geometric centre hangs under the visible art rather than beside it.
+	/// </summary>
+	private const float EvoSignLift = 3f;
+
 	private static float lastTimeScaleLog = 0f;
 
 	private static bool escWasPressed = false;
@@ -1198,6 +1207,37 @@ public class ItemTooltipsMod
 		}
 	}
 
+	/// <summary>
+	/// While Level Up is open, is this a HUD icon the panel is drawn over?
+	///
+	/// The panel does not block raycasts across its whole area, so the HUD icons beneath it still
+	/// take PointerEnter and open a tooltip for something the player cannot see and did not point
+	/// at - the weapon row across the top left and the accessory strip down the left edge sit
+	/// squarely under it.
+	///
+	/// Nothing is lost by ignoring them: the same icons are all on the pause screen, where they can
+	/// be read without a panel over them. So the rule is the simple one - during Level Up, only the
+	/// cards being offered answer the pointer.
+	///
+	/// Asked of the hierarchy rather than of screen coordinates. Measured rectangles would have to
+	/// be re-measured for every resolution and every panel layout the game ships; "is it inside the
+	/// view" stays true on its own.
+	///
+	/// Only the HUD scan consults this. The pause screen's own EquipmentPanel goes through
+	/// <c>AddHoverToGameObject</c> and is deliberately left alone: it is not under the Level Up
+	/// panel, and it is the copy of these icons the player is meant to read.
+	/// </summary>
+	private static bool IsOutsideLevelUpView(Transform t)
+	{
+		try
+		{
+			if ((Object)(object)t == (Object)null) return false;
+			if ((Object)(object)levelUpView == (Object)null) return false;
+			return !t.IsChildOf(levelUpView.transform);
+		}
+		catch { return false; }
+	}
+
 	private static void AddHoverToIcon(TrackedIcon tracked)
 	{
 		//IL_00aa: Unknown result type (might be due to invalid IL or missing references)
@@ -1219,7 +1259,10 @@ public class ItemTooltipsMod
 			{
 				var t = ((Component)tracked.Image).transform;
 				if (IsLevelUpViewActive())
+				{
+					if (IsOutsideLevelUpView(t)) return;
 					RequestLevelUpHover(t, weaponType, itemType);
+				}
 				else
 					ShowItemPopup(t, weaponType, itemType);
 			}));
@@ -1229,7 +1272,14 @@ public class ItemTooltipsMod
 			((UnityEvent<BaseEventData>)(object)val3.callback).AddListener((UnityEngine.Events.UnityAction<UnityEngine.EventSystems.BaseEventData>)(System.Action<UnityEngine.EventSystems.BaseEventData>)(delegate
 			{
 				CancelLevelUpHoverIfMatch(((Component)tracked.Image).transform);
-				DelayFrames(10, () => { if (mouseOverPopupIndex < 0 && popupStack.Count > 0) HideAllPopups(); });
+				// Same supersede guard as the equipment cells: moving straight to the next icon
+				// opens its tooltip before this hide runs, and without the check this destroys it.
+				int serial = hoverSerial;
+				DelayFrames(10, () =>
+				{
+					if (hoverSerial != serial) return;
+					if (mouseOverPopupIndex < 0 && popupStack.Count > 0) HideAllPopups();
+				});
 			}));
 			val.triggers.Add(val3);
 		}
@@ -1535,7 +1585,8 @@ public class ItemTooltipsMod
 			}
 			if (weaponType.HasValue || itemType.HasValue)
 			{
-				AddHoverToGameObject(((Component)child).gameObject, weaponType, itemType);
+				GameObject cell = ((Component)child).gameObject;
+				AddHoverToGameObject(cell, weaponType, itemType, false, MakeCellHoverable(cell));
 				num++;
 			}
 			num += ScanChildrenForTypes(child, depth + 1, maxDepth);
@@ -3865,6 +3916,7 @@ public class ItemTooltipsMod
 
 	public static void ShowItemPopup(Transform anchor, WeaponType? weaponType, ItemType? itemType)
 	{
+		hoverSerial++;
 		Plugin.Dbg($"ShowItemPopup weapon={weaponType} item={itemType} gameDataReady={GameData.IsReady}");
 		//IL_000c: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0011: Unknown result type (might be due to invalid IL or missing references)
@@ -3960,7 +4012,7 @@ public class ItemTooltipsMod
 			{
 				popupStack.Add(val2);
 				popupAnchorIds.Add(num);
-				PositionPopup(val2, anchor);
+				PositionPopup(val2, anchor, popupStack.Count == 1);
 				AddPopupHoverTracking(val2);
 			}
 		}
@@ -6458,6 +6510,17 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	/// the default up-and-left popup origin lands on top of the artwork. Nudge it down and
 	/// right on those screens only - every other screen's placement is already tuned.
 	/// </summary>
+	/// <summary>
+	/// Nudge for the first item tooltip only, in Safe Area reference units. Down and to the right.
+	///
+	/// The tooltip opens up and slightly left of the icon, inherited from the original mod. That
+	/// puts it over the equipment row it was opened from, which is the one part of the screen the
+	/// player is reading against it. Nested tooltips are left alone - they already step down-right
+	/// from their parent, and moving them too would double the step.
+	/// </summary>
+	private const float OpenPopupOffsetX = 40f;
+	private const float OpenPopupOffsetY = 55f;
+
 	private const float LargeCellPopupOffsetX = 36f;
 
 	private const float LargeCellPopupOffsetY = 48f;
@@ -6499,7 +6562,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 	}
 
-	private static void PositionPopup(GameObject popup, Transform anchor)
+	private static void PositionPopup(GameObject popup, Transform anchor, bool firstInStack = false)
 	{
 		//IL_003c: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0041: Unknown result type (might be due to invalid IL or missing references)
@@ -6622,6 +6685,14 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		{
 			num += LargeCellPopupOffsetX;
 			num2 -= LargeCellPopupOffsetY;
+			ClampToParent(component2, x, y, ref num, ref num2);
+		}
+		else if (firstInStack)
+		{
+			// Mutually exclusive with the large-cell nudge above, which already clears its own
+			// cell - applying both would push the popup off the icon entirely.
+			num += OpenPopupOffsetX;
+			num2 -= OpenPopupOffsetY;
 			ClampToParent(component2, x, y, ref num, ref num2);
 		}
 		component.anchoredPosition = new Vector2(num, num2);
@@ -8626,7 +8697,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 					{
 						if (p == null) continue;
 						AddUiText(erow.transform, "Plus", "+", font, 14f, new Color(0.9f, 0.9f, 0.5f, 1f), true,
-							x, 0f, 12f, rowH, (TextAlignmentOptions)514);
+							x, EvoSignLift, 12f, rowH, (TextAlignmentOptions)514);
 						x += 12f;
 						Sprite ps = p.Sprite ?? GameData.GetSprite(p.Type);
 						if ((Object)(object)ps != (Object)null)
@@ -8647,7 +8718,7 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 					}
 				}
 				AddUiText(erow.transform, "Arrow", "→", font, 14f, gold, true,
-					x, 0f, 18f, rowH, (TextAlignmentOptions)514);
+					x, EvoSignLift, 18f, rowH, (TextAlignmentOptions)514);
 				x += 18f;
 				Sprite es = row.EvolvedSprite ?? GameData.GetSprite(row.Evolved);
 				if ((Object)(object)es != (Object)null)
@@ -9284,6 +9355,23 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		}
 		catch { width = 340f; }
 
+		// A recipe row does not wrap usefully - "Ashes of Muspell" broken over two lines beside its
+		// own icons reads as damage, not as a name - so the panel is widened to hold the longest one
+		// instead. The docked panels grow away from the edge they are pinned to, into margin that is
+		// empty anyway, so the extra width costs nothing that was being used.
+		if (rows != null)
+		{
+			float widest = width;
+			foreach (var r in rows)
+			{
+				if (r == null || !r.IsFormula) continue;
+				widest = Mathf.Max(widest, MeasureFormulaRow(font, r));
+			}
+			// Past this the panel starts covering the screen it is describing, and wrapping is the
+			// lesser evil after all.
+			width = Mathf.Min(widest, 560f);
+		}
+
 		float contentW = width - Padding * 2f;
 		float y = -Padding;
 		float titleTextW = contentW - icon - Spacing;
@@ -9417,6 +9505,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 					y = AdvancePastHeader(rowHdr, contentW, y, 5f, 18f);
 					continue;
 				}
+				if (r.IsFormula)
+				{
+					y = AddFormulaRow(val.transform, font, r, contentW, y, shown);
+					continue;
+				}
 				y = AddWareRow(val.transform, font, r.Sprite, r.Label, rowIcon, nameX, nameW, y, shown);
 			}
 			if (rows.Count > shown)
@@ -9454,6 +9547,141 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		if (string.IsNullOrEmpty(s)) return false;
 		return s.IndexOf("merc", StringComparison.OrdinalIgnoreCase) >= 0
 			|| s.IndexOf("xanthia", StringComparison.OrdinalIgnoreCase) >= 0;
+	}
+
+	/// <summary>
+	/// One recipe line: <c>icon + icon = icon</c>, with the evolved name beside it.
+	///
+	/// Same reading as the weapon tooltip's evolution section, in the width a docked panel has.
+	/// The parts are drawn small enough that a two-passive recipe still fits on one line, and the
+	/// name takes whatever is left - it wraps rather than being cut, because the name is usually
+	/// the only thing on the row a player does not already recognise by its art.
+	/// </summary>
+	private const float FormulaIcon = 26f;
+	private const float FormulaGap = 4f;
+	private const float FormulaSign = 13f;
+	/// <summary>Space between the result icon and the evolved name.</summary>
+	private const float FormulaTail = 6f;
+	private const float FormulaNameSize = 12f;
+
+	/// <summary>
+	/// How wide a recipe row wants to be, so the panel can be sized before anything is drawn.
+	///
+	/// Shares its constants with <see cref="AddFormulaRow"/> rather than restating them: a measure
+	/// that drifts from the layout it measures is worse than no measure, because the panel then
+	/// reports a width the row does not fit in.
+	/// </summary>
+	private static float MeasureFormulaRow(TMP_FontAsset font, GameData.IconRow row)
+	{
+		int n = row.Ingredients.Length;
+		float w = Padding
+			+ n * (FormulaIcon + FormulaGap)
+			+ (n - 1) * (FormulaSign + FormulaGap)   // "+" between the ingredients
+			+ (FormulaSign + FormulaGap)             // the arrow
+			+ FormulaIcon + FormulaTail
+			+ Padding;
+		if (!string.IsNullOrEmpty(row.Label))
+			w += MeasureTmpPreferredWidth(font, row.Label, FormulaNameSize, false) + 4f;
+		return w;
+	}
+
+	private static float AddFormulaRow(Transform parent, TMP_FontAsset font, GameData.IconRow row,
+		float contentW, float y, int index)
+	{
+		const float icon = FormulaIcon;
+		const float gap = FormulaGap;
+		const float sign = FormulaSign;
+		// The signs and the name are centred on the icon box, which is not where they look centred.
+		// A weapon sprite rarely fills its own box - the art sits high in it, with the blade or
+		// handle trailing into empty pixels at the bottom - so text on the geometric centre reads as
+		// hanging below the icons. Lifting it a little puts it back on the art.
+		const float lift = 4f;
+
+		float x = Padding;
+		bool anyMax = false;
+
+		for (int i = 0; i < row.Ingredients.Length; i++)
+		{
+			if (i > 0)
+			{
+				AddFormulaSign(parent, font, "+", x, y + lift, sign, icon, index, i);
+				x += sign + gap;
+			}
+			AddFormulaIcon(parent, row.Ingredients[i], x, y, icon, $"Part{index}_{i}");
+
+			bool atMax = row.IngredientAtMax != null && i < row.IngredientAtMax.Length
+				&& row.IngredientAtMax[i];
+			if (atMax)
+			{
+				anyMax = true;
+				GameObject maxLbl = CreateTextElement(parent, $"Max{index}_{i}", "MAX", font, 9f,
+					new Color(1f, 0.85f, 0f, 1f), (FontStyles)1);
+				RectTransform mr = maxLbl.GetComponent<RectTransform>();
+				mr.anchorMin = new Vector2(0f, 1f);
+				mr.anchorMax = new Vector2(0f, 1f);
+				mr.pivot = new Vector2(0.5f, 1f);
+				mr.anchoredPosition = new Vector2(x + icon * 0.5f, y - icon - 1f);
+				mr.sizeDelta = new Vector2(icon + 8f, 11f);
+			}
+			x += icon + gap;
+		}
+
+		AddFormulaSign(parent, font, "→", x, y + lift, sign, icon, index, -1);
+		x += sign + gap;
+		AddFormulaIcon(parent, row.Result, x, y, icon, $"Result{index}");
+		x += icon + FormulaTail;
+
+		float nameH = 0f;
+		float nameW = contentW - (x - Padding);
+		if (!string.IsNullOrEmpty(row.Label) && nameW > 40f)
+		{
+			GameObject nameGo = CreateTextElement(parent, $"FormulaName{index}", row.Label, font, FormulaNameSize,
+				new Color(0.85f, 0.85f, 0.9f, 1f), (FontStyles)0);
+			RectTransform nr = nameGo.GetComponent<RectTransform>();
+			nr.anchorMin = new Vector2(0f, 1f);
+			nr.anchorMax = new Vector2(0f, 1f);
+			nr.pivot = new Vector2(0f, 1f);
+			nr.sizeDelta = new Vector2(nameW, 16f);
+			TextMeshProUGUI tmp = nameGo.GetComponent<TextMeshProUGUI>();
+			if ((Object)(object)tmp != (Object)null) nameH = FitTmpHeight(tmp, nameW, 16f, 60f);
+			// Centred against the icons whenever it is the shorter of the two.
+			nr.anchoredPosition = new Vector2(x, y + lift - Mathf.Max(0f, (icon - nameH) * 0.5f));
+		}
+
+		float rowH = Mathf.Max(icon + (anyMax ? 12f : 0f), nameH);
+		return y - rowH - 6f;
+	}
+
+	private static void AddFormulaIcon(Transform parent, Sprite sprite, float x, float y,
+		float size, string name)
+	{
+		if ((Object)(object)sprite == (Object)null) return;
+		GameObject go = new GameObject(name);
+		go.transform.SetParent(parent, false);
+		RectTransform rt = go.AddComponent<RectTransform>();
+		rt.anchorMin = new Vector2(0f, 1f);
+		rt.anchorMax = new Vector2(0f, 1f);
+		rt.pivot = new Vector2(0f, 1f);
+		rt.anchoredPosition = new Vector2(x, y);
+		rt.sizeDelta = new Vector2(size, size);
+		Image img = go.AddComponent<Image>();
+		img.sprite = sprite;
+		img.preserveAspect = true;
+		((Graphic)img).raycastTarget = false;
+	}
+
+	/// <summary>The "+" or "=" between two icons, vertically centred against them.</summary>
+	private static void AddFormulaSign(Transform parent, TMP_FontAsset font, string glyph,
+		float x, float y, float width, float iconSize, int index, int part)
+	{
+		GameObject go = CreateTextElement(parent, $"Sign{index}_{part}", glyph, font, 14f,
+			new Color(0.85f, 0.85f, 0.85f, 1f), (FontStyles)1);
+		RectTransform rt = go.GetComponent<RectTransform>();
+		rt.anchorMin = new Vector2(0f, 1f);
+		rt.anchorMax = new Vector2(0f, 1f);
+		rt.pivot = new Vector2(0f, 1f);
+		rt.anchoredPosition = new Vector2(x, y - (iconSize - 16f) * 0.5f);
+		rt.sizeDelta = new Vector2(width, 16f);
 	}
 
 	/// <summary>One "Wares" line: icon on the left, name vertically centred beside it.</summary>
@@ -10132,7 +10360,121 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 		return null;
 	}
 
-	private static void AddHoverToGameObject(GameObject go, WeaponType? weaponType, ItemType? itemType, bool useClick = false)
+	/// <summary>
+	/// Bumped every time any hover opens an item tooltip, so a hide scheduled by an earlier hover
+	/// can tell that it has been superseded.
+	///
+	/// Moving from one icon straight to the next is the case that needed this. PointerExit on the
+	/// slot being left schedules a hide ten frames out; PointerEnter on the slot being entered opens
+	/// its tooltip immediately; then the first hide runs and calls HideAllPopups, taking the new
+	/// tooltip with it. The pointer never left the row, so nothing about "is the pointer still
+	/// inside" can see the problem - the pointer really has left the cell that scheduled the hide.
+	///
+	/// Bumped in <see cref="ShowItemPopup"/> rather than at the hover sites, because an icon can be
+	/// registered through more than one path and each has its own delayed hide. Guarding only the
+	/// one that was noticed leaves the other free to destroy the same tooltip.
+	/// </summary>
+	private static int hoverSerial;
+
+	/// <summary>
+	/// Is the pointer still inside this object's rect?
+	///
+	/// PointerExit alone is not a reliable "the player has left" for a cell whose tooltip opens over
+	/// it: the popup takes the pointer the instant it appears, the cell gets an exit, and the
+	/// ten-frame grace resolves before the popup's own hover tracking has registered anything. The
+	/// tooltip closed and the still-hovered cell reopened it, once per pass.
+	///
+	/// Asking where the pointer actually is settles it without a race, and gives the behaviour that
+	/// was wanted anyway: open until the pointer leaves the slot or reaches the next one.
+	/// </summary>
+	private static bool PointerStillInside(GameObject go)
+	{
+		try
+		{
+			if ((Object)(object)go == (Object)null) return false;
+			RectTransform rt = go.GetComponent<RectTransform>();
+			if ((Object)(object)rt == (Object)null) return false;
+
+			Camera cam = null;
+			Canvas canvas = go.GetComponentInParent<Canvas>();
+			if ((Object)(object)canvas != (Object)null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+				cam = (Object)(object)canvas.worldCamera != (Object)null ? canvas.worldCamera : Camera.main;
+
+			Vector2 mouse = (Vector2)Input.mousePosition;
+			return RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, cam)
+				|| RectTransformUtility.RectangleContainsScreenPoint(rt, mouse, null);
+		}
+		catch { return false; }
+	}
+
+	/// <summary>
+	/// Make a whole equipment cell take the pointer, and pin its tooltip inside that cell.
+	///
+	/// Two complaints, one cause. Only the icon sprite was a raycast target, so the tooltip lived in
+	/// the gap between the art and the edge of its slot - a few pixels off the icon and PointerExit
+	/// fired. And because the popup is anchored to whatever was hovered, it appeared to shift about
+	/// as the pointer crossed the row.
+	///
+	/// A transparent child stretched over the cell fixes both: the hit area becomes the square the
+	/// player sees, and the anchor becomes a fixed point in that square rather than the sprite.
+	///
+	/// The anchor sits in the middle of the cell's lower-right quadrant, so the tooltip opens down
+	/// and right of the slot - the direction it already opens in, now measured from the slot instead
+	/// of from the art inside it.
+	///
+	/// The child carries no handler of its own, so it cannot swallow a click the way forcing
+	/// raycastTarget on a game graphic did to the arcana cards. Events reach the EventTrigger on the
+	/// cell by bubbling, which is what PointerEnter does anyway.
+	/// </summary>
+	private static Transform MakeCellHoverable(GameObject cell)
+	{
+		try
+		{
+			RectTransform cellRt = cell.GetComponent<RectTransform>();
+			if ((Object)(object)cellRt == (Object)null) return cell.transform;
+
+			const string padName = "VSEvoCellHit";
+			Transform existing = cell.transform.Find(padName);
+			if ((Object)(object)existing != (Object)null) return existing;
+
+			GameObject pad = new GameObject(padName);
+			pad.transform.SetParent(cell.transform, false);
+			RectTransform rt = pad.AddComponent<RectTransform>();
+			// Lower-right quadrant of the cell. Anchoring rather than positioning keeps it correct
+			// when the slot is resized by the game's own layout.
+			rt.anchorMin = new Vector2(0.5f, 0f);
+			rt.anchorMax = new Vector2(1f, 0.5f);
+			rt.offsetMin = Vector2.zero;
+			rt.offsetMax = Vector2.zero;
+
+			// Its own graphic covers only the quadrant, so a second one covers the rest of the cell.
+			GameObject full = new GameObject("VSEvoCellArea");
+			full.transform.SetParent(cell.transform, false);
+			RectTransform fr = full.AddComponent<RectTransform>();
+			fr.anchorMin = Vector2.zero;
+			fr.anchorMax = Vector2.one;
+			fr.offsetMin = Vector2.zero;
+			fr.offsetMax = Vector2.zero;
+			full.transform.SetAsFirstSibling();
+			Image hit = full.AddComponent<Image>();
+			hit.color = new Color(0f, 0f, 0f, 0f);
+			((Graphic)hit).raycastTarget = true;
+
+			return pad.transform;
+		}
+		catch (Exception ex)
+		{
+			Plugin.Dbg("[Equipment] cell hover: " + ex.Message);
+			return cell.transform;
+		}
+	}
+
+	/// <param name="popupAnchor">
+	/// Where the tooltip is placed from, when that should not be the hovered object itself. Used by
+	/// equipment cells, whose hit area is the whole slot but whose tooltip should sit at one fixed
+	/// point in it rather than wherever the pointer happened to enter.
+	/// </param>
+	private static void AddHoverToGameObject(GameObject go, WeaponType? weaponType, ItemType? itemType, bool useClick = false, Transform popupAnchor = null)
 	{
 		//IL_002f: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0034: Unknown result type (might be due to invalid IL or missing references)
@@ -10194,10 +10536,11 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			val3.eventID = (EventTriggerType)0; // PointerEnter
 			((UnityEvent<BaseEventData>)(object)val3.callback).AddListener((UnityEngine.Events.UnityAction<UnityEngine.EventSystems.BaseEventData>)(System.Action<UnityEngine.EventSystems.BaseEventData>)(delegate
 			{
+				Transform at = (Object)(object)popupAnchor != (Object)null ? popupAnchor : go.transform;
 				if (IsLevelUpViewActive())
-					RequestLevelUpHover(go.transform, weaponType, itemType);
+					RequestLevelUpHover(at, weaponType, itemType);
 				else
-					ShowItemPopup(go.transform, weaponType, itemType);
+					ShowItemPopup(at, weaponType, itemType);
 			}));
 			val.triggers.Add(val3);
 			EventTrigger.Entry val4 = new EventTrigger.Entry();
@@ -10205,7 +10548,15 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 			((UnityEvent<BaseEventData>)(object)val4.callback).AddListener((UnityEngine.Events.UnityAction<UnityEngine.EventSystems.BaseEventData>)(System.Action<UnityEngine.EventSystems.BaseEventData>)(delegate
 			{
 				CancelLevelUpHoverIfMatch(go.transform);
-				DelayFrames(10, () => { if (mouseOverPopupIndex < 0 && popupStack.Count > 0) HideAllPopups(); });
+				int serial = hoverSerial;
+				DelayFrames(10, () =>
+				{
+					// Another hover has opened its own tooltip in the meantime. That tooltip is the
+					// current one, and this hide belongs to a slot the player has already left.
+					if (hoverSerial != serial) return;
+					if (PointerStillInside(go)) return;
+					if (mouseOverPopupIndex < 0 && popupStack.Count > 0) HideAllPopups();
+				});
 			}));
 			val.triggers.Add(val4);
 		}

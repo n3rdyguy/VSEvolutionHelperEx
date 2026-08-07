@@ -2,6 +2,31 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.14.1] - 2026-08-08
+
+### Changed
+- **Arcana weapon evolutions read as recipes.** Hovering a weapon icon on the arcana info panel
+  showed one line per ingredient, which reads as a list of parts; it now shows one line per
+  evolution - base + passives, then what they make - the way the weapon tooltip has always
+  drawn it. The panel widens to fit the evolved name rather than wrapping it.
+- **The item tooltip opens down and right of the icon**, instead of up and slightly left where
+  it covered the equipment row being read against it.
+
+### Fixed
+- **Equipment tooltips flickered when moving from one icon to the next.** Leaving an icon
+  schedules the tooltip to close a few frames later, which is what lets the pointer travel to
+  the tooltip without it vanishing. Move quickly to the next icon and that close landed after
+  the next tooltip had already opened, destroying it - each icon killing its neighbour's
+  tooltip. A close now applies only to the tooltip that was open when it was scheduled.
+- **Only the icon art responded to the pointer** on the pause screen's equipment slots, so a
+  few pixels of travel lost the tooltip. The whole slot responds now, and the tooltip holds one
+  position within it instead of appearing to drift.
+- **Tooltips opened for icons hidden underneath the Level Up panel.** The panel does not block
+  the pointer across its whole area, so icons behind it still answered - for something not
+  visible and not pointed at. The same icons are all on the pause screen.
+- The `+` and arrow on character-select evolutions sat low; they are aligned to the art rather
+  than to the centre of the row.
+
 ## [1.14.0] - 2026-08-07
 
 ### Added

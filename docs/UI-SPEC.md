@@ -331,6 +331,35 @@ paid for the hard way and must survive any refactor:
 Rows are recycled, so listeners are attached once per `GameObject` (tracked by instance ID) while
 the entry behind that ID is replaced freely.
 
+### A delayed hide must know which tooltip it belongs to
+
+`PointerExit` cannot hide a tooltip on its own - the pointer legitimately leaves an icon on its way
+to the popup - so the hide is deferred a few frames and re-checked. That defers it past the point
+where the player has moved on:
+
+1. `PointerExit` on the icon being left schedules a hide.
+2. `PointerEnter` on the icon being entered opens **its** tooltip immediately.
+3. The first hide runs and calls `HideAllPopups`, destroying the second icon's tooltip.
+
+Moving slowly hides it; moving quickly from one icon to the next is the case that fails. It reads as
+a flicker, and the log shows two neighbours alternating - each killing the other's tooltip, the
+still-hovered one reopening its own.
+
+**Every deferred hide captures `hoverSerial` and skips if it has changed.** `ShowItemPopup` bumps
+it, so the guard holds no matter which path opened the tooltip.
+
+That last part is the trap: an icon can be registered by the HUD scan (`AddHoverToIcon`) *or* by a
+patch handing it over (`AddHoverToGameObject`), and **each installs its own delayed hide**. Guarding
+one leaves the other free to destroy the same tooltip, and the bug survives a fix that looks
+complete. Bump the serial where the tooltip is shown, not at the hover sites.
+
+Two related answers that do **not** work, both tried here:
+
+- Suppressing the hide while the pointer is still inside the icon that scheduled it. The pointer has
+  genuinely left that icon; the answer is honestly "no".
+- Relying on `mouseOverPopupIndex`. The popup's own hover tracking has not registered anything yet
+  when the grace expires.
+
 ### `EventTrigger` eats clicks
 
 `EventTrigger` implements **every** pointer interface, `IPointerClickHandler` included. There is

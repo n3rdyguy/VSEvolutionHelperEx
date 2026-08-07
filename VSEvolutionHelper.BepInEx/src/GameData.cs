@@ -897,8 +897,35 @@ public static class GameData
         public string Label;
         /// <summary>Render as a section heading rather than an icon row.</summary>
         public bool IsHeader;
+
+        /// <summary>
+        /// Left side of a recipe row: the base weapon, then each passive it needs.
+        /// </summary>
+        /// <remarks>
+        /// A recipe read down as "Knife", "+ Bracer" over two lines is a list of parts; read across
+        /// as icon + icon = icon it is the thing itself. The big weapon tooltip has always drawn it
+        /// the second way, and this is what lets a docked panel do the same.
+        /// </remarks>
+        public Sprite[] Ingredients;
+        /// <summary>Per-ingredient "must be at max level" flags, same length as Ingredients.</summary>
+        public bool[] IngredientAtMax;
+        /// <summary>Right side of a recipe row: what those parts make.</summary>
+        public Sprite Result;
+
+        public bool IsFormula { get { return Ingredients != null && Ingredients.Length > 0; } }
+
         public IconRow(Sprite sprite, string label) { Sprite = sprite; Label = label; }
         public static IconRow Header(string label) { return new IconRow(null, label) { IsHeader = true }; }
+
+        public static IconRow Formula(Sprite[] ingredients, bool[] atMax, Sprite result, string label)
+        {
+            return new IconRow(null, label)
+            {
+                Ingredients = ingredients,
+                IngredientAtMax = atMax,
+                Result = result,
+            };
+        }
     }
 
     /// <summary>
@@ -2992,6 +3019,52 @@ public static class GameData
         catch (Exception ex)
         {
             Plugin.Dbg("[GameData] GetWeaponEvoIconRows: " + ex.Message);
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// A weapon's evolutions as recipe rows - base + passives = evolved, one row each.
+    ///
+    /// The same data as <see cref="GetWeaponEvoIconRows"/>, which spreads a recipe over a line per
+    /// part. That reads as a list of ingredients; this reads as the recipe, and matches how the
+    /// weapon tooltip has always drawn it.
+    /// </summary>
+    public static System.Collections.Generic.List<IconRow> GetWeaponEvoFormulaRows(WeaponType weapon)
+    {
+        var rows = new System.Collections.Generic.List<IconRow>();
+        try
+        {
+            var evos = BuildEvoRowsFor(weapon);
+            if (evos == null) return rows;
+
+            Sprite baseSprite = GetSprite(weapon);
+            foreach (var e in evos)
+            {
+                if (e == null) continue;
+
+                var parts = new System.Collections.Generic.List<Sprite> { baseSprite };
+                var maxes = new System.Collections.Generic.List<bool> { false };
+                if (e.Passives != null)
+                {
+                    foreach (var p in e.Passives)
+                    {
+                        if (p == null) continue;
+                        parts.Add(p.Sprite ?? GetSprite(p.Type));
+                        maxes.Add(p.RequiresMax);
+                    }
+                }
+
+                string name = string.IsNullOrEmpty(e.EvolvedName)
+                    ? HumanizeEnum(e.Evolved.ToString())
+                    : e.EvolvedName;
+                rows.Add(IconRow.Formula(parts.ToArray(), maxes.ToArray(),
+                    e.EvolvedSprite ?? GetSprite(e.Evolved), name));
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg("[GameData] GetWeaponEvoFormulaRows: " + ex.Message);
         }
         return rows;
     }
