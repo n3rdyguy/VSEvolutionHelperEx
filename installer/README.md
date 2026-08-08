@@ -67,7 +67,7 @@ Options (all optional; the binary and both scripts accept the same ones):
 | `--no-bepinex` | Update the mod only, leave the loader alone |
 | `--latest` | Download the newest BepInEx BE build instead of the pinned one |
 | `--no-download` | Never reach the network |
-| `--platform <rid>` | `win-x64` or `linux-x64`; needed for Proton |
+| `--platform <rid>` | `win-x64` or `linux-x64`; Proton is detected, so this is an override |
 | `--uninstall` | Remove the mod |
 | `--all` | With `--uninstall`, remove BepInEx too |
 | `--keep-config` | With `--uninstall`, keep your settings file |
@@ -122,6 +122,18 @@ Use `--bepinex <zip>` or `--no-download` for an offline install.
    on macOS/Linux including Flatpak), walks `libraryfolders.vdf` for every library, and reads
    `appmanifest_1794680.acf` for the real install directory. Games on a second drive are the
    normal case, not an edge case.
+
+   **Epic Games Store copies are found too**, from Epic's own manifests at
+   `%ProgramData%\Epic\EpicGamesLauncher\Data\Manifests\*.item` - one JSON file per installed
+   game, carrying `InstallLocation`. Epic has no equivalent of Steam's app id manifest, so the
+   entry is matched by game name. Implemented and tested against a synthetic manifest set, but
+   **not against a real Epic install** - `--game` remains the fallback.
+
+   Note that **`%APPDATA%\Vampire_Survivors_EGS` is save data, not the install**, and the same
+   goes for `steamapps/compatdata/1794680/pfx/` under Proton
+   ([wiki](https://vampire.survivors.wiki/w/SaveData)). Neither can be installed into. The Epic
+   save folder is used only as a hint: if it exists and no install was found, the installer says
+   so rather than reporting a bare "not found".
 2. **Refuses to run while the game is open.** Windows keeps the DLL locked, so installing over a
    running game silently leaves the old build in place.
 3. **Disables MelonLoader if present**, by renaming `version.dll` to `version.dll.melon.off`.
@@ -151,8 +163,11 @@ The mod itself is a managed DLL and is platform-independent - what differs is th
   ```
 
 - **Proton** - the game is still the *Windows* build, so it needs the **win-x64** loader even
-  though the host is Linux. That cannot be detected from inside the installer, so pass
-  `--platform win-x64` explicitly.
+  though the host is Linux. **This is now detected.** Steam creates a Proton prefix per app, so
+  `steamapps/compatdata/1794680/` beside the `common/` folder the game was found in is the game
+  saying itself that it runs through Proton, and the Windows loader is chosen. `--platform` still
+  overrides. Getting this wrong used to be silent: the Linux loader installs perfectly well and
+  then never attaches.
 
 ## Building
 

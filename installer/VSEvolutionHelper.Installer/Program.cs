@@ -174,7 +174,7 @@ internal static class Program
 
             if (bepInExZip == null && !bepInExPresent && !skipBepInEx
                 && Array.IndexOf(args, "--no-download") < 0)
-                bepInExZip = DownloadBepInEx(args);
+                bepInExZip = DownloadBepInEx(args, game);
 
             if (bepInExZip != null)
             {
@@ -390,7 +390,64 @@ internal static class Program
                 if (Directory.Exists(path)) return path;
             }
         }
+
+        string epic = FindEpicGame();
+        if (epic != null) return epic;
+
+        // The save folder does not say where the game is installed, but it does say an Epic copy
+        // exists. Saying so beats a bare "not found" when the manifests could not be read.
+        if (EpicSaveDataPresent())
+            Info("An Epic Games save folder exists but no install was found - pass --game <path>.");
+
         return null;
+    }
+
+    /// <summary>
+    /// Epic records install locations in its own manifests: one .item file per installed game,
+    /// JSON, with InstallLocation. There is no equivalent of Steam's appmanifest keyed by app id,
+    /// so the game is identified by name.
+    ///
+    /// Note this is not the save folder. %APPDATA%\Vampire_Survivors_EGS holds saves and says
+    /// nothing about where the game itself lives.
+    /// </summary>
+    private static string FindEpicGame()
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+
+        string dir = Path.Combine(
+            Env("ProgramData") ?? @"C:\ProgramData",
+            "Epic", "EpicGamesLauncher", "Data", "Manifests");
+        if (!Directory.Exists(dir)) return null;
+
+        string[] items;
+        try { items = Directory.GetFiles(dir, "*.item"); }
+        catch { return null; }
+
+        foreach (string item in items)
+        {
+            string json;
+            try { json = File.ReadAllText(item); } catch { continue; }
+
+            // Match on the display name rather than on a catalog id: the ids are opaque and would
+            // have to be hard-coded per storefront entry, which rots the same way any baked-in id
+            // list does. A launcher entry for another game simply will not contain the name.
+            if (json.IndexOf("Vampire Survivors", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+            var m = Regex.Match(json, "\"InstallLocation\"\\s*:\\s*\"([^\"]+)\"");
+            if (!m.Success) continue;
+
+            // JSON escapes the backslashes in a Windows path.
+            string path = m.Groups[1].Value.Replace("\\\\", "\\");
+            if (Directory.Exists(path)) return path;
+        }
+        return null;
+    }
+
+    private static bool EpicSaveDataPresent()
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        string appData = Env("APPDATA");
+        return appData != null && Directory.Exists(Path.Combine(appData, "Vampire_Survivors_EGS"));
     }
 
     private static IEnumerable<string> SteamRoots()
@@ -607,9 +664,9 @@ internal static class Program
     /// Only win-x64 and linux-x64 IL2CPP artifacts are published - there is no macOS IL2CPP
     /// build, so macOS cannot be served this way at all.
     /// </summary>
-    private static string DownloadBepInEx(string[] args)
+    private static string DownloadBepInEx(string[] args, string game)
     {
-        string platform = ArgValue(args, "--platform") ?? DefaultPlatform();
+        string platform = ArgValue(args, "--platform") ?? DefaultPlatform(game);
         if (platform == null)
         {
             Warn("No BepInEx IL2CPP build is published for macOS.");
@@ -665,13 +722,42 @@ internal static class Program
         }
     }
 
-    private static string DefaultPlatform()
+    private static string DefaultPlatform(string game)
     {
         if (OperatingSystem.IsWindows()) return "win-x64";
-        // Under Proton the game is the Windows build and needs the Windows loader, which cannot
-        // be detected from here - hence --platform.
-        if (OperatingSystem.IsLinux()) return "linux-x64";
+
+        // Under Proton the game is the *Windows* build and needs the Windows loader, even though
+        // the host is Linux. Steam creates a Proton prefix per app, so the presence of
+        // steamapps/compatdata/<appid> is the game itself saying it runs through Proton. Getting
+        // this wrong is quiet: the Linux loader installs cleanly and then never attaches.
+        if (OperatingSystem.IsLinux())
+        {
+            if (RunsUnderProton(game))
+            {
+                Info("Proton prefix found - installing the win-x64 loader, not the Linux one.");
+                return "win-x64";
+            }
+            return "linux-x64";
+        }
         return null;
+    }
+
+    /// <summary>
+    /// The prefix sits at &lt;library&gt;/steamapps/compatdata/&lt;appid&gt;, a sibling of the
+    /// common/ folder the game was found in. Derived from the game path so it works for a library
+    /// on any drive, rather than assuming the default one.
+    /// </summary>
+    private static bool RunsUnderProton(string game)
+    {
+        if (game == null) return false;
+        try
+        {
+            // <library>/steamapps/common/<installdir> -> <library>/steamapps
+            DirectoryInfo steamapps = Directory.GetParent(game)?.Parent;
+            if (steamapps == null) return false;
+            return Directory.Exists(Path.Combine(steamapps.FullName, "compatdata", AppId));
+        }
+        catch { return false; }
     }
 
     /// <summary>
@@ -723,7 +809,13 @@ internal static class Program
             string json = http.GetStringAsync(api).GetAwaiter().GetResult();
 
             var asset = Regex.Match(json,
-                "\"browser_download_url\"\\s*:\\s*\"([^\"]+VSEvolutionHelper[^\"]*\\.zip)\"",
+                // Anchored to the mod zip's own file name. The repo path contains
+                // "VSEvolutionHelper" too, so looking for that string anywhere in the URL matches
+                // every zip on the release - the installer zips and the script bundle included -
+                // and then takes whichever the API happens to list first. The mod zip has been
+                // VSEvolutionHelper-BepInEx-vX.Y.Z.zip since v1.7.0; the installer assets are
+                // vsevolutionhelper-installer-*, which this cannot match.
+                "\"browser_download_url\"\\s*:\\s*\"([^\"]+/VSEvolutionHelper-BepInEx-[^\"]*\\.zip)\"",
                 RegexOptions.IgnoreCase);
             if (!asset.Success)
             {

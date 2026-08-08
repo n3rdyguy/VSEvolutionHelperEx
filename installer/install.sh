@@ -155,7 +155,16 @@ download_bepinex() {
       info "Only win-x64 and linux-x64 IL2CPP artifacts exist on builds.bepinex.dev." >&2
       return 1
     fi
-    plat="linux-x64"
+    # Under Proton the game is the Windows build and needs the Windows loader, even though the
+    # host is Linux. Steam creates a prefix per app, so steamapps/compatdata/<appid> next to the
+    # common/ folder the game was found in is the game saying so itself. Guessing wrong is quiet:
+    # the Linux loader installs cleanly and then never attaches.
+    if [ -n "$GAME" ] && [ -d "$(dirname "$(dirname "$GAME")")/compatdata/$APP_ID" ]; then
+      info "Proton prefix found - installing the win-x64 loader, not the Linux one." >&2
+      plat="win-x64"
+    else
+      plat="linux-x64"
+    fi
   fi
 
   local url=""
@@ -202,7 +211,7 @@ download_mod() {
   if [ -z "$json" ]; then fail "Could not reach GitHub." >&2; return 1; fi
 
   url=$(printf '%s' "$json" \
-    | grep -o '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*VSEvolutionHelper[^"]*\.zip"' \
+    | grep -o '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*/VSEvolutionHelper-BepInEx-[^"]*\.zip"' \
     | sed 's/.*"\(https[^"]*\)"/\1/' | head -n1 || true)
   if [ -z "$url" ]; then fail "No release asset found." >&2; return 1; fi
   info "$url" >&2

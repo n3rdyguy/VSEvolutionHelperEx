@@ -125,6 +125,33 @@ function Find-Game {
             if (Test-Path $path) { return $path }
         }
     }
+
+    $epic = Find-EpicGame
+    if ($epic) { return $epic }
+
+    # The save folder does not say where the game is installed, but it does say an Epic copy
+    # exists. Saying so beats a bare "not found" when the manifests could not be read.
+    if (Test-Path (Join-Path $env:APPDATA 'Vampire_Survivors_EGS')) {
+        Info 'An Epic Games save folder exists but no install was found - pass -Game <path>.'
+    }
+    return $null
+}
+
+function Find-EpicGame {
+    # Epic records install locations in its own manifests: one .item file per installed game,
+    # JSON, carrying InstallLocation. There is no equivalent of Steam's appmanifest keyed by app
+    # id, so the game is matched by name. This is not the save folder - %APPDATA%\
+    # Vampire_Survivors_EGS holds saves and says nothing about where the game lives.
+    $dir = Join-Path $env:ProgramData 'Epic\EpicGamesLauncher\Data\Manifests'
+    if (-not (Test-Path $dir)) { return $null }
+    foreach ($item in Get-ChildItem $dir -Filter *.item -ErrorAction SilentlyContinue) {
+        $json = Get-Content $item.FullName -Raw -ErrorAction SilentlyContinue
+        if ($json -notmatch 'Vampire Survivors') { continue }
+        $m = [regex]::Match($json, '"InstallLocation"\s*:\s*"([^"]+)"')
+        if (-not $m.Success) { continue }
+        $path = $m.Groups[1].Value -replace '\\\\', '\'
+        if (Test-Path $path) { return $path }
+    }
     return $null
 }
 
@@ -173,7 +200,10 @@ function Get-Mod {
     Step ("Downloading VS Evolution Helper" + $(if ($Version) { " $Version" } else { ' (latest)' }) + '...')
     try {
         $rel = Invoke-RestMethod -Uri $api -Headers @{ 'User-Agent' = 'VSEvolutionHelper-Installer' }
-        $asset = $rel.assets | Where-Object { $_.name -like '*VSEvolutionHelper*.zip' } | Select-Object -First 1
+        # Anchored to the mod zip's own name. '*VSEvolutionHelper*.zip' also matches the installer
+        # zips and the script bundle on the same release, and -First 1 would take whichever came
+        # first in the API's ordering.
+        $asset = $rel.assets | Where-Object { $_.name -like 'VSEvolutionHelper-BepInEx-*.zip' } | Select-Object -First 1
         if (-not $asset) { Fail 'No release asset found.'; return $null }
         Info $asset.browser_download_url
 
