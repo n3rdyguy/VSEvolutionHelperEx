@@ -231,6 +231,8 @@ Unity version) plus the plugin's own lines are what actually identify the setup.
 
 ## Install from source (dev)
 
+From the `VSEvolutionHelper` repository root:
+
 ```powershell
 cd VSEvolutionHelper.BepInEx
 dotnet build -c Release
