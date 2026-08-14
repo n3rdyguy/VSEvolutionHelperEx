@@ -1,7 +1,7 @@
 # VS Evolution Helper — User guide
 
 **Plugin:** VS Evolution Helper (BepInEx)  
-**Current version:** 1.14.3
+**Current version:** 1.14.4
 **Game:** Vampire Survivors 1.15 / Unity 6  
 
 This guide describes **every player-facing feature**. For install steps, see the root [README](../README.md). For release history, see [CHANGELOG](../CHANGELOG.md).
@@ -39,7 +39,7 @@ It does **not** change game balance, unlocks, or saves by itself (aside from opt
 │  Collection grid weapons / items / arcanas             │
 │  Secrets → what each one unlocks                       │
 │  Bestiary → enemy stats and resistances                │
-│  Unlocks → rewards and requirements                    │
+│  Unlocks → reward details                              │
 └────────────────────────────────────────────────────────┘
 
 ┌─ Menus ────────────────────────────────────────────────┐
@@ -217,7 +217,7 @@ panel is docked rather than following the cursor, so an eager tooltip costs noth
 |------|--------------------|
 | **Secrets** | Everything the secret unlocks: character portraits, weapons, relic, arcana, power-up, skins, stage, gold. Renamed characters show both names |
 | **Bestiary** | HP, damage, speed, XP, knockback, plus **resistances**, skills, and the stages an enemy appears in. Stats read as ranges where one entry covers a family |
-| **Unlocks** | What an achievement grants and what it requires |
+| **Unlocks** | What an achievement grants; Adventure stages use their in-game names |
 | **Power Up** | The level you own, the price of the next one, and what the rest costs |
 | **Music** | The composer, the game or DLC a track came from, and how it is unlocked |
 

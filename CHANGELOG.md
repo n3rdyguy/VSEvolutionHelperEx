@@ -2,7 +2,7 @@
 
 All notable changes to this BepInEx port are listed here.
 
-## [1.14.3] - 2026-08-14
+## [1.14.4] - 2026-08-14
 
 ### Added
 - **Ascension Points tooltips.** The Adventure selection screen and an active Adventure both
@@ -11,9 +11,13 @@ All notable changes to this BepInEx port are listed here.
   points and points still unspent. Each screen uses its own measured dock beneath the panel.
 
 ### Fixed
-- **Every Unlocks tooltip claimed it unlocked Wings.** Achievement rows are recycled, but the
-  row type can still belong to the previous entry when its data is rebound. Rewards now identify
-  the current record rather than that stale field.
+- **Unlocks tooltips now identify the current reward.** The Progression page binds its rows
+  through `Init`, which does not set an achievement id; every row consequently looked up the
+  default `ReachLV5` record and claimed it unlocked Wings. Rewards now come from the individual
+  record bound to each row.
+- **Adventure progression uses player-facing stage names.** Adventure stages live in their own
+  catalog rather than I2's normal stage table, so unlocks previously showed internal ids such as
+  `ADV_POE_2_Forest`. They now resolve to the name shown in-game, such as **Rough Awakening**.
 
 ## [1.14.2] - 2026-08-08
 

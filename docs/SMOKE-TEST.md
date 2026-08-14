@@ -61,6 +61,8 @@ Run before tagging or uploading a release zip. Game: **VS 1.15.x**, BepInEx 6 IL
 Same shape on all five: hover a row, a docked panel appears in the free space beside the list.
 
 - [ ] Each page: hover a row → panel appears with content, not an empty box
+- [ ] **Unlocks / Progression:** different rows show their own rewards, not the same Wings line;
+      Adventure stage rewards use the in-game stage name, never an `ADV_*` id
 - [ ] **Hover the selected row too** — the selection highlight swallows the pointer, and this is
       the case that failed first on Secrets
 - [ ] Panel is **not clipped** by the list's scroll mask, and does not follow the cursor
