@@ -9760,6 +9760,18 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	public static readonly Vector2 SidePanelPivot = new Vector2(0.5f, 1f);
 
 	/// <summary>
+	/// Free space directly beneath the Ascension Points panel, in Safe Area reference units
+	/// (1920x1200). Measured from the screen box 40,756 - 620,1568 at 2560x1600: left edge
+	/// 0.016 -> (0.016 - 0.5) * 1920 = -929, top edge 0.472 -> (0.5 - 0.472) * 1200 = 34.
+	///
+	/// Pinning the top left lets the short Ascension panels grow right and down inside the
+	/// measured free area, rather than overlapping the controls above them.
+	/// </summary>
+	public const float AscensionPopupLeftX = -929f;
+	public const float AscensionPopupTopY = 34f;
+	public static readonly Vector2 AscensionPopupPivot = new Vector2(0f, 1f);
+
+	/// <summary>
 	/// The Music page's free space, which sits higher and further right than the list pages':
 	/// the track list runs down the left and the panel that would normally occupy the middle is
 	/// not there.

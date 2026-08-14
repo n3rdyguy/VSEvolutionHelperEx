@@ -77,6 +77,8 @@ public static class AscensionPatches
 		{
 			Title = "Ascension Points",
 			Description = "Complete an Adventure to earn Ascension Points. Spend them here to boost Luck, Growth, Greed and Curse for that Adventure.",
+			Offset = new Vector2(ItemTooltipsMod.AscensionPopupLeftX, ItemTooltipsMod.AscensionPopupTopY),
+			Pivot = ItemTooltipsMod.AscensionPopupPivot,
 		});
 	}
 
@@ -99,6 +101,8 @@ public static class AscensionPatches
 			Description = Description(type),
 			SpriteProvider = () => Sprite(control, type),
 			RowsProvider = () => BuildRows(control, panel),
+			Offset = new Vector2(ItemTooltipsMod.AscensionPopupLeftX, ItemTooltipsMod.AscensionPopupTopY),
+			Pivot = ItemTooltipsMod.AscensionPopupPivot,
 		});
 	}
 
