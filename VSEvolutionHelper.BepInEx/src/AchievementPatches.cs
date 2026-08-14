@@ -59,7 +59,7 @@ public static class AchievementPatches
 			// AchievementType, leaving it as ReachLV5; using that id made every tooltip read
 			// ReachLV5's Wings reward. The bound record itself has the right reward strings.
 			var achievement = __instance._data;
-			if ((Object)(object)achievement == (Object)null) return;
+			if (achievement == null) return;
 			string id = null;
 			try { id = achievement.Type.ToString(); } catch { }
 			var rows = GameData.GetAchievementRows(achievement, out string description);

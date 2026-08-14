@@ -1962,7 +1962,9 @@ public static class GameData
     {
         description = null;
         var rows = new System.Collections.Generic.List<IconRow>();
-        if ((Object)(object)achievement == (Object)null) return rows;
+        // AchievementData is an Il2CppSystem.Object, not a UnityEngine.Object. Casting it to
+        // UnityEngine.Object returns null even for a live record and silently hides every row.
+        if (achievement == null) return rows;
 
         var rewards = new RewardIds();
         try { rewards.Character = achievement.characterToUnlock; } catch { }
