@@ -1674,6 +1674,15 @@ public static class GameData
     private static string StageDisplayName(string stageId)
     {
         if (string.IsNullOrEmpty(stageId)) return null;
+        // A stage-only reward does not otherwise ask for a weapon/item name, so this can be the
+        // first data lookup a Progression tooltip performs. Resolve DataManager here instead of
+        // assuming another row happened to initialize it first.
+        if (_dataManager == null) EnsureLoaded();
+        if (_dataManager == null)
+        {
+            Plugin.Dbg($"[Stages] '{stageId}': DataManager unavailable; falling back to I2");
+            return DescribeStage(stageId);
+        }
         if (!_stageNamesParsed && _dataManager != null)
         {
             var map = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -1681,16 +1690,22 @@ public static class GameData
             {
                 // Adventure stages are deliberately kept in their own catalog. Parsing only
                 // _allStagesJson made every ADV_* reward fall through to its internal enum id.
-                AddStageNames(_dataManager._allStagesJson, map);
-                AddStageNames(_dataManager._allAdventureStagesJson, map);
+                AddStageNames("normal", _dataManager._allStagesJson, map);
+                AddStageNames("adventure", _dataManager._allAdventureStagesJson, map);
             }
             catch (Exception ex) { Plugin.Dbg("[GameData] stage names: " + ex.Message); }
             _stageNames = map;
             _stageNamesParsed = map.Count > 0;
             Plugin.Dbg($"[GameData] stage names: {map.Count}");
         }
-        if (_stageNames != null && _stageNames.TryGetValue(stageId, out string name)) return name;
-        return DescribeStage(stageId);
+        if (_stageNames != null && _stageNames.TryGetValue(stageId, out string name))
+        {
+            Plugin.Dbg($"[Stages] '{stageId}' -> '{name}'");
+            return name;
+        }
+        string fallback = DescribeStage(stageId);
+        Plugin.Dbg($"[Stages] '{stageId}' missing from {_stageNames?.Count ?? 0} catalog names; fallback '{fallback}'");
+        return fallback;
     }
 
     /// <summary>
@@ -1699,31 +1714,51 @@ public static class GameData
     /// Both catalogs are keyed by stage id and store the usable record in the first array slot.
     /// Keeping this shared prevents one surface from learning only the normal catalog again.
     /// </summary>
-    private static void AddStageNames(object json, System.Collections.Generic.Dictionary<string, string> map)
+    private static void AddStageNames(string catalog, object json,
+        System.Collections.Generic.Dictionary<string, string> map)
     {
-        if (json == null || map == null) return;
+        if (map == null) return;
+        if (json == null)
+        {
+            Plugin.Dbg($"[Stages] {catalog} catalog is null");
+            return;
+        }
         string raw = null;
         try { raw = json.ToString(); } catch { }
-        if (string.IsNullOrEmpty(raw)) return;
-        using (var doc = System.Text.Json.JsonDocument.Parse(raw))
+        if (string.IsNullOrEmpty(raw))
         {
-            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return;
-            foreach (var prop in doc.RootElement.EnumerateObject())
+            Plugin.Dbg($"[Stages] {catalog} catalog stringified empty ({json.GetType().FullName})");
+            return;
+        }
+        int before = map.Count;
+        try
+        {
+            using (var doc = System.Text.Json.JsonDocument.Parse(raw))
             {
-                System.Text.Json.JsonElement rec = prop.Value;
-                if (rec.ValueKind == System.Text.Json.JsonValueKind.Array)
+                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
                 {
-                    bool any = false;
-                    foreach (var f in rec.EnumerateArray()) { rec = f; any = true; break; }
-                    if (!any) continue;
+                    Plugin.Dbg($"[Stages] {catalog} catalog root is {doc.RootElement.ValueKind}");
+                    return;
                 }
-                if (rec.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
-                string n = JsonStr(rec, "stageName");
-                if (string.IsNullOrWhiteSpace(n)) continue;
-                string loc = LocalizeDisplayText(n) ?? n;
-                if (!string.IsNullOrWhiteSpace(loc) && !LooksLikeLocKey(loc)) map[prop.Name] = loc.Trim();
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    System.Text.Json.JsonElement rec = prop.Value;
+                    if (rec.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        bool any = false;
+                        foreach (var f in rec.EnumerateArray()) { rec = f; any = true; break; }
+                        if (!any) continue;
+                    }
+                    if (rec.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                    string n = JsonStr(rec, "stageName");
+                    if (string.IsNullOrWhiteSpace(n)) continue;
+                    string loc = LocalizeDisplayText(n) ?? n;
+                    if (!string.IsNullOrWhiteSpace(loc) && !LooksLikeLocKey(loc)) map[prop.Name] = loc.Trim();
+                }
             }
         }
+        catch (Exception ex) { Plugin.Dbg($"[Stages] {catalog} catalog parse: {ex.Message}"); }
+        Plugin.Dbg($"[Stages] {catalog} catalog: {raw.Length} chars, added {map.Count - before} names");
     }
 
     private static bool TryJsonFloat(System.Text.Json.JsonElement obj, string name, out float value)
