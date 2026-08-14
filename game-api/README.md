@@ -130,7 +130,8 @@ enemy. Key any tracking off the re-init hook and drop it on `IsDead`, never on o
 - `AchievementData` reward fields are **plain strings**, not nullable enums, so they need no
   fallback. The Progress page calls `AchievementDataUI.Init`, which does not set an achievement
   type; looking that id up in JSON makes every row read `ReachLV5` and claim it unlocks Wings.
-  Read the record's reward fields directly instead.
+  Read the record's reward fields directly instead. DLC/custom records can use I2 terms in those
+  string fields, so resolve each displayed reward through I2 before falling back to a humanized id.
 - An unset typed id reads back as `"VOID"`, sometimes `"0"`, sometimes empty — check all three.
 - `PowerUpItemUI._currentLevel` reads `0` for every upgrade on 1.15; use
   `PlayerStats.GetOwnedPowerUps()[type]._Level`. **1.16 appears to have fixed it** - the two now

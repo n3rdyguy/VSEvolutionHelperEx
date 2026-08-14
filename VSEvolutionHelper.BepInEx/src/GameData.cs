@@ -1162,10 +1162,27 @@ public static class GameData
         var rows = new System.Collections.Generic.List<IconRow>();
         if (e == null) return rows;
 
+        // Achievement records are inconsistent: most rewards are enum ids, while DLC and
+        // custom rewards can already be I2 terms. Resolve at the last possible point so an
+        // untranslated key never leaks into an otherwise correct unlock tooltip.
+        string rewardName(string id, string candidate)
+        {
+            string translated = LocalizeDisplayText(candidate);
+            if (!string.IsNullOrWhiteSpace(translated) && !LooksLikeLocKey(translated)
+                && !string.Equals(translated, id, StringComparison.OrdinalIgnoreCase))
+                return translated;
+
+            translated = LocalizeTypedDescription(id, "name");
+            if (!string.IsNullOrWhiteSpace(translated) && !LooksLikeLocKey(translated))
+                return translated;
+
+            return HumanizeId(id);
+        }
+
         void addCharacter(string id)
         {
             if (IsVoidValue(id)) return;
-            rows.Add(new IconRow(GetCharacterPortrait(id), DescribeRewardCharacter(id)));
+            rows.Add(new IconRow(GetCharacterPortrait(id), rewardName(id, DescribeRewardCharacter(id))));
         }
 
         void addWeapon(string id)
@@ -1174,9 +1191,9 @@ public static class GameData
             if (Enum.TryParse<WeaponType>(id, true, out WeaponType w) && !IsVoidValue(w.ToString()))
             {
                 string n = GetWeaponName(w);
-                rows.Add(new IconRow(GetSprite(w), string.IsNullOrEmpty(n) ? HumanizeId(id) : n));
+                rows.Add(new IconRow(GetSprite(w), rewardName(id, n)));
             }
-            else rows.Add(new IconRow(null, HumanizeId(id)));
+            else rows.Add(new IconRow(null, rewardName(id, null)));
         }
 
         addCharacter(e.Character);
@@ -1188,20 +1205,20 @@ public static class GameData
         if (!IsVoidValue(e.Relic))
         {
             if (Enum.TryParse<ItemType>(e.Relic, true, out ItemType it) && !IsVoidValue(it.ToString()))
-                rows.Add(new IconRow(GetItemSprite(it), GetItemName(it)));
-            else rows.Add(new IconRow(null, HumanizeId(e.Relic)));
+                rows.Add(new IconRow(GetItemSprite(it), rewardName(e.Relic, GetItemName(it))));
+            else rows.Add(new IconRow(null, rewardName(e.Relic, null)));
         }
         if (!IsVoidValue(e.Arcana))
         {
             if (Enum.TryParse<ArcanaType>(e.Arcana, true, out ArcanaType at) && !IsVoidValue(at.ToString()))
-                rows.Add(new IconRow(GetArcanaSprite(at), GetArcanaName(at)));
-            else rows.Add(new IconRow(null, HumanizeId(e.Arcana)));
+                rows.Add(new IconRow(GetArcanaSprite(at), rewardName(e.Arcana, GetArcanaName(at))));
+            else rows.Add(new IconRow(null, rewardName(e.Arcana, null)));
         }
         if (!IsVoidValue(e.PowerUp))
         {
             if (Enum.TryParse<PowerUpType>(e.PowerUp, true, out PowerUpType pt) && !IsVoidValue(pt.ToString()))
-                rows.Add(new IconRow(GetSprite(pt), GetPowerUpName(pt)));
-            else rows.Add(new IconRow(null, HumanizeId(e.PowerUp)));
+                rows.Add(new IconRow(GetSprite(pt), rewardName(e.PowerUp, GetPowerUpName(pt))));
+            else rows.Add(new IconRow(null, rewardName(e.PowerUp, null)));
         }
 
         if (e.Skins != null)
