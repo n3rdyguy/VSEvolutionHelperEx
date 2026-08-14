@@ -1225,8 +1225,11 @@ public static class GameData
             foreach (string id in e.Skins)
                 rows.Add(new IconRow(null, DescribeRewardCharacter(id) + " (skin)"));
 
-        if (!IsVoidValue(e.Stage)) rows.Add(new IconRow(null, DescribeStage(e.Stage) + " (stage)"));
-        if (!IsVoidValue(e.Hyper)) rows.Add(new IconRow(null, DescribeStage(e.Hyper) + " (Hyper)"));
+        // Adventure progression stores stageToUnlock as an internal ADV_* key. The normal I2
+        // stage table does not know those keys, but the stage catalog has their displayed names
+        // (for example ADV_POE_2_Forest -> Rough Awakening).
+        if (!IsVoidValue(e.Stage)) rows.Add(new IconRow(null, StageDisplayName(e.Stage) + " (stage)"));
+        if (!IsVoidValue(e.Hyper)) rows.Add(new IconRow(null, StageDisplayName(e.Hyper) + " (Hyper)"));
         if (e.Gold > 0) rows.Add(new IconRow(null, $"Gold: {e.Gold}"));
 
         if (!string.IsNullOrEmpty(e.CustomText))
