@@ -99,6 +99,8 @@ Same shape on all five: hover a row, a docked panel appears in the free space be
 - [ ] No raw `itemLang/…` / `powerupLang/…` in title or body (1.10.7+)
 - [ ] Odd characters/skins (e.g. Merchant line): name human-readable even if flavor is sparse
 - [ ] **Adventure selection:** hover adventure → summary (if `AdventureTooltips` on)
+- [ ] **Ascension Points:** open it from Adventure select and from an active Adventure; hover all
+      four controls → effect, per-point amount, current allocation and unspent points; +/- still work
 
 ## Config / regression
 

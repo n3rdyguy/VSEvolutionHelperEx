@@ -400,6 +400,9 @@ public class ItemTooltipsMod
 				AdventureSelectPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("AdventureSelect patches: " + ex.Message); }
 			try {
+				AscensionPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("Ascension patches: " + ex.Message); }
+			try {
 				WeaponSelectionPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("WeaponSelection patches: " + ex.Message); }
 			try {

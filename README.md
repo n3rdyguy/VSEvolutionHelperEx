@@ -41,7 +41,7 @@ Please support the original authors. This port reuses their design with typed Il
 | Feature | What you get |
 |---------|----------------|
 | **Character selection** | Hover a character → portrait, flavor (localized), **starting weapon**, evolution path icons, **other outfits**’ starters, **notable stats**. Click-through so you can still select the card. |
-| **Adventure selection** | Hover an adventure → cast / weapon summary (config `AdventureTooltips`) |
+| **Adventure selection** | Hover an adventure → cast / weapon summary; Ascension Points explains each bonus (config `AdventureTooltips`) |
 | **Weapon selectors** | Hover a weapon on a selector screen (Penshin Fatcha tuna forms, Arma Dio) → tooltip (config `WeaponSelectionTooltips`) |
 | **Collection / Grimoire** | Tooltips on evolution formula icons and collection grid items/arcanas. Collections tooltips **dock to the right margin** (always visible, never clipped by the grid) and stay **clickable** for nested formula detail; locked cells show an **Unlock:** hint |
 | **Stage selection - relics** | Hover **Relics in stage** icons for name + description (dynamic sizing for long names) |

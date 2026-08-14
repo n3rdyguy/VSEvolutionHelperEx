@@ -71,6 +71,7 @@ Dictionary<PowerUpType, JArray>     AllPowerUps;   // one entry per rank
 | `AchievementDataUI` | `SetData(AchievementType, AchievementData, DataManager, bool, ContentGroupType)` + `AdventureAchievementType` overload | `_data`, `_type`, `Label` |
 | `PowerUpItemUI` | `SetData(PowerUpData, PowerUpType, PowerUpsPage, int, int)`, `UpdateAfterPurchase` | `_data`, `_type`, `_maxRank`, `_page`, `Title`, `Icon` |
 | `PowerUpsPage` | `Purchase`, `RefundPowerUps`, `ResetAll` | `_playerStats` |
+| `AscensionPanel` | `SetData(PlayerOptionsData, AdventureType)`, `RefreshData` | four `AdjustValuePanel`s, `_completionCount`, `_currentSpend` |
 | `ArcanaCardUI` | `SetData` **x3 overloads** | `_data`, `_type`, `_Icon`; `GetArcanaType()` |
 | `TrackItemUI` | `SetData(string, Sprite, BgmType, MusicData, AdvancedMusicSelection)` | `_data`, `_bgmType`, `_Title`, `_Icon`; `GetMusicData()` |
 

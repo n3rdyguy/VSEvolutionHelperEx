@@ -124,7 +124,7 @@ public class Plugin : BasePlugin
             "Features",
             "AdventureTooltips",
             true,
-            "Show cast/weapon summary tooltips when hovering adventures on the Adventures select screen.");
+            "Show cast/weapon summary and Ascension Points tooltips on Adventure screens.");
 
         _weaponSelectionTooltipsEnabled = Config.Bind(
             "Features",

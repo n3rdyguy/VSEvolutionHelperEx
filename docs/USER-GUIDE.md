@@ -268,9 +268,12 @@ Kill switch: `Features.CharacterTooltips`.
 
 ## 6. Adventure selection
 
-**Where:** Adventure list / cards on the Adventures select screen.
+**Where:** Adventure list / cards on the Adventures select screen, and the Ascension Points menu
+there or during an active Adventure.
 
 **Shows:** Adventure title, description when available, cast characters, related weapons when data is present.
+Ascension controls show what Luck, Growth, Greed and Curse do, their per-point increment, current
+bonus, assigned points and unspent points.
 
 Kill switch: `Features.AdventureTooltips`.
 
