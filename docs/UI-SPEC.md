@@ -645,7 +645,7 @@ Every surface, its hook, and where its tooltip lands.
 | Collections | `CollectionItemUI` | `CollectionSelectPatches.cs` | Side panel |
 | Character select | grid cards | `CharacterSelectPatches.cs` | Near card, click-through |
 | Adventure select | adventure cards | `AdventureSelectPatches.cs` | Fixed box |
-| Ascension Points | Luck / Growth / Greed / Curse controls | `AscensionPatches.cs` | Beneath Ascension panel, left-pinned |
+| Ascension Points | Luck / Growth / Greed / Curse controls | `AscensionPatches.cs` | Beneath panel, left-pinned (per Adventure screen) |
 | Stage select | relic icons | `StageSelectPatches.cs` | Near icon |
 | Weapon selectors | selector cells | `WeaponSelectionPatches.cs` | Offset from icon |
 | Secrets | `SecretItemUI.SetData` | `SecretsPatches.cs` | `(71, 344)` pivot `(0,1)` |

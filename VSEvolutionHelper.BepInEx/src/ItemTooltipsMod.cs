@@ -9772,6 +9772,14 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	public static readonly Vector2 AscensionPopupPivot = new Vector2(0f, 1f);
 
 	/// <summary>
+	/// The Adventure selection screen's corresponding free space. Its left panel sits 92 Safe
+	/// Area units further right than the in-adventure panel: screen box 165,754 - 673,1586 at
+	/// 2560x1600, left edge 0.064 -> (0.064 - 0.5) * 1920 = -837. The measured top edge 0.472
+	/// converts to the same 34 as the in-adventure dock, so only X differs.
+	/// </summary>
+	public const float AscensionSelectPopupLeftX = -837f;
+
+	/// <summary>
 	/// The Music page's free space, which sits higher and further right than the list pages':
 	/// the track list runs down the left and the panel that would normally occupy the middle is
 	/// not there.

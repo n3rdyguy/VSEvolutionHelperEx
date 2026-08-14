@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using HarmonyLib;
 using UnityEngine;
 using VampireSurvivors;
+using VampireSurvivors.App.Scripts.UI;
 using VampireSurvivors.Data;
 using VampireSurvivors.UI;
 using Object = UnityEngine.Object;
@@ -73,24 +74,26 @@ public static class AscensionPatches
 
 	private static void RegisterButton(AscensionButton button)
 	{
+		Vector2 offset = AscensionOffset();
 		Rows.Register(((Component)button).gameObject, null, new RowTooltipRegistry.Entry
 		{
 			Title = "Ascension Points",
 			Description = "Complete an Adventure to earn Ascension Points. Spend them here to boost Luck, Growth, Greed and Curse for that Adventure.",
-			Offset = new Vector2(ItemTooltipsMod.AscensionPopupLeftX, ItemTooltipsMod.AscensionPopupTopY),
+			Offset = offset,
 			Pivot = ItemTooltipsMod.AscensionPopupPivot,
 		});
 	}
 
 	private static void RegisterPanel(AscensionPanel panel)
 	{
-		Register(panel._LuckPanel, PowerUpType.LUCK, panel);
-		Register(panel._GrowthPanel, PowerUpType.GROWTH, panel);
-		Register(panel._GreedPanel, PowerUpType.GREED, panel);
-		Register(panel._CursePanel, PowerUpType.CURSE, panel);
+		Vector2 offset = AscensionOffset();
+		Register(panel._LuckPanel, PowerUpType.LUCK, panel, offset);
+		Register(panel._GrowthPanel, PowerUpType.GROWTH, panel, offset);
+		Register(panel._GreedPanel, PowerUpType.GREED, panel, offset);
+		Register(panel._CursePanel, PowerUpType.CURSE, panel, offset);
 	}
 
-	private static void Register(AdjustValuePanel control, PowerUpType type, AscensionPanel panel)
+	private static void Register(AdjustValuePanel control, PowerUpType type, AscensionPanel panel, Vector2 offset)
 	{
 		if ((Object)(object)control == (Object)null) return;
 
@@ -101,9 +104,27 @@ public static class AscensionPatches
 			Description = Description(type),
 			SpriteProvider = () => Sprite(control, type),
 			RowsProvider = () => BuildRows(control, panel),
-			Offset = new Vector2(ItemTooltipsMod.AscensionPopupLeftX, ItemTooltipsMod.AscensionPopupTopY),
+			Offset = offset,
 			Pivot = ItemTooltipsMod.AscensionPopupPivot,
 		});
+	}
+
+	/// <summary>
+	/// SelectAdventuresPage owns the main-menu version of Ascension Points. It uses a different
+	/// Safe Area layout from the in-adventure menu, so sharing one dock leaves the popup 122 screen
+	/// pixels too far left at 2560x1600. Resolve the active page at registration time; the scan
+	/// replaces the entry whenever the player changes screen.
+	/// </summary>
+	private static Vector2 AscensionOffset()
+	{
+		try
+		{
+			var page = Object.FindObjectOfType<SelectAdventuresPage>();
+			if ((Object)(object)page != (Object)null && ((Component)page).gameObject.activeInHierarchy)
+				return new Vector2(ItemTooltipsMod.AscensionSelectPopupLeftX, ItemTooltipsMod.AscensionPopupTopY);
+		}
+		catch { }
+		return new Vector2(ItemTooltipsMod.AscensionPopupLeftX, ItemTooltipsMod.AscensionPopupTopY);
 	}
 
 	private static List<GameData.IconRow> BuildRows(AdjustValuePanel control, AscensionPanel panel)
