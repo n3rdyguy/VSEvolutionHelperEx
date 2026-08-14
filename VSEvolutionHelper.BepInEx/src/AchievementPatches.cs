@@ -59,13 +59,15 @@ public static class AchievementPatches
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 
-			// Init carries no AchievementType, so the id comes off the record itself when the
-			// field has not been set.
+			// Rows are recycled. Init carries no AchievementType and can run while _type still
+			// holds the previous row's value - which made every hovered row inherit Wings' reward.
+			// The freshly bound record carries its own type, so it must win; _type is only a
+			// fallback for the adventure overloads whose record does not expose a normal id.
 			string id = null;
-			try { id = __instance._type.ToString(); } catch { }
+			try { id = __instance._data.Type.ToString(); } catch { }
 			if (string.IsNullOrEmpty(id) || id == "0" || id == "VOID")
 			{
-				try { id = __instance._data.Type.ToString(); } catch { }
+				try { id = __instance._type.ToString(); } catch { }
 			}
 			if (string.IsNullOrEmpty(id)) return;
 

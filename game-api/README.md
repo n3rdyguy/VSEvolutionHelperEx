@@ -68,7 +68,7 @@ Dictionary<PowerUpType, JArray>     AllPowerUps;   // one entry per rank
 |------|--------|----------------------|
 | `SecretItemUI` | `SetData` | `_data`, `_type` |
 | `EnemyItemUI` | `SetData(EnemyType, int, EnemyData, BestiaryPage, bool hasKilled)` | `_data`, `_type`, `_hasKilled`, `_Name` |
-| `AchievementDataUI` | `SetData(AchievementType, AchievementData, DataManager, bool, ContentGroupType)` + `AdventureAchievementType` overload | `_data`, `_type`, `Label` |
+| `AchievementDataUI` | `SetData(AchievementType, AchievementData, DataManager, bool, ContentGroupType)` + `AdventureAchievementType` overload | `_data.Type` is the current normal-row id; `_type` can be stale after recycling; `Label` |
 | `PowerUpItemUI` | `SetData(PowerUpData, PowerUpType, PowerUpsPage, int, int)`, `UpdateAfterPurchase` | `_data`, `_type`, `_maxRank`, `_page`, `Title`, `Icon` |
 | `PowerUpsPage` | `Purchase`, `RefundPowerUps`, `ResetAll` | `_playerStats` |
 | `AscensionPanel` | `SetData(PlayerOptionsData, AdventureType)`, `RefreshData` | four `AdjustValuePanel`s, `_completionCount`, `_currentSpend` |
