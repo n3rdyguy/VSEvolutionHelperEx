@@ -36,12 +36,9 @@ public static class AscensionPatches
 			Patch(harmony, typeof(AscensionPanel), "SetData", nameof(SetData_Postfix));
 			Patch(harmony, typeof(AscensionPanel), "RefreshData", nameof(Refresh_Postfix));
 
-			// The pointer does not leave a +/- button after it is clicked. Refreshing the open
-			// panel here makes its allocation and bonus move with the game control instead of
-			// making the player hover away and back to see the new values.
-			Patch(harmony, typeof(AdjustValuePanel), "IncrementUp", nameof(Refresh_Postfix));
-			Patch(harmony, typeof(AdjustValuePanel), "IncrementDown", nameof(Refresh_Postfix));
-			Patch(harmony, typeof(AdjustValuePanel), "SetValue", nameof(Refresh_Postfix));
+			// AscensionPanel.RefreshData is the owner-level update that follows a +/- change.
+			// Do not patch AdjustValuePanel itself: it is a generic control used while the game
+			// boots, before the Ascension panel exists, so a broad hook here has unsafe reach.
 		}
 		catch (Exception ex)
 		{

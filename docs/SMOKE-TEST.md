@@ -101,6 +101,7 @@ Same shape on all five: hover a row, a docked panel appears in the free space be
 - [ ] **Adventure selection:** hover adventure → summary (if `AdventureTooltips` on)
 - [ ] **Ascension Points:** open it from Adventure select and from an active Adventure; hover all
       four controls → effect, per-point amount, current allocation and unspent points; +/- still work
+      and the values refresh after the panel updates
 
 ## Config / regression
 
