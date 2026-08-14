@@ -10,8 +10,8 @@ namespace VSItemTooltips;
 /// Achievements page: show what each achievement unlocks.
 ///
 /// The page lists a condition and a tick, and reveals the reward only in a side panel for the
-/// selected row. Rewards are read from the raw achievements JSON so every row is covered on
-/// hover, without needing it selected first.
+/// selected row. Rewards come from the record the row was just bound to, because the progress
+/// page's Init call never assigns a usable AchievementType to that row.
 /// </summary>
 public static class AchievementPatches
 {
@@ -48,35 +48,24 @@ public static class AchievementPatches
 		}
 	}
 
-	/// <summary>
-	/// Instance-only postfix - the achievement is read back off the row rather than taken from
-	/// the patched call's arguments, matching the other IL2CPP postfixes here. There are two
-	/// SetData overloads (normal and adventure) and this serves both.
-	/// </summary>
+	/// <summary>The instance holds the current record after both SetData and Init have completed.</summary>
 	public static void SetData_Postfix(AchievementDataUI __instance)
 	{
 		try
 		{
 			if ((Object)(object)__instance == (Object)null) return;
 
-			// Rows are recycled. Init carries no AchievementType and can run while _type still
-			// holds the previous row's value - which made every hovered row inherit Wings' reward.
-			// The freshly bound record carries its own type, so it must win; _type is only a
-			// fallback for the adventure overloads whose record does not expose a normal id.
+			// Progress rows bind via Init. That method assigns _data but never the row's normal
+			// AchievementType, leaving it as ReachLV5; using that id made every tooltip read
+			// ReachLV5's Wings reward. The bound record itself has the right reward strings.
+			var achievement = __instance._data;
+			if ((Object)(object)achievement == (Object)null) return;
 			string id = null;
-			try { id = __instance._data.Type.ToString(); } catch { }
-			if (string.IsNullOrEmpty(id) || id == "0" || id == "VOID")
-			{
-				try { id = __instance._type.ToString(); } catch { }
-			}
-			if (string.IsNullOrEmpty(id)) return;
-
-			GameData.DumpAchievementJsonOnce(id);
-
-			var rows = GameData.GetAchievementRows(id, out string description);
+			try { id = achievement.Type.ToString(); } catch { }
+			var rows = GameData.GetAchievementRows(achievement, out string description);
 			if ((rows == null || rows.Count == 0) && string.IsNullOrEmpty(description))
 			{
-				if (Plugin.DebugVerbose) Plugin.Dbg("Achievements: nothing to show for " + id);
+				if (Plugin.DebugVerbose) Plugin.Dbg("Achievements: nothing to show for current record");
 				return;
 			}
 

@@ -4,6 +4,7 @@ using BepInEx.Logging;
 using I2.Loc;
 using Il2CppSystem.Collections.Generic;
 using UnityEngine;
+using VampireSurvivors.Achievements;
 using VampireSurvivors.Data;
 using VampireSurvivors.Data.PowerUp;
 using VampireSurvivors.Data.Weapons;
@@ -1944,6 +1945,52 @@ public static class GameData
             foreach (string s in rec.Requires) rows.Add(new IconRow(null, s));
         }
 
+        return rows;
+    }
+
+    /// <summary>
+    /// Build an achievement tooltip from the record bound to its row.
+    ///
+    /// The progress page creates rows through AchievementDataUI.Init, which receives a new
+    /// AchievementData but does not receive - or set - an AchievementType. The row's type then
+    /// remains its enum default, ReachLV5, and a JSON lookup makes every tooltip claim Wings.
+    /// These scalar reward fields are the current record's own strings, so reading them here
+    /// keeps a recycled row tied to the achievement it is actually displaying.
+    /// </summary>
+    public static System.Collections.Generic.List<IconRow> GetAchievementRows(
+        AchievementData achievement, out string description)
+    {
+        description = null;
+        var rows = new System.Collections.Generic.List<IconRow>();
+        if ((Object)(object)achievement == (Object)null) return rows;
+
+        var rewards = new RewardIds();
+        try { rewards.Character = achievement.characterToUnlock; } catch { }
+        try { rewards.Weapon = achievement.weaponToUnlock; } catch { }
+        try { rewards.Relic = achievement.relicToUnlock; } catch { }
+        try { rewards.Arcana = achievement.arcanaToUnlock; } catch { }
+        try { rewards.PowerUp = achievement.powerUpToUnlock; } catch { }
+        try { rewards.Stage = achievement.stageToUnlock; } catch { }
+        try { rewards.Hyper = achievement.hyperToUnlock; } catch { }
+        try { rewards.Gold = achievement.goldPrize; } catch { }
+        try { rewards.CustomText = achievement.forcedUnlockTips; } catch { }
+        try { rewards.CustomTexture = achievement.forcedTexture; } catch { }
+        try { rewards.CustomFrame = achievement.forcedFrameName; } catch { }
+
+        try
+        {
+            string text = achievement.description;
+            text = LocalizeDisplayText(text) ?? text;
+            if (!string.IsNullOrWhiteSpace(text) && !LooksLikeLocKey(text)) description = text.Trim();
+        }
+        catch { }
+
+        var rewardRows = BuildRewardRows(rewards);
+        if (rewardRows.Count > 0)
+        {
+            rows.Add(IconRow.Header("Unlocks:"));
+            rows.AddRange(rewardRows);
+        }
         return rows;
     }
 

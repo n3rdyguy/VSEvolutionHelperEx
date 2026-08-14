@@ -1,5 +1,4 @@
 # Vampire Survivors game API notes (1.15.113 / Unity 6000.0.62f1)
-
 Re-checked against the **1.16 public beta**: every type, field and method below still resolves,
 and all patches bind. Two behaviour notes for 1.16 are marked inline.
 
@@ -26,7 +25,7 @@ When a type cannot be found, search both rather than guessing — see [Regenerat
 | `VampireSurvivors.Data.ItemType` | Stage pickups (COIN, GEM, …) - **not** passives |
 | `VampireSurvivors.Data.ArcanaData` / `ArcanaType` | Arcana record + enum |
 | `VampireSurvivors.Data.SecretData` | Secret rewards - **sparse when handed to the UI**, see below |
-| `VampireSurvivors.Data.AchievementData` | Unlock rewards as plain strings |
+| `VampireSurvivors.Achievements.AchievementData` | Unlock rewards as plain strings |
 | `VampireSurvivors.Data.Enemies.EnemyData` | Enemy stats, resistances, behaviour |
 | `VampireSurvivors.Data.MusicData` | Track credits + unlock source (`VampireSurvivors.Runtime`) |
 | `VampireSurvivors.UI.BaseUIPage.Data` | How UI reaches `DataManager` |
@@ -68,7 +67,7 @@ Dictionary<PowerUpType, JArray>     AllPowerUps;   // one entry per rank
 |------|--------|----------------------|
 | `SecretItemUI` | `SetData` | `_data`, `_type` |
 | `EnemyItemUI` | `SetData(EnemyType, int, EnemyData, BestiaryPage, bool hasKilled)` | `_data`, `_type`, `_hasKilled`, `_Name` |
-| `AchievementDataUI` | `SetData(AchievementType, AchievementData, DataManager, bool, ContentGroupType)` + `AdventureAchievementType` overload | `_data.Type` is the current normal-row id; `_type` can be stale after recycling; `Label` |
+| `AchievementDataUI` | `SetData(AchievementType, AchievementData, DataManager, bool, ContentGroupType)` + `AdventureAchievementType` overload; `Init(AchievementData, DataManager, bool)` | `Init` updates `_data` but leaves both type fields at their default (`ReachLV5`); use current `_data` reward fields, then `Label` |
 | `PowerUpItemUI` | `SetData(PowerUpData, PowerUpType, PowerUpsPage, int, int)`, `UpdateAfterPurchase` | `_data`, `_type`, `_maxRank`, `_page`, `Title`, `Icon` |
 | `PowerUpsPage` | `Purchase`, `RefundPowerUps`, `ResetAll` | `_playerStats` |
 | `AscensionPanel` | `SetData(PlayerOptionsData, AdventureType)`, `RefreshData` | four `AdjustValuePanel`s, `_completionCount`, `_currentSpend` |
@@ -129,7 +128,9 @@ enemy. Key any tracking off the re-init hook and drop it on `IsDead`, never on o
 - `SecretData` handed to `SecretItemUI` has every reward field null or `VOID`. The populated
   record is in `DataManager.AllSecrets` keyed by type, with raw JSON behind that.
 - `AchievementData` reward fields are **plain strings**, not nullable enums, so they need no
-  fallback.
+  fallback. The Progress page calls `AchievementDataUI.Init`, which does not set an achievement
+  type; looking that id up in JSON makes every row read `ReachLV5` and claim it unlocks Wings.
+  Read the record's reward fields directly instead.
 - An unset typed id reads back as `"VOID"`, sometimes `"0"`, sometimes empty — check all three.
 - `PowerUpItemUI._currentLevel` reads `0` for every upgrade on 1.15; use
   `PlayerStats.GetOwnedPowerUps()[type]._Level`. **1.16 appears to have fixed it** - the two now
