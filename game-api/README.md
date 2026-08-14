@@ -134,7 +134,9 @@ enemy. Key any tracking off the re-init hook and drop it on `IsDead`, never on o
   string fields, so resolve each displayed reward through I2 before falling back to a humanized id.
   Adventure stage rewards are `ADV_*` keys outside I2; resolve them through
   `_allAdventureStagesJson`'s `stageName` instead (for example `ADV_POE_2_Forest` is
-  **Rough Awakening**). Normal stages remain in `_allStagesJson`.
+  **Rough Awakening**). Normal stages remain in `_allStagesJson`. Both fields are interop
+  `Newtonsoft.Json.Linq.JObject`s: cast to `JToken` before serializing, since `ToString()` via
+  `object` returns the wrapper type name rather than JSON.
 - An unset typed id reads back as `"VOID"`, sometimes `"0"`, sometimes empty — check all three.
 - `PowerUpItemUI._currentLevel` reads `0` for every upgrade on 1.15; use
   `PlayerStats.GetOwnedPowerUps()[type]._Level`. **1.16 appears to have fixed it** - the two now

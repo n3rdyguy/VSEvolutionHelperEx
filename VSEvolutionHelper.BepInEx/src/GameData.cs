@@ -1724,10 +1724,26 @@ public static class GameData
             return;
         }
         string raw = null;
-        try { raw = json.ToString(); } catch { }
+        try
+        {
+            // Calling ToString through System.Object invokes the interop wrapper's type-name
+            // implementation ("Newtonsoft.Json.Linq.JObject"), not Newtonsoft's JSON writer.
+            // The log's 28-character "N..." parse failures proved this boundary matters.
+            var token = json as Newtonsoft.Json.Linq.JToken;
+            if (token == null)
+            {
+                Plugin.Dbg($"[Stages] {catalog} catalog is {json.GetType().FullName}, not JToken");
+                return;
+            }
+            raw = token.ToString(Newtonsoft.Json.Formatting.None);
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg($"[Stages] {catalog} catalog serialize: {ex.Message}");
+        }
         if (string.IsNullOrEmpty(raw))
         {
-            Plugin.Dbg($"[Stages] {catalog} catalog stringified empty ({json.GetType().FullName})");
+            Plugin.Dbg($"[Stages] {catalog} catalog serialized empty");
             return;
         }
         int before = map.Count;
