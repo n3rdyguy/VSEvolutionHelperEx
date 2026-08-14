@@ -1,7 +1,7 @@
 # VS Evolution Helper — User guide
 
 **Plugin:** VS Evolution Helper (BepInEx)  
-**Current version:** 1.14.3  
+**Current version:** 1.14.3
 **Game:** Vampire Survivors 1.15 / Unity 6  
 
 This guide describes **every player-facing feature**. For install steps, see the root [README](../README.md). For release history, see [CHANGELOG](../CHANGELOG.md).
