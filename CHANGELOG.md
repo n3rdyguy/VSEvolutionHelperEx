@@ -2,6 +2,19 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.14.3] - 2026-08-14
+
+### Added
+- **Ascension Points tooltips.** The Adventure selection screen and an active Adventure both
+  expose a compact Ascension panel with no explanation of its four controls. Hover Luck, Growth,
+  Greed or Curse to see what it changes, the per-point increment, current bonus, allocated
+  points and points still unspent. Each screen uses its own measured dock beneath the panel.
+
+### Fixed
+- **Every Unlocks tooltip claimed it unlocked Wings.** Achievement rows are recycled, but the
+  row type can still belong to the previous entry when its data is rebound. Rewards now identify
+  the current record rather than that stale field.
+
 ## [1.14.2] - 2026-08-08
 
 ### Fixed
