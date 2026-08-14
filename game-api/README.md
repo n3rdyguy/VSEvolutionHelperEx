@@ -132,8 +132,9 @@ enemy. Key any tracking off the re-init hook and drop it on `IsDead`, never on o
   type; looking that id up in JSON makes every row read `ReachLV5` and claim it unlocks Wings.
   Read the record's reward fields directly instead. DLC/custom records can use I2 terms in those
   string fields, so resolve each displayed reward through I2 before falling back to a humanized id.
-  Adventure stage rewards are `ADV_*` keys outside I2; resolve them through `_allStagesJson`'s
-  `stageName` instead (for example `ADV_POE_2_Forest` is **Rough Awakening**).
+  Adventure stage rewards are `ADV_*` keys outside I2; resolve them through
+  `_allAdventureStagesJson`'s `stageName` instead (for example `ADV_POE_2_Forest` is
+  **Rough Awakening**). Normal stages remain in `_allStagesJson`.
 - An unset typed id reads back as `"VOID"`, sometimes `"0"`, sometimes empty — check all three.
 - `PowerUpItemUI._currentLevel` reads `0` for every upgrade on 1.15; use
   `PlayerStats.GetOwnedPowerUps()[type]._Level`. **1.16 appears to have fixed it** - the two now

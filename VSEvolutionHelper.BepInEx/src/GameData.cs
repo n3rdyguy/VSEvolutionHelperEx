@@ -104,6 +104,8 @@ public static class GameData
         ArcanaDescriptions.Clear();
         WeaponToArcanas.Clear();
         ItemToArcanas.Clear();
+        _stageNames = null;
+        _stageNamesParsed = false;
     }
 
     /// <summary>Try to locate DataManager in the scene / UI and build caches.</summary>
@@ -1674,44 +1676,54 @@ public static class GameData
         if (string.IsNullOrEmpty(stageId)) return null;
         if (!_stageNamesParsed && _dataManager != null)
         {
-            _stageNamesParsed = true;
             var map = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                var json = _dataManager._allStagesJson;
-                string raw = json != null ? json.ToString() : null;
-                if (!string.IsNullOrEmpty(raw))
-                {
-                    using (var doc = System.Text.Json.JsonDocument.Parse(raw))
-                    {
-                        if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
-                        {
-                            foreach (var prop in doc.RootElement.EnumerateObject())
-                            {
-                                System.Text.Json.JsonElement rec = prop.Value;
-                                if (rec.ValueKind == System.Text.Json.JsonValueKind.Array)
-                                {
-                                    bool any = false;
-                                    foreach (var f in rec.EnumerateArray()) { rec = f; any = true; break; }
-                                    if (!any) continue;
-                                }
-                                if (rec.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
-                                string n = JsonStr(rec, "stageName");
-                                if (string.IsNullOrWhiteSpace(n)) continue;
-                                string loc = LocalizeDisplayText(n) ?? n;
-                                if (!string.IsNullOrWhiteSpace(loc) && !LooksLikeLocKey(loc))
-                                    map[prop.Name] = loc.Trim();
-                            }
-                        }
-                    }
-                }
+                // Adventure stages are deliberately kept in their own catalog. Parsing only
+                // _allStagesJson made every ADV_* reward fall through to its internal enum id.
+                AddStageNames(_dataManager._allStagesJson, map);
+                AddStageNames(_dataManager._allAdventureStagesJson, map);
             }
             catch (Exception ex) { Plugin.Dbg("[GameData] stage names: " + ex.Message); }
             _stageNames = map;
+            _stageNamesParsed = map.Count > 0;
             Plugin.Dbg($"[GameData] stage names: {map.Count}");
         }
         if (_stageNames != null && _stageNames.TryGetValue(stageId, out string name)) return name;
         return DescribeStage(stageId);
+    }
+
+    /// <summary>
+    /// Add names from either the normal or Adventure stage catalog.
+    ///
+    /// Both catalogs are keyed by stage id and store the usable record in the first array slot.
+    /// Keeping this shared prevents one surface from learning only the normal catalog again.
+    /// </summary>
+    private static void AddStageNames(object json, System.Collections.Generic.Dictionary<string, string> map)
+    {
+        if (json == null || map == null) return;
+        string raw = null;
+        try { raw = json.ToString(); } catch { }
+        if (string.IsNullOrEmpty(raw)) return;
+        using (var doc = System.Text.Json.JsonDocument.Parse(raw))
+        {
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                System.Text.Json.JsonElement rec = prop.Value;
+                if (rec.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    bool any = false;
+                    foreach (var f in rec.EnumerateArray()) { rec = f; any = true; break; }
+                    if (!any) continue;
+                }
+                if (rec.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                string n = JsonStr(rec, "stageName");
+                if (string.IsNullOrWhiteSpace(n)) continue;
+                string loc = LocalizeDisplayText(n) ?? n;
+                if (!string.IsNullOrWhiteSpace(loc) && !LooksLikeLocKey(loc)) map[prop.Name] = loc.Trim();
+            }
+        }
     }
 
     private static bool TryJsonFloat(System.Text.Json.JsonElement obj, string name, out float value)
