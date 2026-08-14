@@ -273,7 +273,7 @@ there or during an active Adventure.
 
 **Shows:** Adventure title, description when available, cast characters, related weapons when data is present.
 Ascension controls show what Luck, Growth, Greed and Curse do, their per-point increment, current
-bonus, assigned points and unspent points. Values refresh when the panel refreshes after a change.
+bonus, assigned points and unspent points.
 
 Kill switch: `Features.AdventureTooltips`.
 

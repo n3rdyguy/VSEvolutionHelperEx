@@ -884,6 +884,7 @@ public class ItemTooltipsMod
 		if (Plugin.AdventureTooltipsEnabled)
 		{
 			AdventureSelectPatches.Tick();
+			AscensionPatches.Tick();
 			if (adventureIcons.Count > 0)
 				UpdateAdventureHover();
 		}

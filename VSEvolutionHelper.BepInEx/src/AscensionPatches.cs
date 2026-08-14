@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 using VampireSurvivors;
@@ -21,6 +20,8 @@ namespace VSItemTooltips;
 public static class AscensionPatches
 {
 	private static readonly RowTooltipRegistry Rows = new RowTooltipRegistry("Ascension");
+	private const float ScanCooldown = 0.5f;
+	private static float _lastScan;
 
 	public static void Apply(Harmony harmony)
 	{
@@ -30,73 +31,61 @@ public static class AscensionPatches
 			return;
 		}
 
+		// These UI methods are generated IL2CPP bindings with native implementations. Harmony
+		// reports them as patchable, but a postfix on any of the Ascension bindings crashes
+		// CoreCLR before the main menu. The existing Update host is safe after the scene has
+		// constructed its UI, so scan it there instead of intercepting the native calls.
+		Plugin.Log.LogInfo("[Ascension] Using scene scan; native UI methods are not Harmony-patched");
+	}
+
+	public static void Tick()
+	{
+		if (!Plugin.AdventureTooltipsEnabled) return;
+		if (Time.unscaledTime - _lastScan < ScanCooldown) return;
+		_lastScan = Time.unscaledTime;
+
 		try
 		{
-			Patch(harmony, typeof(AscensionButton), "SetAdventure", nameof(AscensionButton_Postfix));
-			Patch(harmony, typeof(AscensionPanel), "SetData", nameof(SetData_Postfix));
-			Patch(harmony, typeof(AscensionPanel), "RefreshData", nameof(Refresh_Postfix));
+			AscensionButton[] buttons = null;
+			AscensionPanel[] panels = null;
+			try { buttons = Object.FindObjectsOfType<AscensionButton>(true); } catch { }
+			try { panels = Object.FindObjectsOfType<AscensionPanel>(true); } catch { }
 
-			// AscensionPanel.RefreshData is the owner-level update that follows a +/- change.
-			// Do not patch AdjustValuePanel itself: it is a generic control used while the game
-			// boots, before the Ascension panel exists, so a broad hook here has unsafe reach.
+			int registered = 0;
+			if (buttons != null)
+				foreach (var button in buttons)
+					if ((Object)(object)button != (Object)null && ((Component)button).gameObject.activeInHierarchy)
+					{
+						RegisterButton(button);
+						registered++;
+					}
+			if (panels != null)
+				foreach (var panel in panels)
+					if ((Object)(object)panel != (Object)null && ((Component)panel).gameObject.activeInHierarchy)
+					{
+						RegisterPanel(panel);
+						registered += 4;
+					}
+			if (registered > 0) Plugin.Dbg("Ascension: registered " + registered + " controls");
 		}
-		catch (Exception ex)
-		{
-			Plugin.Log.LogWarning("[Ascension] patch: " + ex.Message);
-		}
+		catch (Exception ex) { Plugin.Dbg("[Ascension] scan: " + ex.Message); }
 	}
 
-	private static void Patch(Harmony harmony, Type type, string methodName, string postfixName)
+	private static void RegisterButton(AscensionButton button)
 	{
-		MethodInfo method = type.GetMethod(methodName,
-			BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-		if (method == null)
+		Rows.Register(((Component)button).gameObject, null, new RowTooltipRegistry.Entry
 		{
-			Plugin.Log.LogWarning($"[Ascension] {type.Name}.{methodName} not found");
-			return;
-		}
-		harmony.Patch(method, postfix: new HarmonyMethod(typeof(AscensionPatches), postfixName));
-		Plugin.Log.LogInfo($"[Ascension] Patched {type.Name}.{methodName}({method.GetParameters().Length} args)");
+			Title = "Ascension Points",
+			Description = "Complete an Adventure to earn Ascension Points. Spend them here to boost Luck, Growth, Greed and Curse for that Adventure.",
+		});
 	}
 
-	public static void AscensionButton_Postfix(AscensionButton __instance)
+	private static void RegisterPanel(AscensionPanel panel)
 	{
-		try
-		{
-			if ((Object)(object)__instance == (Object)null) return;
-			Rows.Register(((Component)__instance).gameObject, null, new RowTooltipRegistry.Entry
-			{
-				Title = "Ascension Points",
-				Description = "Complete an Adventure to earn Ascension Points. Spend them here to boost Luck, Growth, Greed and Curse for that Adventure.",
-			});
-		}
-		catch (Exception ex)
-		{
-			Plugin.Log.LogWarning("[Ascension] button postfix: " + ex.Message);
-		}
-	}
-
-	public static void SetData_Postfix(AscensionPanel __instance)
-	{
-		try
-		{
-			if ((Object)(object)__instance == (Object)null) return;
-			Register(__instance._LuckPanel, PowerUpType.LUCK, __instance);
-			Register(__instance._GrowthPanel, PowerUpType.GROWTH, __instance);
-			Register(__instance._GreedPanel, PowerUpType.GREED, __instance);
-			Register(__instance._CursePanel, PowerUpType.CURSE, __instance);
-			Plugin.Dbg("Ascension: registered 4 point controls");
-		}
-		catch (Exception ex)
-		{
-			Plugin.Log.LogWarning("[Ascension] SetData postfix: " + ex.Message);
-		}
-	}
-
-	public static void Refresh_Postfix()
-	{
-		try { Rows.Refresh(); }
-		catch (Exception ex) { Plugin.Dbg("[Ascension] refresh: " + ex.Message); }
+		Register(panel._LuckPanel, PowerUpType.LUCK, panel);
+		Register(panel._GrowthPanel, PowerUpType.GROWTH, panel);
+		Register(panel._GreedPanel, PowerUpType.GREED, panel);
+		Register(panel._CursePanel, PowerUpType.CURSE, panel);
 	}
 
 	private static void Register(AdjustValuePanel control, PowerUpType type, AscensionPanel panel)
