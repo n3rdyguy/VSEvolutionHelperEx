@@ -1,12 +1,12 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.14.2** - Evolution, arcana, grimoire, collection, map, stage, character, adventure, secrets, bestiary, power-up and music tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.14.4** - Evolution, arcana, grimoire, collection, map, stage, character, adventure, secrets, bestiary, power-up and music tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
 | | |
 |--|--|
-| **Latest release** | [v1.14.2](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.14.2) |
+| **Latest release** | [v1.14.4](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.14.4) |
 | **Nexus Mods** | [VS Evolution Helper (BepInEx port)](https://www.nexusmods.com/vampiresurvivors/mods/105) |
 | **Game** | Vampire Survivors **1.15.x** (tested **1.15.114**) and the **1.16 public beta**, Unity **6000.0.62f1** |
 | **Loader** | [BepInEx 6 IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (BE / bleeding-edge) |
@@ -41,13 +41,13 @@ Please support the original authors. This port reuses their design with typed Il
 | Feature | What you get |
 |---------|----------------|
 | **Character selection** | Hover a character → portrait, flavor (localized), **starting weapon**, evolution path icons, **other outfits**’ starters, **notable stats**. Click-through so you can still select the card. |
-| **Adventure selection** | Hover an adventure → cast / weapon summary (config `AdventureTooltips`) |
+| **Adventure selection** | Hover an adventure → cast / weapon summary; Ascension Points explains each bonus (config `AdventureTooltips`) |
 | **Weapon selectors** | Hover a weapon on a selector screen (Penshin Fatcha tuna forms, Arma Dio) → tooltip (config `WeaponSelectionTooltips`) |
 | **Collection / Grimoire** | Tooltips on evolution formula icons and collection grid items/arcanas. Collections tooltips **dock to the right margin** (always visible, never clipped by the grid) and stay **clickable** for nested formula detail; locked cells show an **Unlock:** hint |
 | **Stage selection - relics** | Hover **Relics in stage** icons for name + description (dynamic sizing for long names) |
 | **Stage selection - Music \| Guide** | Tabs above the song panel: **Music** keeps the track list; **Guide** reuses that space for stage help |
 | **Secrets** | Hover a secret → what it unlocks (character portrait, weapons, relic, arcana, power-up, skins, stage, gold). Renamed characters show both names. Turn off `SecretSpoilers` to reveal only secrets you have already found |
-| **Unlocks (achievements)** | Hover a row on the Unlocks page for what it grants (character portrait, weapons, relic, arcana, power-up, skins, stage, gold) and what it requires |
+| **Unlocks (achievements)** | Hover a row on the Unlocks page for what it grants (character portrait, weapons, relic, arcana, power-up, skins, stage, gold). Adventure stage rewards use their in-game names rather than internal `ADV_*` ids |
 | **Power Up** | Hover an upgrade → level owned, next price, and what the rest costs. Prices climb with every level bought anywhere on the page, so the game's single "next" figure says little about finishing an upgrade; levels beyond the next are projected and labelled as such |
 | **Bestiary** | Hover an enemy → HP, damage, speed, XP, knockback, plus **resistances**, skills and the stages it appears in - none of which the page itself shows. Stats read as ranges where one entry covers a family of enemies. Turn off `BestiarySpoilers` for killed enemies only |
 | **Music** | Hover a track → the composer, the game or DLC it came from, and how it is unlocked. The page itself shows only a title, and credits the music nowhere. Turn off `MusicSpoilers` to keep the dashes the game draws over locked track names |
@@ -209,7 +209,7 @@ Newer BE builds generally work too. If a very new BE build misbehaves, dropping 
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.14.2]
+Loading [VS Evolution Helper 1.14.4]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete
@@ -230,6 +230,8 @@ When reporting a problem, the first ~10 lines of `LogOutput.log` (BepInEx versio
 Unity version) plus the plugin's own lines are what actually identify the setup.
 
 ## Install from source (dev)
+
+From the `VSEvolutionHelper` repository root:
 
 ```powershell
 cd VSEvolutionHelper.BepInEx

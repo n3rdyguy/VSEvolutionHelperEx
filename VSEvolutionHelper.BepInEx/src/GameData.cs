@@ -4,6 +4,7 @@ using BepInEx.Logging;
 using I2.Loc;
 using Il2CppSystem.Collections.Generic;
 using UnityEngine;
+using VampireSurvivors.Achievements;
 using VampireSurvivors.Data;
 using VampireSurvivors.Data.PowerUp;
 using VampireSurvivors.Data.Weapons;
@@ -103,6 +104,8 @@ public static class GameData
         ArcanaDescriptions.Clear();
         WeaponToArcanas.Clear();
         ItemToArcanas.Clear();
+        _stageNames = null;
+        _stageNamesParsed = false;
     }
 
     /// <summary>Try to locate DataManager in the scene / UI and build caches.</summary>
@@ -1161,10 +1164,27 @@ public static class GameData
         var rows = new System.Collections.Generic.List<IconRow>();
         if (e == null) return rows;
 
+        // Achievement records are inconsistent: most rewards are enum ids, while DLC and
+        // custom rewards can already be I2 terms. Resolve at the last possible point so an
+        // untranslated key never leaks into an otherwise correct unlock tooltip.
+        string rewardName(string id, string candidate)
+        {
+            string translated = LocalizeDisplayText(candidate);
+            if (!string.IsNullOrWhiteSpace(translated) && !LooksLikeLocKey(translated)
+                && !string.Equals(translated, id, StringComparison.OrdinalIgnoreCase))
+                return translated;
+
+            translated = LocalizeTypedDescription(id, "name");
+            if (!string.IsNullOrWhiteSpace(translated) && !LooksLikeLocKey(translated))
+                return translated;
+
+            return HumanizeId(id);
+        }
+
         void addCharacter(string id)
         {
             if (IsVoidValue(id)) return;
-            rows.Add(new IconRow(GetCharacterPortrait(id), DescribeRewardCharacter(id)));
+            rows.Add(new IconRow(GetCharacterPortrait(id), rewardName(id, DescribeRewardCharacter(id))));
         }
 
         void addWeapon(string id)
@@ -1173,9 +1193,9 @@ public static class GameData
             if (Enum.TryParse<WeaponType>(id, true, out WeaponType w) && !IsVoidValue(w.ToString()))
             {
                 string n = GetWeaponName(w);
-                rows.Add(new IconRow(GetSprite(w), string.IsNullOrEmpty(n) ? HumanizeId(id) : n));
+                rows.Add(new IconRow(GetSprite(w), rewardName(id, n)));
             }
-            else rows.Add(new IconRow(null, HumanizeId(id)));
+            else rows.Add(new IconRow(null, rewardName(id, null)));
         }
 
         addCharacter(e.Character);
@@ -1187,28 +1207,31 @@ public static class GameData
         if (!IsVoidValue(e.Relic))
         {
             if (Enum.TryParse<ItemType>(e.Relic, true, out ItemType it) && !IsVoidValue(it.ToString()))
-                rows.Add(new IconRow(GetItemSprite(it), GetItemName(it)));
-            else rows.Add(new IconRow(null, HumanizeId(e.Relic)));
+                rows.Add(new IconRow(GetItemSprite(it), rewardName(e.Relic, GetItemName(it))));
+            else rows.Add(new IconRow(null, rewardName(e.Relic, null)));
         }
         if (!IsVoidValue(e.Arcana))
         {
             if (Enum.TryParse<ArcanaType>(e.Arcana, true, out ArcanaType at) && !IsVoidValue(at.ToString()))
-                rows.Add(new IconRow(GetArcanaSprite(at), GetArcanaName(at)));
-            else rows.Add(new IconRow(null, HumanizeId(e.Arcana)));
+                rows.Add(new IconRow(GetArcanaSprite(at), rewardName(e.Arcana, GetArcanaName(at))));
+            else rows.Add(new IconRow(null, rewardName(e.Arcana, null)));
         }
         if (!IsVoidValue(e.PowerUp))
         {
             if (Enum.TryParse<PowerUpType>(e.PowerUp, true, out PowerUpType pt) && !IsVoidValue(pt.ToString()))
-                rows.Add(new IconRow(GetSprite(pt), GetPowerUpName(pt)));
-            else rows.Add(new IconRow(null, HumanizeId(e.PowerUp)));
+                rows.Add(new IconRow(GetSprite(pt), rewardName(e.PowerUp, GetPowerUpName(pt))));
+            else rows.Add(new IconRow(null, rewardName(e.PowerUp, null)));
         }
 
         if (e.Skins != null)
             foreach (string id in e.Skins)
                 rows.Add(new IconRow(null, DescribeRewardCharacter(id) + " (skin)"));
 
-        if (!IsVoidValue(e.Stage)) rows.Add(new IconRow(null, DescribeStage(e.Stage) + " (stage)"));
-        if (!IsVoidValue(e.Hyper)) rows.Add(new IconRow(null, DescribeStage(e.Hyper) + " (Hyper)"));
+        // Adventure progression stores stageToUnlock as an internal ADV_* key. The normal I2
+        // stage table does not know those keys, but the stage catalog has their displayed names
+        // (for example ADV_POE_2_Forest -> Rough Awakening).
+        if (!IsVoidValue(e.Stage)) rows.Add(new IconRow(null, StageDisplayName(e.Stage) + " (stage)"));
+        if (!IsVoidValue(e.Hyper)) rows.Add(new IconRow(null, StageDisplayName(e.Hyper) + " (Hyper)"));
         if (e.Gold > 0) rows.Add(new IconRow(null, $"Gold: {e.Gold}"));
 
         if (!string.IsNullOrEmpty(e.CustomText))
@@ -1651,46 +1674,107 @@ public static class GameData
     private static string StageDisplayName(string stageId)
     {
         if (string.IsNullOrEmpty(stageId)) return null;
+        // A stage-only reward does not otherwise ask for a weapon/item name, so this can be the
+        // first data lookup a Progression tooltip performs. Resolve DataManager here instead of
+        // assuming another row happened to initialize it first.
+        if (_dataManager == null) EnsureLoaded();
+        if (_dataManager == null)
+        {
+            Plugin.Dbg($"[Stages] '{stageId}': DataManager unavailable; falling back to I2");
+            return DescribeStage(stageId);
+        }
         if (!_stageNamesParsed && _dataManager != null)
         {
-            _stageNamesParsed = true;
             var map = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                var json = _dataManager._allStagesJson;
-                string raw = json != null ? json.ToString() : null;
-                if (!string.IsNullOrEmpty(raw))
-                {
-                    using (var doc = System.Text.Json.JsonDocument.Parse(raw))
-                    {
-                        if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
-                        {
-                            foreach (var prop in doc.RootElement.EnumerateObject())
-                            {
-                                System.Text.Json.JsonElement rec = prop.Value;
-                                if (rec.ValueKind == System.Text.Json.JsonValueKind.Array)
-                                {
-                                    bool any = false;
-                                    foreach (var f in rec.EnumerateArray()) { rec = f; any = true; break; }
-                                    if (!any) continue;
-                                }
-                                if (rec.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
-                                string n = JsonStr(rec, "stageName");
-                                if (string.IsNullOrWhiteSpace(n)) continue;
-                                string loc = LocalizeDisplayText(n) ?? n;
-                                if (!string.IsNullOrWhiteSpace(loc) && !LooksLikeLocKey(loc))
-                                    map[prop.Name] = loc.Trim();
-                            }
-                        }
-                    }
-                }
+                // Adventure stages are deliberately kept in their own catalog. Parsing only
+                // _allStagesJson made every ADV_* reward fall through to its internal enum id.
+                AddStageNames("normal", _dataManager._allStagesJson, map);
+                AddStageNames("adventure", _dataManager._allAdventureStagesJson, map);
             }
             catch (Exception ex) { Plugin.Dbg("[GameData] stage names: " + ex.Message); }
             _stageNames = map;
+            _stageNamesParsed = map.Count > 0;
             Plugin.Dbg($"[GameData] stage names: {map.Count}");
         }
-        if (_stageNames != null && _stageNames.TryGetValue(stageId, out string name)) return name;
-        return DescribeStage(stageId);
+        if (_stageNames != null && _stageNames.TryGetValue(stageId, out string name))
+        {
+            Plugin.Dbg($"[Stages] '{stageId}' -> '{name}'");
+            return name;
+        }
+        string fallback = DescribeStage(stageId);
+        Plugin.Dbg($"[Stages] '{stageId}' missing from {_stageNames?.Count ?? 0} catalog names; fallback '{fallback}'");
+        return fallback;
+    }
+
+    /// <summary>
+    /// Add names from either the normal or Adventure stage catalog.
+    ///
+    /// Both catalogs are keyed by stage id and store the usable record in the first array slot.
+    /// Keeping this shared prevents one surface from learning only the normal catalog again.
+    /// </summary>
+    private static void AddStageNames(string catalog, object json,
+        System.Collections.Generic.Dictionary<string, string> map)
+    {
+        if (map == null) return;
+        if (json == null)
+        {
+            Plugin.Dbg($"[Stages] {catalog} catalog is null");
+            return;
+        }
+        string raw = null;
+        try
+        {
+            // Calling ToString through System.Object invokes the interop wrapper's type-name
+            // implementation ("Newtonsoft.Json.Linq.JObject"), not Newtonsoft's JSON writer.
+            // The log's 28-character "N..." parse failures proved this boundary matters.
+            var token = json as Newtonsoft.Json.Linq.JToken;
+            if (token == null)
+            {
+                Plugin.Dbg($"[Stages] {catalog} catalog is {json.GetType().FullName}, not JToken");
+                return;
+            }
+            raw = token.ToString(Newtonsoft.Json.Formatting.None);
+        }
+        catch (Exception ex)
+        {
+            Plugin.Dbg($"[Stages] {catalog} catalog serialize: {ex.Message}");
+        }
+        if (string.IsNullOrEmpty(raw))
+        {
+            Plugin.Dbg($"[Stages] {catalog} catalog serialized empty");
+            return;
+        }
+        int before = map.Count;
+        try
+        {
+            using (var doc = System.Text.Json.JsonDocument.Parse(raw))
+            {
+                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+                {
+                    Plugin.Dbg($"[Stages] {catalog} catalog root is {doc.RootElement.ValueKind}");
+                    return;
+                }
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    System.Text.Json.JsonElement rec = prop.Value;
+                    if (rec.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        bool any = false;
+                        foreach (var f in rec.EnumerateArray()) { rec = f; any = true; break; }
+                        if (!any) continue;
+                    }
+                    if (rec.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                    string n = JsonStr(rec, "stageName");
+                    if (string.IsNullOrWhiteSpace(n)) continue;
+                    string loc = LocalizeDisplayText(n) ?? n;
+                    if (!string.IsNullOrWhiteSpace(loc) && !LooksLikeLocKey(loc)) map[prop.Name] = loc.Trim();
+                }
+            }
+        }
+        catch (Exception ex) { Plugin.Dbg($"[Stages] {catalog} catalog parse: {ex.Message}"); }
+        Plugin.Dbg($"[Stages] {catalog} catalog: {raw.Length} chars, added {map.Count - before} names");
     }
 
     private static bool TryJsonFloat(System.Text.Json.JsonElement obj, string name, out float value)
@@ -1944,6 +2028,54 @@ public static class GameData
             foreach (string s in rec.Requires) rows.Add(new IconRow(null, s));
         }
 
+        return rows;
+    }
+
+    /// <summary>
+    /// Build an achievement tooltip from the record bound to its row.
+    ///
+    /// The progress page creates rows through AchievementDataUI.Init, which receives a new
+    /// AchievementData but does not receive - or set - an AchievementType. The row's type then
+    /// remains its enum default, ReachLV5, and a JSON lookup makes every tooltip claim Wings.
+    /// These scalar reward fields are the current record's own strings, so reading them here
+    /// keeps a recycled row tied to the achievement it is actually displaying.
+    /// </summary>
+    public static System.Collections.Generic.List<IconRow> GetAchievementRows(
+        AchievementData achievement, out string description)
+    {
+        description = null;
+        var rows = new System.Collections.Generic.List<IconRow>();
+        // AchievementData is an Il2CppSystem.Object, not a UnityEngine.Object. Casting it to
+        // UnityEngine.Object returns null even for a live record and silently hides every row.
+        if (achievement == null) return rows;
+
+        var rewards = new RewardIds();
+        try { rewards.Character = achievement.characterToUnlock; } catch { }
+        try { rewards.Weapon = achievement.weaponToUnlock; } catch { }
+        try { rewards.Relic = achievement.relicToUnlock; } catch { }
+        try { rewards.Arcana = achievement.arcanaToUnlock; } catch { }
+        try { rewards.PowerUp = achievement.powerUpToUnlock; } catch { }
+        try { rewards.Stage = achievement.stageToUnlock; } catch { }
+        try { rewards.Hyper = achievement.hyperToUnlock; } catch { }
+        try { rewards.Gold = achievement.goldPrize; } catch { }
+        try { rewards.CustomText = achievement.forcedUnlockTips; } catch { }
+        try { rewards.CustomTexture = achievement.forcedTexture; } catch { }
+        try { rewards.CustomFrame = achievement.forcedFrameName; } catch { }
+
+        try
+        {
+            string text = achievement.description;
+            text = LocalizeDisplayText(text) ?? text;
+            if (!string.IsNullOrWhiteSpace(text) && !LooksLikeLocKey(text)) description = text.Trim();
+        }
+        catch { }
+
+        var rewardRows = BuildRewardRows(rewards);
+        if (rewardRows.Count > 0)
+        {
+            rows.Add(IconRow.Header("Unlocks:"));
+            rows.AddRange(rewardRows);
+        }
         return rows;
     }
 

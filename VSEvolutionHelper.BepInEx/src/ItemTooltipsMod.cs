@@ -400,6 +400,9 @@ public class ItemTooltipsMod
 				AdventureSelectPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("AdventureSelect patches: " + ex.Message); }
 			try {
+				AscensionPatches.Apply(harmonyInstance);
+			} catch (Exception ex) { Plugin.Log.LogWarning("Ascension patches: " + ex.Message); }
+			try {
 				WeaponSelectionPatches.Apply(harmonyInstance);
 			} catch (Exception ex) { Plugin.Log.LogWarning("WeaponSelection patches: " + ex.Message); }
 			try {
@@ -881,6 +884,7 @@ public class ItemTooltipsMod
 		if (Plugin.AdventureTooltipsEnabled)
 		{
 			AdventureSelectPatches.Tick();
+			AscensionPatches.Tick();
 			if (adventureIcons.Count > 0)
 				UpdateAdventureHover();
 		}
@@ -9754,6 +9758,26 @@ private unsafe static float AddEvolvedFromSection(Transform parent, TMP_FontAsse
 	public const float SidePanelX = 667f;
 	public const float SidePanelTopY = 312f;
 	public static readonly Vector2 SidePanelPivot = new Vector2(0.5f, 1f);
+
+	/// <summary>
+	/// Free space directly beneath the Ascension Points panel, in Safe Area reference units
+	/// (1920x1200). Measured from the screen box 40,756 - 620,1568 at 2560x1600: left edge
+	/// 0.016 -> (0.016 - 0.5) * 1920 = -929, top edge 0.472 -> (0.5 - 0.472) * 1200 = 34.
+	///
+	/// Pinning the top left lets the short Ascension panels grow right and down inside the
+	/// measured free area, rather than overlapping the controls above them.
+	/// </summary>
+	public const float AscensionPopupLeftX = -929f;
+	public const float AscensionPopupTopY = 34f;
+	public static readonly Vector2 AscensionPopupPivot = new Vector2(0f, 1f);
+
+	/// <summary>
+	/// The Adventure selection screen's corresponding free space. Its left panel sits 92 Safe
+	/// Area units further right than the in-adventure panel: screen box 165,754 - 673,1586 at
+	/// 2560x1600, left edge 0.064 -> (0.064 - 0.5) * 1920 = -837. The measured top edge 0.472
+	/// converts to the same 34 as the in-adventure dock, so only X differs.
+	/// </summary>
+	public const float AscensionSelectPopupLeftX = -837f;
 
 	/// <summary>
 	/// The Music page's free space, which sits higher and further right than the list pages':
