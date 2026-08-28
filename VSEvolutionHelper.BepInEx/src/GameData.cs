@@ -3043,6 +3043,7 @@ public static class GameData
         else if (id.StartsWith("EME_") || id.Contains("_EME_")) t = DlcType.Emeralds;
         else if (id.StartsWith("TP_") || id.Contains("_TP_")) t = DlcType.ThosePeople;
         else if (id.StartsWith("LEM_") || id.Contains("_LEM_")) t = DlcType.Lemon;
+        else if (id.StartsWith("BMN_") || id.Contains("_BMN_")) t = DlcType.Bloodmoon;
 
         return t.HasValue ? new Il2CppSystem.Nullable<DlcType>(t.Value) : none;
     }

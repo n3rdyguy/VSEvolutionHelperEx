@@ -649,7 +649,7 @@ Every surface, its hook, and where its tooltip lands.
 | Stage select | relic icons | `StageSelectPatches.cs` | Near icon |
 | Weapon selectors | selector cells | `WeaponSelectionPatches.cs` | Offset from icon |
 | Secrets | `SecretItemUI.SetData` | `SecretsPatches.cs` | `(71, 344)` pivot `(0,1)` |
-| Bestiary | `EnemyItemUI.SetData` | `BestiaryPatches.cs` | Side panel, top-right pinned |
+| Bestiary | `BestiaryPage.Populate` / `OnShowStart` scan (do not patch `EnemyItemUI.SetData` - 1.16 `Nullable<DlcType>` trampoline crash) | `BestiaryPatches.cs` | Side panel, top-right pinned |
 | Unlocks | `AchievementDataUI.SetData` | `AchievementPatches.cs` | Side panel |
 | Power Up | `PowerUpItemUI.SetData` + `UpdateAfterPurchase` | `PowerUpPatches.cs` | Side panel |
 | Arcana cards | `ArcanaCardUI.SetData` x3 | `ArcanaCardPatches.cs` | Side panel |
