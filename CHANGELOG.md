@@ -2,6 +2,19 @@
 
 All notable changes to this BepInEx port are listed here.
 
+## [1.14.5] - 2026-08-28
+
+### Fixed
+- **Bestiary crashed on open after Vampire Survivors 1.16 / Legacy of the Bloodmoon.** Harmony
+  was patching `EnemyItemUI.SetData`, which now takes an `Il2CppSystem.Nullable<DlcType>`. The
+  native-to-managed trampoline marshals that nullable and throws once per row, taking the page
+  down. Rows are now registered after `BestiaryPage.Populate` instead, the same way Adventures
+  already avoids `SetData` trampolines.
+
+### Changed
+- Tested on Vampire Survivors **1.16** with Legacy of the Bloodmoon. Bloodmoon Bestiary enemies
+  use the `BMN_` id prefix for DLC atlas loads.
+
 ## [1.14.4] - 2026-08-14
 
 ### Added

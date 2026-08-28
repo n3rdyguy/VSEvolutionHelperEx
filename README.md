@@ -1,14 +1,14 @@
 # VS Evolution Helper (BepInEx port)
 
-**Version 1.14.4** - Evolution, arcana, grimoire, collection, map, stage, character, adventure, secrets, bestiary, power-up and music tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
+**Version 1.14.5** - Evolution, arcana, grimoire, collection, map, stage, character, adventure, secrets, bestiary, power-up and music tooltips for **Vampire Survivors** on Unity 6 / BepInEx IL2CPP.
 
 Ported because **MelonLoader crashes** on current Unity 6 builds (`0x80131506` / CoreCLR). **Use BepInEx only.**
 
 | | |
 |--|--|
-| **Latest release** | [v1.14.4](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.14.4) |
+| **Latest release** | [v1.14.5](https://github.com/n3rdyguy/VSEvolutionHelperEx/releases/tag/v1.14.5) |
 | **Nexus Mods** | [VS Evolution Helper (BepInEx port)](https://www.nexusmods.com/vampiresurvivors/mods/105) |
-| **Game** | Vampire Survivors **1.15.x** (tested **1.15.114**) and the **1.16 public beta**, Unity **6000.0.62f1** |
+| **Game** | Vampire Survivors **1.16.x** (tested **1.16** / Legacy of the Bloodmoon), Unity **6000.0.62f1** |
 | **Loader** | [BepInEx 6 IL2CPP](https://builds.bepinex.dev/projects/bepinex_be) (BE / bleeding-edge) |
 
 ## Credits / original creators
@@ -95,7 +95,7 @@ Everything below is the manual route, and is also what to read when something go
 
 ## Requirements
 
-- Vampire Survivors (Steam) - **1.15.x** or the **1.16 public beta**, Unity **6000.x**
+- Vampire Survivors (Steam) - **1.16.x**, Unity **6000.x**
 - **[BepInEx 6 bleeding-edge (BE)](https://builds.bepinex.dev/projects/bepinex_be)**, **Unity.IL2CPP**, **win-x64**
 - **Do not** run MelonLoader and BepInEx at the same time
 
@@ -126,7 +126,7 @@ BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.785+<commit>.zip
 | Component | Version |
 |-----------|---------|
 | BepInEx | **6.0.0-be.785** (Unity.IL2CPP, win-x64) |
-| Vampire Survivors | **1.15.114** |
+| Vampire Survivors | **1.16** (Legacy of the Bloodmoon) |
 | Unity | **6000.0.62f1** |
 | .NET runtime (bundled by BepInEx) | 6.0.7 |
 
@@ -209,7 +209,7 @@ Newer BE builds generally work too. If a very new BE build misbehaves, dropping 
 Confirm in `BepInEx/LogOutput.log`:
 
 ```
-Loading [VS Evolution Helper 1.14.4]
+Loading [VS Evolution Helper 1.14.5]
 Patches applied successfully
 [GameData] Ready: …
 Chainloader startup complete

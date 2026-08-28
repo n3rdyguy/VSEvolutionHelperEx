@@ -1,6 +1,6 @@
 # Smoke test checklist (pre-release)
 
-Run before tagging or uploading a release zip. Game: **VS 1.15.x**, BepInEx 6 IL2CPP only. Plugin version under test: current `PluginVersion`.
+Run before tagging or uploading a release zip. Game: **VS 1.16.x**, BepInEx 6 IL2CPP only. Plugin version under test: current `PluginVersion`.
 
 ## Setup
 
@@ -72,6 +72,8 @@ Same shape on all five: hover a row, a docked panel appears in the free space be
 - [ ] Scroll the list, then hover again — recycled rows still respond
 - [ ] **Power Up:** buy a level; the open panel updates in place without moving the mouse
 - [ ] **Power Up:** where a projection cannot be trusted, no projection is shown (never a wrong total)
+- [ ] **Bestiary:** the page **opens** from the main menu with no Il2CppInterop trampoline flood
+      (`EnemyItemUI.SetData` is not Harmony-patched; 1.16 `Nullable<DlcType>` crash)
 - [ ] **Bestiary:** a DLC enemy shows its icon from the **second** hover (async atlas — expected)
 - [ ] **Bestiary:** a variant row names the row, not the family (e.g. "Calamity", not "Spirit")
 - [ ] **Music:** a locked track is named from the record, not `-----`
