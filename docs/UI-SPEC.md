@@ -4,9 +4,8 @@ How this mod draws things into Vampire Survivors' UI, and what the game does tha
 decision. Everything here was paid for by a bug; the rationale is kept because the rules look
 arbitrary without it.
 
-Game: **VS 1.15.x** (tested 1.15.114) and the **1.16 public beta**, Unity **6000.0.62f1**,
-BepInEx 6 BE IL2CPP. Every surface here was re-confirmed on 1.16 with no source changes; the
-only thing that moved was the game's own canvas sorting orders, which is exactly what
+Game: **VS 1.16.x** (Legacy of the Bloodmoon), Unity **6000.0.62f1**,
+BepInEx 6 BE IL2CPP. Canvas sorting orders still vary by page; that is what
 [§2](#2-sorting-and-the-dimmer) measures rather than assumes.
 
 | Section | Covers |
@@ -649,7 +648,7 @@ Every surface, its hook, and where its tooltip lands.
 | Stage select | relic icons | `StageSelectPatches.cs` | Near icon |
 | Weapon selectors | selector cells | `WeaponSelectionPatches.cs` | Offset from icon |
 | Secrets | `SecretItemUI.SetData` | `SecretsPatches.cs` | `(71, 344)` pivot `(0,1)` |
-| Bestiary | `EnemyItemUI.SetData` | `BestiaryPatches.cs` | Side panel, top-right pinned |
+| Bestiary | `BestiaryPage.Populate` / `OnShowStart` scan (do not patch `EnemyItemUI.SetData` - 1.16 `Nullable<DlcType>` trampoline crash) | `BestiaryPatches.cs` | Side panel, top-right pinned |
 | Unlocks | `AchievementDataUI.SetData` | `AchievementPatches.cs` | Side panel |
 | Power Up | `PowerUpItemUI.SetData` + `UpdateAfterPurchase` | `PowerUpPatches.cs` | Side panel |
 | Arcana cards | `ArcanaCardUI.SetData` x3 | `ArcanaCardPatches.cs` | Side panel |

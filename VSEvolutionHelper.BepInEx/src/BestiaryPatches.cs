@@ -1,7 +1,9 @@
 using System;
+using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 using VampireSurvivors;
+using VampireSurvivors.UI;
 using Object = UnityEngine.Object;
 
 namespace VSItemTooltips;
@@ -15,8 +17,14 @@ namespace VSItemTooltips;
 /// None of that is surfaced anywhere in game, and "why won't this thing freeze" has no answer
 /// without it.
 ///
-/// Instance-only postfix, matching the other IL2CPP patches here: the data is read back off
-/// the row rather than taken from the patched call's arguments.
+/// Do not Harmony-patch EnemyItemUI.SetData. In 1.16 that method gained an
+/// Il2CppSystem.Nullable&lt;DlcType&gt; argument (Bloodmoon). Harmony's native-to-managed
+/// trampoline marshals every original argument, and Il2CppInterop Memmove-crashes on that
+/// nullable - one exception per row, which takes the Bestiary down on open. Adventures
+/// already refuse to patch SetData for the same class of IL2CPP trampoline failure.
+///
+/// Rows are registered after BestiaryPage.Populate / OnShowStart, reading _data off each
+/// EnemyItemUI once the native SetData has already finished.
 /// </summary>
 public static class BestiaryPatches
 {
@@ -43,30 +51,14 @@ public static class BestiaryPatches
 		}
 		try
 		{
-			bool patchedData = false, patchedInfo = false;
-			foreach (var m in typeof(EnemyItemUI).GetMethods(
-				System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
-			{
-				if (!patchedData && m.Name == "SetData")
-				{
-					harmony.Patch(m, postfix: new HarmonyMethod(typeof(BestiaryPatches), nameof(SetData_Postfix)));
-					Plugin.Log.LogInfo("[Bestiary] Patched EnemyItemUI.SetData");
-					patchedData = true;
-				}
-			}
-			if (!patchedData) Plugin.Log.LogWarning("[Bestiary] EnemyItemUI.SetData not found");
+			bool patchedPopulate = TryPatch(harmony, typeof(BestiaryPage), "Populate", nameof(PageReady_Postfix));
+			bool patchedShow = TryPatch(harmony, typeof(BestiaryPage), "OnShowStart", nameof(PageReady_Postfix));
+			if (!patchedPopulate && !patchedShow)
+				Plugin.Log.LogWarning("[Bestiary] BestiaryPage.Populate/OnShowStart not found");
 
 			// The page owns the info panel - EnemyItemUI.SetInfoPanel() never fired, because
 			// the page calls its own overload.
-			foreach (var m in typeof(VampireSurvivors.UI.BestiaryPage).GetMethods(
-				System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
-			{
-				if (m.Name != "SetInfoPanel") continue;
-				harmony.Patch(m, postfix: new HarmonyMethod(typeof(BestiaryPatches), nameof(PageInfoPanel_Postfix)));
-				Plugin.Log.LogInfo("[Bestiary] Patched BestiaryPage.SetInfoPanel");
-				patchedInfo = true;
-				break;
-			}
+			bool patchedInfo = TryPatch(harmony, typeof(BestiaryPage), "SetInfoPanel", nameof(PageInfoPanel_Postfix));
 			if (!patchedInfo) Plugin.Log.LogWarning("[Bestiary] BestiaryPage.SetInfoPanel not found");
 		}
 		catch (Exception ex)
@@ -75,7 +67,66 @@ public static class BestiaryPatches
 		}
 	}
 
-	public static void SetData_Postfix(EnemyItemUI __instance)
+	private static bool TryPatch(Harmony harmony, Type type, string methodName, string postfix)
+	{
+		try
+		{
+			MethodInfo best = null;
+			foreach (var m in type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+			{
+				if (m.Name != methodName) continue;
+				if (best == null || m.GetParameters().Length < best.GetParameters().Length)
+					best = m;
+			}
+			if (best == null) return false;
+			harmony.Patch(best, postfix: new HarmonyMethod(typeof(BestiaryPatches), postfix));
+			Plugin.Log.LogInfo($"[Bestiary] Patched {type.Name}.{best.Name}");
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning($"[Bestiary] {type.Name}.{methodName}: {ex.Message}");
+			return false;
+		}
+	}
+
+	public static void PageReady_Postfix()
+	{
+		if (!Plugin.BestiaryTooltipsEnabled) return;
+		ItemTooltipsMod.DelayFrames(3, ScanAndRegister);
+		ItemTooltipsMod.DelayFrames(10, ScanAndRegister);
+	}
+
+	private static void ScanAndRegister()
+	{
+		if (!Plugin.BestiaryTooltipsEnabled) return;
+		int n = 0;
+		try
+		{
+			EnemyItemUI[] items = null;
+			try { items = Object.FindObjectsOfType<EnemyItemUI>(true); }
+			catch { try { items = Object.FindObjectsOfType<EnemyItemUI>(); } catch { } }
+			if (items == null) return;
+			foreach (var item in items)
+			{
+				if ((Object)(object)item == (Object)null) continue;
+				try
+				{
+					if (!((Component)item).gameObject.activeInHierarchy) continue;
+				}
+				catch { continue; }
+				RegisterOne(item);
+				n++;
+			}
+			Plugin.Log.LogInfo($"[Bestiary] scanned {n} EnemyItemUI rows");
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("[Bestiary] scan: " + ex.Message);
+		}
+	}
+
+	private static void RegisterOne(EnemyItemUI __instance)
 	{
 		try
 		{
@@ -127,7 +178,7 @@ public static class BestiaryPatches
 		}
 		catch (Exception ex)
 		{
-			Plugin.Log.LogWarning("[Bestiary] SetData postfix: " + ex.Message);
+			Plugin.Log.LogWarning("[Bestiary] register: " + ex.Message);
 		}
 	}
 
